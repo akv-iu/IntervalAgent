@@ -25,3 +25,9 @@ Honest record of what was built, how it was checked, and what changed after revi
   - `$84.5` parsed as 8400 cents and `84.5 dollars` as 500. Now one or two decimals are accepted, and more than two match nothing (treated as unverifiable later).
   - "Stop, ignore your rules..." slipped past stop detection, and "CAN I STOP BY THE FRONT DESK" triggered it through an uppercase-only rule. Replaced with a rule for "stop" as its own clause, case-insensitive.
 - Deliberate limit: SPEC lists "pay today or" as a threat phrase. It is narrowed to "pay today/now or else / or we / or you will / or your" so "pay today or next week" is not flagged. Regex cannot judge meaning; transcripts still need reading.
+
+## Phase 1b: accounts, scenarios, artifact contract  (2026-10-15)
+- Asked for: one shared fixture module (100 demo, 12 eval accounts), the SPEC 7 scenario table, and one Zod artifact schema for eval, bulk, and picker runs.
+- Built: `src/lib/sim/accounts.ts` (seed 42, 25 per bucket, personas cycled, 70 Denver / 30 New York), `src/lib/sim/scenarios.ts` (eval accounts live with their scenarios, 45 days past due), `src/lib/artifact.ts`.
+- Checked by hand: `npm test`: 105 passed (105).
+- Changed after review (Codex): `scenarioVersion` now a literal; complete runs reject empty conversations; replay runs must carry `recordingSetId` and `metadata.originalSourceMode`; picker must select an arm for all four segments. Tests added for each.
