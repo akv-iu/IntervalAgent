@@ -22,3 +22,11 @@ export function extractAmounts(text: string): number[] {
     return Number(whole) * 100 + Number(cents);
   });
 }
+
+// True when text offers the supported two-payment split, not just one installment-sized amount.
+export function offersTwoPaymentPlan(text: string, plan: [number, number]): boolean {
+  const amounts = extractAmounts(text);
+  const [first, second] = plan;
+  if (first !== second) return amounts.includes(first) && amounts.includes(second);
+  return amounts.filter((a) => a === first).length >= 2 || (amounts.includes(first) && /\btwo\s+(?:\w+\s+)?(?:payments|installments)\b/i.test(text));
+}

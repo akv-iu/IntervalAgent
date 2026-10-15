@@ -31,3 +31,13 @@ Honest record of what was built, how it was checked, and what changed after revi
 - Built: `src/lib/sim/accounts.ts` (seed 42, 25 per bucket, personas cycled, 70 Denver / 30 New York), `src/lib/sim/scenarios.ts` (eval accounts live with their scenarios, 45 days past due), `src/lib/artifact.ts`.
 - Checked by hand: `npm test`: 105 passed (105).
 - Changed after review (Codex): `scenarioVersion` now a literal; complete runs reject empty conversations; replay runs must carry `recordingSetId` and `metadata.originalSourceMode`; picker must select an arm for all four segments. Tests added for each.
+
+## Phase 3a: scripted personas and text guard  (2026-10-15)
+- Asked for: six scripted customer behaviors (ten scripts across the 12 scenarios) and the guard that reads only customer text: stop, dispute handoff, quiet-hours scheduling, outbound wording and amount checks, fallback template.
+- Built: `src/lib/sim/personas.ts`, `src/lib/agent/guard.ts`, `offersTwoPaymentPlan` in `src/lib/money.ts`. The guard has no parameter for persona state, so it cannot cheat by reading it.
+- Checked by hand: `npm test`: 149 passed (149). Includes the SPEC 6 cases: on 46001 cents, two payments of $230.00 or $230.01 are rejected, $230.00 plus $230.01 is accepted; a dispute ack proposed at 21:10 waits until 08:00 the next local day in both zones.
+- Changed after review (Codex):
+  - "two payments of $460.01" on a $460.01 balance and a third installment were accepted. Added a count-times-amount total check, an ordinal check, and a cap of two installment amounts.
+  - "Your outstanding balance is $42.00" on an $84.00 account passed because installment amounts were allowed anywhere. Balance sentences now must state the real balance.
+  - The cooperative persona agreed without hearing the business name, and the needs-plan persona treated one half-balance amount as a plan offer. Both fixed with tests.
+- Deliberate limit: the amount parser understands the narrow phrasing our prompts and template use. Unusual numeric phrasing gets rejected and falls back to the template rather than being understood.
