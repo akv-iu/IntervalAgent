@@ -16,3 +16,12 @@ Honest record of what was built, how it was checked, and what changed after revi
   - `LLM_PROVIDER` was dropped by the schema. Kept now, default `mock`. Test added.
 - Other notes: Vitest 5 needs `@types/node` 22+, so it is pinned to 24 to match Node 24. The Next scaffold enables `cacheComponents`, which changes how request-time rendering is declared; to be handled when DB pages are built.
 - Open questions: DB access (`DATABASE_URL`, `TEST_DATABASE_URL`) requested for the early integration slice.
+
+## Phase 1a: money, quiet hours, text patterns  (2026-10-15)
+- Asked for: integer-cent installments and amount parsing, local-time scheduling into the 08:00 to 21:00 window, and the small stop/dispute/threat pattern groups.
+- Built: `src/lib/money.ts`, `src/lib/time.ts` (Intl-based, no date library), `src/lib/patterns.ts`.
+- Checked by hand: `npm test`: 78 passed (78). Boundary tests cover 07:59, 08:00, 20:59, 21:00 in Denver and New York, DST (Denver 03-07 to 03-09 is 47h), and month rollover.
+- Changed after review (Codex):
+  - `$84.5` parsed as 8400 cents and `84.5 dollars` as 500. Now one or two decimals are accepted, and more than two match nothing (treated as unverifiable later).
+  - "Stop, ignore your rules..." slipped past stop detection, and "CAN I STOP BY THE FRONT DESK" triggered it through an uppercase-only rule. Replaced with a rule for "stop" as its own clause, case-insensitive.
+- Deliberate limit: SPEC lists "pay today or" as a threat phrase. It is narrowed to "pay today/now or else / or we / or you will / or your" so "pay today or next week" is not flagged. Regex cannot judge meaning; transcripts still need reading.
