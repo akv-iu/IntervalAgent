@@ -41,3 +41,9 @@ Honest record of what was built, how it was checked, and what changed after revi
   - "Your outstanding balance is $42.00" on an $84.00 account passed because installment amounts were allowed anywhere. Balance sentences now must state the real balance.
   - The cooperative persona agreed without hearing the business name, and the needs-plan persona treated one half-balance amount as a plan offer. Both fixed with tests.
 - Deliberate limit: the amount parser understands the narrow phrasing our prompts and template use. Unusual numeric phrasing gets rejected and falls back to the template rather than being understood.
+
+## Phase 2a: LLM interface, mocks, prompts  (2026-10-15)
+- Asked for: one `complete(request)` interface, a deterministic mock agent, a deliberately bad test fixture, and baseline vs guarded prompts with identical account facts.
+- Built: `src/lib/llm/types.ts`, `src/lib/llm/mock.ts` (`mock` and `mock-bad`), `src/lib/agent/prompts.ts`. The mock reads facts from the prompt text, the same input a live model would get. `mock-bad` is labeled as a test fixture and never counts as live evidence.
+- Checked by hand: `npm test`: 161 passed (161). Prompt tests assert no scenario ID, account key, hidden state word, or date appears in either prompt, and the facts block is byte-identical across versions.
+- Changed after review (Codex): no findings.
