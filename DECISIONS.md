@@ -129,3 +129,32 @@ The referee reads only the words and timestamps of what was sent. It does not tr
 - The referee reuses the guard's money reader. If that reader misses a trick, both miss it. We accept this for now and rely on separate tests plus reading real transcripts by hand later.
 
 **What the scores show today (fake AI only, not real evidence):** with the well-behaved fake AI, both versions pass almost everything, except the simple version sends messages at 6am and 10pm (scenarios S11 and S12). With the deliberately bad fake AI, the simple version fails in all 12 scenarios and the careful version still passes every hard rule.
+
+---
+
+## Step 8: Real AI connection, recording, replay, and spending guard
+
+**What this step is:** the plug for the real OpenAI model, plus three safety pieces.
+- **Recording:** when we pay for a real run, every AI reply is saved to a folder under a fingerprint of the exact question asked. A recording folder is never overwritten.
+- **Replay:** later runs (and GitHub CI, and anyone who downloads the project) can play those saved replies back for free. If the code now asks a question that was never recorded, replay stops with an error instead of guessing or quietly calling the paid API.
+- **Spending guard:** before every paid attempt, including retries, the app reserves an estimated number of tokens and refuses to go over the run's limit.
+
+Nothing here has called the real API yet. All tests use a fake OpenAI client.
+
+**A safety choice:** your computer has an OpenAI key set in the shell. The app now reads the key only from the project's `.env` file and ignores the shell, so a paid run can only happen when you deliberately put a key in `.env`.
+
+**What went wrong and what Codex said (check 1, 6 problems):**
+1. Retries: any error without a status code was retried, not just dropped connections. Some errors never get better by retrying.
+2. Two recording runs started at the same moment could write into the same folder.
+3. A finished recording could be reopened and accidentally marked incomplete again.
+4. A recording could claim to cover no scenarios at all and still be accepted for replay.
+5. Repeated fingerprints in a recording's index were quietly merged instead of flagged.
+6. The retry limits were written in two different files; the spec wants them in one place so retries cannot multiply unnoticed.
+
+**What was fixed:** all 6, each with a test that failed first.
+
+**Codex check 2:** confirmed all 6 fixes, and caught a subtle problem in fix 1: the real OpenAI library labels its connection errors simply "Error", so my check for the label "APIConnectionError" would never match and dropped connections would not be retried. I checked the installed library and Codex was right. The check now asks "is this a connection error object?" instead of reading the label, and the test uses the library's real error objects.
+
+**Also caught by hand:** `--record` with the fake AI was correctly refused, but only after creating an empty recording folder. The refusal now happens first.
+
+**Honest note:** one tiny helper (the `.env` reader) was written before its test. It works and is tested, but the test was never seen failing first.

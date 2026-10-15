@@ -5,7 +5,7 @@ import type { LlmProvider } from "../llm/types";
 import { createRng } from "../rng";
 import { localToInstant, SIM_DATE } from "../time";
 import { runConversation } from "./loop";
-import { SCENARIOS } from "./scenarios";
+import { EVAL_SEED_BASE, SCENARIOS } from "./scenarios";
 
 const SOURCE_MODE = { openai: "live", mock: "mock", "mock-bad": "mock", replay: "replay" } as const;
 
@@ -26,7 +26,7 @@ export async function runEval(o: {
         version,
         startAt: localToInstant(SIM_DATE, s.startHour, 0, s.account.timezone),
         provider: o.provider,
-        rng: createRng(1000 + i),
+        rng: createRng(EVAL_SEED_BASE + i),
         channel: "sms",
         tone: "friendly",
       });
@@ -44,8 +44,13 @@ export async function runEval(o: {
     status: conversations.some((c) => c.outcome === "failed") ? "failed" : "complete",
     sourceMode: SOURCE_MODE[o.provider.name],
     model: o.provider.model,
+    ...(o.provider.recordingSetId ? { recordingSetId: o.provider.recordingSetId } : {}),
     scenarioVersion: SCENARIO_VERSION,
-    metadata: { provider: o.provider.name, ...(o.provider.name === "mock-bad" ? { testFixture: "deliberately bad agent, not live evidence" } : {}) },
+    metadata: {
+      provider: o.provider.name,
+      ...(o.provider.originalSourceMode ? { originalSourceMode: o.provider.originalSourceMode } : {}),
+      ...(o.provider.name === "mock-bad" ? { testFixture: "deliberately bad agent, not live evidence" } : {}),
+    },
     conversations,
   };
 }

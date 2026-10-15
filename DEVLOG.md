@@ -80,3 +80,16 @@ Honest record of what was built, how it was checked, and what changed after revi
   - Check 2: confirmed 6 fixed; plan wording still off ("set up a plan", "your full balance is"), plus a false alarm on "Can you make time...", and "Pay $129.00 today" not counted. Fixed with 4 more tests; full-payment offer now means a sentence that asks to pay with full wording or the exact balance.
   - Two older tests were updated because their premise changed on purpose (see DECISIONS.md).
 - Known limit: the scorer reuses the guard's amount parser, so a parser blind spot would hide in both. Mitigated by separate tests and by reading transcripts by hand once live recordings exist.
+
+## Phase 2b: OpenAI adapter, recording, replay, budget guard  (2026-10-15)
+- Asked for: the live OpenAI adapter with bounded retries, a token budget checked before every paid attempt, immutable recording sets, and pinned replay that fails closed. Everything tested offline with a fake client; no paid calls made.
+- Built: `src/lib/llm/openai.ts` (Chat Completions, JSON mode, SDK retries off), `budget.ts`, `recording.ts`, `limits.ts` (all attempt limits in one place), `src/lib/agent/output.ts` (reply parser moved out of the loop so the recorder can use it), `scripts/project-env.ts`. `npm run eval` gained `--provider openai|replay`, `--set`, `--record`.
+- Safety choice: runners read `OPENAI_API_KEY` only from the project `.env` file, never from the shell. Akshay has a key exported in his shell; `npm run eval -- --provider openai` with no `.env` now stops with "Missing required env vars: OPENAI_API_KEY, OPENAI_AGENT_MODEL".
+- Checked by hand:
+  - `npm test`: 266 passed (266), including a full record-then-replay of the 12 x 2 mock suite with identical verdicts and a passing gate.
+  - `--record` with the mock provider is refused before anything is written (my first version created an empty set folder before refusing; caught by hand and fixed).
+- Changed after review (Codex gpt-6.1-sol):
+  - Check 1 (6 findings, all fixed with tests): any error without an HTTP status was retried; two recorders could race into one set; a finished recorder could be reopened; empty or mismatched scenario coverage was accepted; duplicate manifest keys were merged; attempt limits lived in two files.
+  - Check 2: confirmed all 6, and pointed out that the real SDK names its connection errors "Error", so my name-based retry check would never fire. Verified against the installed SDK, switched to `instanceof APIConnectionError`, test now throws real SDK error objects.
+- Process slip: `scripts/project-env.ts` was written before its test, so that test never failed first. Small helper, but noted honestly.
+- Not yet verified: the adapter has never talked to the real API. That happens in Task 9 with Akshay's approval.

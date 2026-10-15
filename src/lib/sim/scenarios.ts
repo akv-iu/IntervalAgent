@@ -24,6 +24,8 @@ export interface Scenario {
 }
 
 const EVAL_DAYS_PAST_DUE = 45;
+// Scenario i uses seed EVAL_SEED_BASE + i for its receipt timing.
+export const EVAL_SEED_BASE = 1000;
 
 function row(
   id: `S${string}`,

@@ -1,8 +1,9 @@
 // One conversation: agent opens, scripted customer replies, until an ending or the turn cap.
-import { z } from "zod";
 import { fallbackTemplate, preGenerate, validateOutbound } from "../agent/guard";
+import { parseAgentOutput, type AgentOutput } from "../agent/output";
 import { buildSystemPrompt, type AgentFacts } from "../agent/prompts";
 import type { Conversation, Message, Outcome } from "../artifact";
+import { OUTPUT_ATTEMPTS } from "../llm/limits";
 import type { LlmMessage, LlmProvider } from "../llm/types";
 import { installments } from "../money";
 import { redact } from "../env";
@@ -16,25 +17,8 @@ const GAP_MS = 10 * 60 * 1000;
 const DAY_MS = 86400000;
 const JSON_CORRECTION = "Your previous reply was not valid JSON in the required format. Reply with JSON only.";
 
-// A send must carry text; otherwise the loop would make progress without outreach.
-const AgentOutput = z
-  .object({ message: z.string(), action: z.enum(["send", "handoff", "stop", "close"]) })
-  .refine((o) => o.action !== "send" || o.message.trim().length > 0, "send needs a message");
-export type AgentOutput = z.infer<typeof AgentOutput>;
+export { parseAgentOutput, type AgentOutput };
 export type ConversationResult = Omit<Conversation, "scenarioChecks"> & { llmCalls: number };
-
-// Tolerates code fences and leading prose: takes the outermost {...}.
-export function parseAgentOutput(raw: string): AgentOutput | null {
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
-  try {
-    const parsed = AgentOutput.safeParse(JSON.parse(raw.slice(start, end + 1)));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
-}
 
 class GenerationFailed extends Error {}
 
@@ -78,7 +62,7 @@ export async function runConversation(o: RunOptions): Promise<ConversationResult
   // One generation, with a single corrective retry for invalid JSON.
   const generate = async (feedback?: string[]): Promise<AgentOutput> => {
     let system = buildSystemPrompt(version, facts, feedback);
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    for (let attempt = 1; attempt <= OUTPUT_ATTEMPTS; attempt++) {
       llmCalls++;
       turnAttempt++;
       let res;

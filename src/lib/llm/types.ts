@@ -20,4 +20,7 @@ export interface LlmProvider {
   model: string;
   params: Record<string, number>;
   complete(req: LlmRequest): Promise<LlmResponse>;
+  // Set by the recording and replay wrappers so artifacts carry their provenance.
+  recordingSetId?: string;
+  originalSourceMode?: "live" | "mock";
 }
