@@ -1,14 +1,10 @@
-import { parseArgs } from "../src/lib/env";
+import { parseArgs, parseLimit } from "../src/lib/env";
 import { runBulk } from "../src/lib/sim/bulk";
 import { newRunId, writeArtifact } from "./artifact-file";
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const limit = args.limit ? Number(args.limit) : undefined;
-  if (limit !== undefined && !(Number.isInteger(limit) && limit >= 1 && limit <= 100)) {
-    console.error("--limit must be an integer from 1 to 100");
-    process.exit(1);
-  }
+  const limit = parseLimit(args.limit, 100);
   const now = new Date();
   const artifact = await runBulk({ runId: newRunId("bulk", now), createdAt: now.toISOString(), limit });
   const path = writeArtifact(artifact);

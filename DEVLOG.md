@@ -64,5 +64,5 @@ Honest record of what was built, how it was checked, and what changed after revi
   - Full run: 100 conversations, agreed_to_pay 17, payment_plan 17, disputed 17, promise_to_pay 17, stopped 16, no_response 16. These are mock outcomes from scripted customers, not a measure of anything real.
   - `--limit 0`: `--limit must be an integer from 1 to 100`.
   - `npm test`: 181 passed (181).
-- Changed after review: Codex review pending (ChatGPT quota exhausted until 8). Will be reviewed with the other pending tasks.
+- Changed after review (Codex gpt-6.1-sol, two checks): check 1 found same-second run ID collisions and a bare `--limit` silently meaning 1. Run IDs now carry milliseconds; `parseLimit` rejects bare or out-of-range values (tests added, 190 passed). Check 2 confirmed the `--limit` fix and suggested a random suffix for same-millisecond runs; rejected because the write refuses to overwrite (loud error, no data loss) and readable IDs matter more.
 - Fixed while building: tsx compiles scripts as CommonJS, so top-level await failed. Wrapped in `main()`.

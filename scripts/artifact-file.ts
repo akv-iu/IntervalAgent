@@ -13,5 +13,7 @@ export function writeArtifact(a: unknown): string {
 }
 
 export function newRunId(kind: string, now = new Date()): string {
-  return `${kind}-${now.toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 15)}`;
+  // yyyymmdd-hhmmss-mmm; milliseconds keep back-to-back runs apart
+  const iso = now.toISOString();
+  return `${kind}-${iso.slice(0, 10).replace(/-/g, "")}-${iso.slice(11, 19).replace(/:/g, "")}-${iso.slice(20, 23)}`;
 }

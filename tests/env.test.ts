@@ -1,4 +1,4 @@
-import { loadEnv, parseArgs, redact } from "../src/lib/env";
+import { loadEnv, parseArgs, parseLimit, redact } from "../src/lib/env";
 
 test("redacts connection strings and API keys", () => {
   const s = redact("failed postgres://u:p@h:5432/db and postgresql://x:y@z/db and sk-proj-abc123XYZ");
@@ -45,4 +45,10 @@ test("live commands still validate live settings", () => {
 test("LLM_PROVIDER defaults to mock and is kept", () => {
   expect(loadEnv([], {}).LLM_PROVIDER).toBe("mock");
   expect(loadEnv([], { LLM_PROVIDER: "replay" }).LLM_PROVIDER).toBe("replay");
+});
+
+describe("parseLimit", () => {
+  test("absent means no limit", () => expect(parseLimit(undefined, 100)).toBeUndefined());
+  test("valid number", () => expect(parseLimit("10", 100)).toBe(10));
+  test.each([true, "0", "101", "2.5", "abc", ""])("rejects %s", (v) => expect(() => parseLimit(v, 100)).toThrow(/--limit/));
 });

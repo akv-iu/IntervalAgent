@@ -2,7 +2,7 @@
 
 A plain-language log, one entry per build step: what went wrong, what the reviewer (Codex) pointed out, and what was changed. DEVLOG.md has the technical detail; this file is the readable version.
 
-How review works: after each step, Codex reads the new code and reports problems (check 1). Fixes go in with a test that proves the problem existed and is now gone. Then Codex looks again to confirm the fixes (check 2). Steps 1 to 6 below were reviewed with one check under the earlier process; step 11 is still waiting for its review.
+How review works: after each step, Codex reads the new code and reports problems (check 1). Fixes go in with a test that proves the problem existed and is now gone. Then Codex looks again to confirm the fixes (check 2). Steps 1 to 6 below were reviewed with one check under the earlier process. From step 11 on, every step gets both checks.
 
 ---
 
@@ -93,4 +93,12 @@ The first two would let a wrong message through. The last two would make the age
 1. The run script would not start because of how the TypeScript runner handles async code.
 2. Two runs started in the same second would have overwritten each other's results file. They now refuse to overwrite.
 
-**Codex review:** pending (ChatGPT quota ran out). Will be done with the new two-check process before the next step.
+**Codex check 1 said:**
+1. Two runs started in the same second got the same run name, so the second one failed. (Minor.)
+2. Typing `--limit` with no number quietly ran 1 account instead of complaining. (Minor.)
+
+**What was fixed:** run names now include milliseconds, for example `bulk-20261015-231824-500`. A bare `--limit` now stops with "--limit must be a whole number from 1 to 100". Both have tests.
+
+**Codex check 2 said:** the `--limit` fix works. It still suggested adding a random suffix to run names, because two runs in the same millisecond could still clash.
+
+**Decision:** left as is. Starting two runs by hand within the same thousandth of a second is not realistic, and if it ever happens nothing is lost: the second run stops with a clear "file exists" error instead of overwriting the first. A random suffix would also make run names harder to read in the dashboard.

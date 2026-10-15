@@ -60,3 +60,11 @@ export function parseArgs(argv: string[]): Record<string, string | boolean> {
   }
   return out;
 }
+
+// A --limit flag must carry a whole number from 1 to max. A bare flag is an error, not 1.
+export function parseLimit(v: string | boolean | undefined, max: number): number | undefined {
+  if (v === undefined) return undefined;
+  const n = typeof v === "string" && /^\d+$/.test(v) ? Number(v) : NaN;
+  if (!(n >= 1 && n <= max)) throw new Error(`--limit must be a whole number from 1 to ${max}`);
+  return n;
+}
