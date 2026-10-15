@@ -47,3 +47,11 @@ Honest record of what was built, how it was checked, and what changed after revi
 - Built: `src/lib/llm/types.ts`, `src/lib/llm/mock.ts` (`mock` and `mock-bad`), `src/lib/agent/prompts.ts`. The mock reads facts from the prompt text, the same input a live model would get. `mock-bad` is labeled as a test fixture and never counts as live evidence.
 - Checked by hand: `npm test`: 161 passed (161). Prompt tests assert no scenario ID, account key, hidden state word, or date appears in either prompt, and the facts block is byte-identical across versions.
 - Changed after review (Codex): no findings.
+
+## Phase 3b: conversation loop  (2026-10-15)
+- Asked for: the agent/customer loop for both systems with the guard order from SPEC 6, one regeneration with feedback, a fallback template, one corrective retry for invalid JSON, and simulated receipts.
+- Built: `src/lib/sim/loop.ts`. The guard decides stop, handoff (fixed text, no model call), or generate with a scheduled send time; the conversation clock moves from the actual send time. The outcome comes from the scripted customer's state, which only the simulator reads.
+- Checked by hand: `npm test`: 178 passed (178). Includes the SPEC 6 boundary case: opening 20:50, dispute 21:00, acknowledgement lands 08:00 next day with exactly one model call in the whole conversation. Mock-bad under the guarded system falls back to the template; under baseline it keeps messaging after STOP.
+- Changed after review (Codex):
+  - An empty `send` reply skipped validation and never counted as a turn. My first failing test hung the suite, which confirmed an infinite loop. A send now needs text; empty sends count as invalid output.
+  - A provider error that escaped its retries crashed the run. It now ends the conversation as `failed` with a redacted system note.
