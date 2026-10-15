@@ -55,3 +55,14 @@ Honest record of what was built, how it was checked, and what changed after revi
 - Changed after review (Codex):
   - An empty `send` reply skipped validation and never counted as a turn. My first failing test hung the suite, which confirmed an infinite loop. A send now needs text; empty sends count as invalid output.
   - A provider error that escaped its retries crashed the run. It now ends the conversation as `failed` with a redacted system note.
+
+## Phase 4d (early): bulk mock simulation  (2026-10-15)
+- Asked for: `npm run simulate` over the 100 demo accounts with the guarded mock agent, fixed sms / friendly / 10:00 local, `--limit 1` for the early database slice.
+- Built: `src/lib/sim/bulk.ts`, `scripts/simulate.ts`, `scripts/artifact-file.ts` (validates before writing, refuses to overwrite an existing run file).
+- Checked by hand:
+  - `npm run simulate -- --limit 1`: `wrote results\bulk-20261015-225306.json (complete, 1 conversations)`, `{ agreed_to_pay: 1 }`.
+  - Full run: 100 conversations, agreed_to_pay 17, payment_plan 17, disputed 17, promise_to_pay 17, stopped 16, no_response 16. These are mock outcomes from scripted customers, not a measure of anything real.
+  - `--limit 0`: `--limit must be an integer from 1 to 100`.
+  - `npm test`: 181 passed (181).
+- Changed after review: Codex review pending (ChatGPT quota exhausted until 8). Will be reviewed with the other pending tasks.
+- Fixed while building: tsx compiles scripts as CommonJS, so top-level await failed. Wrapped in `main()`.
