@@ -38,7 +38,7 @@ Use agreed defaults and engineering judgment for reversible choices. Ask only fo
 ## Execution, review, and browser checks
 
 - Plan: [docs/superpowers/plans/2026-10-15-recovery-lab.md](docs/superpowers/plans/2026-10-15-recovery-lab.md). Claude implements every task inline. No Claude reviewer subagents.
-- Code review is done by Codex, not Claude, always with model `gpt-6.1-sol`: `codex exec -m gpt-6.1-sol -s read-only --ephemeral -o .superpowers/review-tN-K.md "<prompt>"`, then read only that output file. (`codex review --uncommitted` rejects a custom prompt, so it is not used.)
+- Code review is done by Codex, not Claude, always with model `gpt-6.1-sol`: `env -u OPENAI_API_KEY codex exec -m gpt-6.1-sol -s read-only --ephemeral -o .superpowers/review-tN-K.md "<prompt>"`, then read only that output file. Codex must run on the ChatGPT login, never an API key: always strip `OPENAI_API_KEY` from its environment. (`codex review --uncommitted` rejects a custom prompt, so it is not used.)
 - Two Codex checks per task, both before the commit:
   1. Check 1 (implementation review): after the task's tests pass, review the uncommitted changes against the task, its FR/NFR IDs, and SPEC. Bugs and spec violations only, max 10, one line each. Fix confirmed findings test-first.
   2. Check 2 (verification): after fixes, Codex re-reviews the same changes to confirm each finding is fixed and nothing new broke. If check 2 finds something, fix it and note it; no third loop unless it is critical.
