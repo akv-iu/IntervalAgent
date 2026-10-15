@@ -40,6 +40,7 @@ Use agreed defaults and engineering judgment for reversible choices. Ask only fo
 - Plan: [docs/superpowers/plans/2026-10-15-recovery-lab.md](docs/superpowers/plans/2026-10-15-recovery-lab.md). Claude implements every task inline. No Claude reviewer subagents.
 - Code review is done by Codex, not Claude. After a task's tests pass and before committing, `codex exec -s read-only --ephemeral -o .superpowers/review-tN.md "<review uncommitted changes; task N, FR/NFR IDs, plan path; bugs and spec violations only, max 10, one line each>"` and read only that output file (`codex review --uncommitted` rejects a custom prompt). Fix confirmed findings, note rejected ones with a reason in DEVLOG. At the end, run one whole-branch review with `--base main`.
 - Keep review output short: never paste full Codex logs into context or DEVLOG; summarize findings in one line each.
+- One task per turn. After each task, stop and give Akshay a review summary: what the task is, what was built, Codex findings, and exact commands to verify it. Do not start the next task until he approves.
 - Akshay does all browser testing. Do not use browser automation tools. When a page needs checking, start `npm run dev` if needed, then give Akshay a short checklist (URL, what to click, what to expect) and wait for his results.
 
 ## Before declaring done
