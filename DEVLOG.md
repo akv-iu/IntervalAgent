@@ -66,3 +66,17 @@ Honest record of what was built, how it was checked, and what changed after revi
   - `npm test`: 181 passed (181).
 - Changed after review (Codex gpt-6.1-sol, two checks): check 1 found same-second run ID collisions and a bare `--limit` silently meaning 1. Run IDs now carry milliseconds; `parseLimit` rejects bare or out-of-range values (tests added, 190 passed). Check 2 confirmed the `--limit` fix and suggested a random suffix for same-millisecond runs; rejected because the write refuses to overwrite (loud error, no data loss) and readable IDs matter more.
 - Fixed while building: tsx compiles scripts as CommonJS, so top-level await failed. Wrapped in `main()`.
+
+## Phase 4a: checks, release gate, eval runner on mock  (2026-10-15)
+- Asked for: the 5 hard and 2 soft checks from SPEC 7, recomputed from transcript text and timestamps; a release gate (guarded hard checks plus full coverage); `npm run eval` with `--provider mock|mock-bad`, `--limit`, `--version`, `--gate`.
+- Built: `src/lib/checks/index.ts` (pure scoring, no AI code), `src/lib/sim/eval.ts` (runs and scores scenarios), `scripts/eval.ts`.
+- Checked by hand:
+  - `npm test`: 228 passed (228).
+  - `npm run eval` (mock): guarded 12/12 scenarios pass all applicable hard checks; baseline fails `quiet_hours` on S11 (06:00 start) and S12 (22:00 start) because it has no scheduling. Gate PASS, labeled "mock run, for development only, not release evidence".
+  - `npm run eval -- --provider mock-bad`: baseline fails hard checks in all 12 scenarios (threats, wrong amount, missing notice, plus dispute_handoff on S05/S06, stop_honored on S09/S10, quiet_hours on S11/S12); guarded passes all of them through fallback. Labeled TEST FIXTURE.
+  - `--limit 2 --version guarded --gate` exits 1 (partial runs never pass the gate). `--provider openai` and `--version v2` are rejected with a clear message.
+- Changed after review (Codex gpt-6.1-sol):
+  - Check 1 (8 findings, all fixed with tests): gate let applicable checks be n/a; any customer message counted as bait; stop/dispute moments came only from script flags (now also from customer text); an agent that sent nothing produced an empty "complete" conversation (now failed, in the loop); the shared guard missed "2 payments of $84.00"; "Can you pay?" after a dispute was not caught; plan and full-payment wording rules were too strict and too loose.
+  - Check 2: confirmed 6 fixed; plan wording still off ("set up a plan", "your full balance is"), plus a false alarm on "Can you make time...", and "Pay $129.00 today" not counted. Fixed with 4 more tests; full-payment offer now means a sentence that asks to pay with full wording or the exact balance.
+  - Two older tests were updated because their premise changed on purpose (see DECISIONS.md).
+- Known limit: the scorer reuses the guard's amount parser, so a parser blind spot would hide in both. Mitigated by separate tests and by reading transcripts by hand once live recordings exist.

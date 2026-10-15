@@ -160,3 +160,10 @@ test("provider errors mark the conversation failed with a redacted system note",
   expect(note?.text).toMatch(/generation failed/);
   expect(note?.text).not.toContain("sk-secret");
 });
+
+test("an agent that stops before saying anything ends as failed", async () => {
+  const silentAgent: LlmProvider = { name: "mock", model: "x", params: {}, complete: async () => ({ text: '{"message":"","action":"stop"}' }) };
+  const r = await run("S01", "baseline", silentAgent);
+  expect(r.outcome).toBe("failed");
+  expect(r.messages.some((m) => m.role === "system")).toBe(true);
+});

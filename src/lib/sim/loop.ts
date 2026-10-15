@@ -162,6 +162,12 @@ export async function runConversation(o: RunOptions): Promise<ConversationResult
     push("system", `generation failed: ${e.message}`, clock);
   }
 
+  // An agent that never sent anything did not complete outreach (SPEC 3: empty conversations fail).
+  if (!failed && !messages.some((m) => m.role === "agent")) {
+    failed = true;
+    push("system", "generation failed: agent sent no messages", clock);
+  }
+
   const outcome: Outcome = failed
     ? "failed"
     : state.agreed === "full"

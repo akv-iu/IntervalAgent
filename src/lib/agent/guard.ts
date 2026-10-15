@@ -27,7 +27,7 @@ interface Facts {
 
 const COUNT_WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
 const COUNT = /\b(one|two|three|four|five|six|\d+)\s+(?:equal\s+|monthly\s+|weekly\s+|separate\s+)?(?:payments|installments)\b/gi;
-const TWO_OF = /\btwo\s+(?:\w+\s+)?(?:payments|installments)\s+of\s+(\$\s?\d[\d,]*(?:\.\d{1,2})?)/gi;
+const TWO_OF = /\b(?:two|2)\s+(?:\w+\s+)?(?:payments|installments)\s+of\s+(\$\s?\d[\d,]*(?:\.\d{1,2})?)/gi;
 const LATER_ORDINAL = /\b(third|fourth|fifth|sixth|3rd|4th|5th|6th)\s+(?:payment|installment)/i;
 const BALANCE_WORDS = /\b(balance|owe|outstanding|total)\b/i;
 const PLAN_WORDS = /\b(payments?|installments?|split|plan)\b/i;

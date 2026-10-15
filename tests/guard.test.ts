@@ -90,3 +90,8 @@ describe("review regressions", () => {
     expect(validateOutbound("Your outstanding balance is $42.00.", facts(8400)).join()).toMatch(/balance/i));
   test("balance sentence with the real balance passes", () => expect(validateOutbound("Your outstanding balance is $84.00.", facts(8400))).toEqual([]));
 });
+
+test("digit installment counts are checked against the total", () => {
+  expect(validateOutbound("We can do 2 payments of $84.00.", facts(8400)).length).toBeGreaterThan(0);
+  expect(validateOutbound("We can do 2 payments of $42.00.", facts(8400))).toEqual([]);
+});
