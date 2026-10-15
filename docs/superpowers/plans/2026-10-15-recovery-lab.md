@@ -143,8 +143,8 @@ Each requirement has an ID so tasks and tests can point at it. "Done when" is th
 - No em dashes in UI copy, README, docs, DEVLOG.
 - Fixed simulation date `2026-03-10`. Timezones `America/Denver`, `America/New_York`. Quiet window 08:00 inclusive to 21:00 exclusive local.
 - Outcome enum: `agreed_to_pay`, `payment_plan`, `promise_to_pay`, `disputed`, `stopped`, `no_response` (plus `failed` for generation errors, artifact-only, never imported as complete).
-- After every task: `npm run typecheck && npm test`, then Codex review `codex exec -s read-only --ephemeral -o .superpowers/review-tN.md "<review uncommitted changes; task N, FR/NFR IDs, plan path; bugs and spec violations only, max 10, one line each>"` and read only that output file (`codex review --uncommitted` rejects a custom prompt), fix confirmed findings, commit, append DEVLOG entry. The "Commit" step in each task means this whole sequence.
-- No Claude reviewer subagents. Final whole-branch review is `codex review --base main`.
+- After every task: `npm run typecheck && npm run lint && npm test`, then two Codex checks with model `gpt-6.1-sol` as CLAUDE.md describes (check 1 reviews the implementation, fixes are made test-first, check 2 verifies the fixes), commit with no Co-Authored-By trailer, append DEVLOG and DECISIONS.md entries, then stop for Akshay. The "Commit" step in each task means this whole sequence.
+- No Claude reviewer subagents. Final whole-branch review is a Codex (`gpt-6.1-sol`) review against `main`.
 - No browser automation. Every browser check is handed to Akshay as a short checklist.
 - Ask the human before choosing the model name, before any live call, before anything touching keys, billing, deploy settings, or deleting data.
 
