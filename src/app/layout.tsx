@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 import { Barlow } from "next/font/google";
 import NavLinks from "@/components/NavLinks";
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             not a legal standard.
           </p>
         </footer>
+        <Analytics />
       </body>
     </html>
   );

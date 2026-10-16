@@ -20,6 +20,7 @@
     "db:import": "tsx scripts/import.ts"
   },
   "dependencies": {
+    "@vercel/analytics": "2.0.1",
     "dotenv": "18.0.8",
     "next": "16.4.2",
     "openai": "7.34.0",
