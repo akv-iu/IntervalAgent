@@ -63,3 +63,16 @@ describe("LessonsPanel", () => {
     expect(html(false)).not.toContain("Delete");
   });
 });
+
+describe("a lesson that is off", () => {
+  const off: Lesson = {
+    id: 2, createdAt: "2026-10-16T12:00:00.000Z", situation: "refusal", reason: "gave_up", instruction: "Offer the plan.", hardRule: null,
+    appliesTo: "situation", scenarioId: "S01", moment: [], beforeText: "b", afterText: "a", active: false, timesUsed: 0,
+  };
+  const html = renderToStaticMarkup(<LessonsPanel lessons={[off]} setLessons={() => {}} off={null} canDelete={false} />);
+  test("its Turn on button is not faded with the card, and stands out", () => {
+    expect(html).not.toMatch(/<li[^>]*opacity-/); // only the content is faded, never the controls
+    expect(html).toMatch(/<button[^>]*bg-accent[^>]*>Turn on</);
+  });
+  test("says plainly that it is off", () => expect(html).toContain("Off, not used"));
+});

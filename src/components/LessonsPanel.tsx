@@ -96,7 +96,12 @@ export default function LessonsPanel({
                 </p>
               )}
               <div className="mt-2 flex gap-2">
-                <button type="button" disabled={busy} onClick={() => act(async () => setLessons((await post({ op: "toggle", id: l.id, active: !l.active })).lessons))} className="rounded-md border border-line px-2 py-1 text-xs">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => act(async () => setLessons((await post({ op: "toggle", id: l.id, active: !l.active })).lessons))}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium disabled:opacity-50 ${l.active ? "border border-line enabled:hover:border-accent" : "bg-accent text-white enabled:hover:opacity-90"}`}
+                >
                   {l.active ? "Turn off" : "Turn on"}
                 </button>
                 {canDelete && (
