@@ -1,5 +1,5 @@
 // npm run eval -- [--provider mock|mock-bad|openai|replay] [--set <id>] [--record] [--limit N] [--version baseline|guarded] [--gate]
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { gate, summaryTable } from "../src/lib/checks";
 import { loadEnv, parseArgs, parseLimit } from "../src/lib/env";
 import { createBudget } from "../src/lib/llm/budget";
@@ -11,6 +11,8 @@ import { runEval } from "../src/lib/sim/eval";
 import { SCENARIOS } from "../src/lib/sim/scenarios";
 import { newRunId, writeArtifact } from "./artifact-file";
 import { projectEnv } from "./project-env";
+
+const PIN_FILE = "fixtures/replay-set.json";
 
 function nextLiveSetId(now: Date): string {
   const day = now.toISOString().slice(0, 10).replace(/-/g, "");
@@ -35,8 +37,10 @@ async function main() {
   if (providerName === "mock") provider = mockProvider();
   else if (providerName === "mock-bad") provider = mockBadProvider();
   else if (providerName === "replay") {
-    const setId = String(args.set ?? fileEnv.RECORDING_SET ?? "");
-    if (!setId) throw new Error("--provider replay needs --set <recording-set-id>");
+    const pinned = existsSync(PIN_FILE) ? (JSON.parse(readFileSync(PIN_FILE, "utf8")) as { setId?: string }).setId : undefined;
+    const setId = String(args.set ?? pinned ?? "");
+    if (!setId) throw new Error(`--provider replay needs --set <recording-set-id> or a pin in ${PIN_FILE}`);
+    console.log(`replaying recording set ${setId}${args.set ? "" : " (pinned)"}`);
     provider = replayProvider(setId, { requireLive: args["allow-mock-set"] !== true });
   } else if (providerName === "openai") {
     const env = loadEnv(["live"], fileEnv); // key and model come from .env only, never the shell

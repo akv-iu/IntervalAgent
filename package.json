@@ -12,7 +12,8 @@
     "simulate": "tsx scripts/simulate.ts",
     "show": "tsx scripts/show-conversation.ts",
     "eval": "tsx scripts/eval.ts",
-    "picker": "tsx scripts/picker.ts"
+    "picker": "tsx scripts/picker.ts",
+    "eval:replay": "tsx scripts/eval.ts --provider replay --gate"
   },
   "dependencies": {
     "dotenv": "18.0.8",

@@ -177,3 +177,22 @@ The simulated customers follow a table of made-up odds that the learner is not a
 **An honest finding:** checking its choices against the hidden table, it found the truly best option for the two newer groups, but **missed it for the two oldest groups** (email, evening, formal would have done noticeably better there). The reason: in those groups only about 1 in 10 customers pays, so with 500 practice cases and 10% exploring, each option gets only a few tries and early luck decides. This is a known weakness of this simple method. The spec fixes the method and the practice size, so the result is reported as it came out, not tuned. Natural next steps would be more practice cases, several seeds, or a smarter exploration method.
 
 **What Codex said:** check 1 found that the hidden odds table was exported, which means the learner *could* have imported it (even though it did not). It is now private and a test makes sure only the "draw one outcome" function is visible. Check 2 confirmed the fix and found nothing new.
+
+---
+
+## Step 9: First real AI run and the saved recording
+
+**What this step is:** the first time the real OpenAI model (`gpt-6-luna`, your choice) wrote the agent's messages. We did a 2-conversation test, then recorded all 12 scenarios for both agent versions (35 real AI calls, about 13,000 tokens, well under one cent). Those replies are saved in the project, so from now on GitHub CI and anyone who downloads the project replays them for free and gets the same verdicts. A separate CI job now does this replay on every push.
+
+**What the real AI did:**
+- The careful (guarded) agent passed every hard rule in all 12 scenarios.
+- The simple (baseline) agent, on its own with no fake bad AI, sent messages at 6am and 10pm, and in one case wrote "I can't threaten legal action" (a refusal, but it still uses a banned phrase, so the rule check fails it). It also often offered only the split payment and not full payment.
+- The simple agent handled disputes and "stop" requests politely by itself. That is an honest result: the guard's big wins here are timing and wording control, not disputes.
+
+**What went wrong (found by reading the real messages):** the referee wrongly failed two correct messages from the simple agent: "two payments of $230.00 and $230.01" (it only read the first amount) and "two $90 payments" (it read "90" as the number of payments). Because the guard uses the same reader, it had the same blind spot. Fixed before saving the recording as the official one.
+
+**What Codex said:**
+- Check 1: my fix for those false alarms opened two new holes. "three $90 payments" and "two payments of $84.00 and $84.00" on an $84 balance (double the debt) were both accepted. The reader now requires every stated split to be exactly two payments that match the computed amounts and add up to the exact balance.
+- Check 2: confirmed those fixes and that the real messages still pass, and found one more gap: "three **equal** $90 payments" slipped through because of the word "equal" before the amount. Fixed.
+
+**Open question for you:** your usage page showed 5,576 tokens after the 2-conversation test, while the API reported 1,024 tokens for those two calls. After the full run, the API reported 13,311 more (so about 14,335 from this project in total). If your page now shows noticeably more than that, something else is also using that key or project.

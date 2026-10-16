@@ -95,3 +95,28 @@ test("digit installment counts are checked against the total", () => {
   expect(validateOutbound("We can do 2 payments of $84.00.", facts(8400)).length).toBeGreaterThan(0);
   expect(validateOutbound("We can do 2 payments of $42.00.", facts(8400))).toEqual([]);
 });
+
+describe("live recording false alarms (real gpt-6-luna wording)", () => {
+  test("'two payments of $230.00 and $230.01' is the correct uneven plan", () =>
+    expect(validateOutbound("We can split it into two payments of $230.00 and $230.01.", facts(46001))).toEqual([]));
+  test("'two $90 payments' is two payments, not ninety", () =>
+    expect(validateOutbound("We can split it into two $90 payments if that helps.", facts(18000))).toEqual([]));
+  test("'two $90 payments' on the wrong balance still fails", () =>
+    expect(validateOutbound("We can split it into two $90 payments.", facts(25000)).length).toBeGreaterThan(0));
+  test("'two payments of $230.00' alone on 46001 still fails", () =>
+    expect(validateOutbound("We can do two payments of $230.00.", facts(46001)).length).toBeGreaterThan(0));
+});
+
+describe("review of the live false-alarm fix", () => {
+  test("'three $90 payments' on 180 fails", () => expect(validateOutbound("We can do three $90 payments.", facts(18000)).length).toBeGreaterThan(0));
+  test("'two $100 payments' on 180 fails (total 200)", () => expect(validateOutbound("We can do two $100 payments.", facts(18000)).length).toBeGreaterThan(0));
+  test("'two payments of $84.00 and $84.00' on 84 fails", () =>
+    expect(validateOutbound("We can do two payments of $84.00 and $84.00.", facts(8400)).length).toBeGreaterThan(0));
+  test("'two payments of $230.01 and $230.01' on 46001 fails", () =>
+    expect(validateOutbound("We can do two payments of $230.01 and $230.01.", facts(46001)).length).toBeGreaterThan(0));
+});
+
+test("a modifier before the amount does not hide the count", () => {
+  expect(validateOutbound("We can do three equal $90 payments.", facts(18000)).length).toBeGreaterThan(0);
+  expect(validateOutbound("We can do two equal $90 payments.", facts(18000))).toEqual([]);
+});

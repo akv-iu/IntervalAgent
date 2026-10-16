@@ -26,8 +26,13 @@ interface Facts {
 }
 
 const COUNT_WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
-const COUNT = /\b(one|two|three|four|five|six|\d+)\s+(?:equal\s+|monthly\s+|weekly\s+|separate\s+)?(?:payments|installments)\b/gi;
-const TWO_OF = /\b(?:two|2)\s+(?:\w+\s+)?(?:payments|installments)\s+of\s+(\$\s?\d[\d,]*(?:\.\d{1,2})?)/gi;
+const MOD = "(?:equal|monthly|weekly|separate)";
+const AMT = String.raw`\$\s?\d[\d,]*(?:\.\d{1,2})?(?!\d|\.\d)`;
+// Count, optionally with the amount in between: "two payments", "2 installments", "two $90 payments".
+// A dollar amount is never read as a count ("$90 payments" is not 90 payments).
+const COUNT = new RegExp(String.raw`(?<![$.,\d])\b(one|two|three|four|five|six|\d+)\s+(?:${MOD}\s+)?(?:(${AMT})\s+)?(?:${MOD}\s+)?(?:payments|installments)\b`, "gi");
+// "two payments of $X" (equal) or "two payments of $X and $Y" (both listed).
+const TWO_OF = new RegExp(String.raw`\b(?:two|2)\s+(?:\w+\s+)?(?:payments|installments)\s+of\s+(${AMT})(?:\s*(?:and|&|,|plus)\s*(${AMT}))?`, "gi");
 const LATER_ORDINAL = /\b(third|fourth|fifth|sixth|3rd|4th|5th|6th)\s+(?:payment|installment)/i;
 const BALANCE_WORDS = /\b(balance|owe|outstanding|total)\b/i;
 const PLAN_WORDS = /\b(payments?|installments?|split|plan)\b/i;
@@ -48,15 +53,25 @@ export function validateOutbound(text: string, f: Facts): string[] {
   const allowed = new Set([f.balanceCents, first, second]);
   for (const a of amounts) if (!allowed.has(a)) problems.push(`unsupported amount ${formatCents(a)}`);
 
+  // Every stated installment split must be exactly two payments that add up to the balance.
+  const checkPair = (x: number, y: number, said: string) => {
+    if (x + y !== f.balanceCents || !((x === first && y === second) || (x === second && y === first))) {
+      problems.push(`${said} does not match ${formatCents(first)} + ${formatCents(second)} = ${formatCents(f.balanceCents)}`);
+    }
+  };
   for (const m of text.matchAll(COUNT)) {
     const n = COUNT_WORDS[m[1].toLowerCase()] ?? Number(m[1]);
     if (n !== 2) problems.push(`unsupported installment count: ${n}`);
+    else if (m[2]) {
+      const each = extractAmounts(m[2])[0];
+      checkPair(each, each, `two payments of ${formatCents(each)}`);
+    }
   }
-
   if (LATER_ORDINAL.test(text)) problems.push("unsupported installment count: more than 2");
   for (const m of text.matchAll(TWO_OF)) {
-    const each = extractAmounts(m[1])[0];
-    if (each * 2 !== f.balanceCents) problems.push(`two payments of ${formatCents(each)} do not total ${formatCents(f.balanceCents)}`);
+    const x = extractAmounts(m[1])[0];
+    const y = m[2] ? extractAmounts(m[2])[0] : x;
+    checkPair(x, y, m[2] ? `payments of ${formatCents(x)} and ${formatCents(y)}` : `two payments of ${formatCents(x)}`);
   }
 
   // A sentence about the balance (and not about a plan) may only state the balance.
