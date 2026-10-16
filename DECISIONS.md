@@ -195,4 +195,4 @@ The simulated customers follow a table of made-up odds that the learner is not a
 - Check 1: my fix for those false alarms opened two new holes. "three $90 payments" and "two payments of $84.00 and $84.00" on an $84 balance (double the debt) were both accepted. The reader now requires every stated split to be exactly two payments that match the computed amounts and add up to the exact balance.
 - Check 2: confirmed those fixes and that the real messages still pass, and found one more gap: "three **equal** $90 payments" slipped through because of the word "equal" before the amount. Fixed.
 
-**Open question for you:** your usage page showed 5,576 tokens after the 2-conversation test, while the API reported 1,024 tokens for those two calls. After the full run, the API reported 13,311 more (so about 14,335 from this project in total). If your page now shows noticeably more than that, something else is also using that key or project.
+**Usage check (resolved):** after the full run your usage page showed about 10k input and 4k output tokens, which matches the roughly 14,300 tokens the API reported for this project. Nothing else is using the key.
