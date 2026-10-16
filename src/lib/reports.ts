@@ -2,6 +2,7 @@
 // parameterized and scoped to one run. pg returns sums and rounded numerics as strings; convert here.
 import type { Pool } from "pg";
 import { getPool } from "./db";
+import type { Lesson } from "./lessons";
 
 type Db = Pick<Pool, "query">;
 const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
@@ -234,4 +235,27 @@ export async function pickerSummary(runId: string, db: Db = getPool()): Promise<
     [runId],
   );
   return r.rows.map((x) => ({ segment: x.segment, strategy: x.strategy, n: num(x.n)!, respondRate: num(x.respond_rate)!, payRate: num(x.pay_rate)! }));
+}
+
+// Lessons taught on the local Try page, newest first. Read-only; shown on the public site as a log.
+export async function lessonsLog(db: Db = getPool()): Promise<Lesson[]> {
+  const r = await db.query(
+    `select id, created_at, situation, reason, instruction, hard_rule, applies_to, scenario_id, moment, before_text, after_text, active, times_used
+     from lessons order by id desc`,
+  );
+  return r.rows.map((x) => ({
+    id: x.id,
+    createdAt: new Date(x.created_at).toISOString(),
+    situation: x.situation,
+    reason: x.reason,
+    instruction: x.instruction,
+    hardRule: x.hard_rule,
+    appliesTo: x.applies_to,
+    scenarioId: x.scenario_id,
+    moment: x.moment,
+    beforeText: x.before_text,
+    afterText: x.after_text,
+    active: x.active,
+    timesUsed: x.times_used,
+  }));
 }

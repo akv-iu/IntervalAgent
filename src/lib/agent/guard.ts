@@ -1,7 +1,7 @@
 // Code guard for the guarded system. Reads customer text only, never persona state.
 import { extractAmounts, formatCents } from "../money";
 import { findThreats, isDispute, isStop } from "../patterns";
-import { isRefusal, requestedHour, situationOf, type Situation } from "../situations";
+import { isRefusal, requestedHour, situationLabel, situationOf, type Situation } from "../situations";
 import { notBeforeHour, scheduleInWindow, type Tz } from "../time";
 
 export type GuardDecision =
@@ -117,7 +117,7 @@ export type GuardDecisionV2 = (GuardDecision | { kind: "close"; text: string; se
 export function preGenerateV2(lastCustomerText: string | null, proposedAt: Date, tz: Tz, ctx: { firstName: string; customerTexts: string[] }): GuardDecisionV2 {
   const situation = lastCustomerText ? situationOf(lastCustomerText, ctx.firstName) : "general";
   const refused = lastCustomerText ? isRefusal(lastCustomerText) : false;
-  const notes = lastCustomerText ? [`customer message read as: ${situation.replace("_", " ")}${refused && situation !== "refusal" ? " (also a refusal)" : ""}`] : [];
+  const notes = lastCustomerText ? [`read as: the customer ${situationLabel(situation)}${refused && situation !== "refusal" ? " (and refuses to pay)" : ""}`] : [];
   const hour = requestedHour(ctx.customerTexts);
   const sendAt = hour === null ? scheduleInWindow(proposedAt, tz) : notBeforeHour(proposedAt, hour, tz);
   if (hour !== null) notes.push(`customer asked for after ${formatHour(hour)}`);

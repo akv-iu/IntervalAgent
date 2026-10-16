@@ -4,6 +4,10 @@ import LiveChat, { type LiveCustomer } from "@/components/LiveChat";
 import PageHeader from "@/components/PageHeader";
 import { formatCents } from "@/lib/format";
 import { projectEnv, tryAgent } from "@/lib/project-env";
+import LessonsLog from "@/components/LessonsLog";
+import type { Lesson } from "@/lib/lessons";
+import { redact } from "@/lib/env";
+import { lessonsLog } from "@/lib/reports";
 import { PRESETS } from "@/lib/situations";
 import { SCENARIOS } from "@/lib/sim/scenarios";
 
@@ -14,11 +18,32 @@ export default function TryPage() {
         title="Try it: talk to both agents"
         lede="You play the overdue customer. Both versions of the agent answer every message you send, live, using the same model. Watch what the guard does differently."
       />
-      <Suspense fallback={<p className="mt-6 text-sm text-muted">Checking whether the live demo is available...</p>}>
+      <Suspense
+        fallback={
+          <p className="mt-6 text-sm text-muted">
+            Checking whether the live demo is available...
+          </p>
+        }
+      >
         <Try />
       </Suspense>
     </>
   );
+}
+
+// Lessons come from PostgreSQL. Without a database the chat still works and lessons are off.
+async function loadLessons(): Promise<{
+  lessons: Lesson[];
+  off: string | null;
+}> {
+  try {
+    return { lessons: await lessonsLog(), off: null };
+  } catch (e) {
+    return {
+      lessons: [],
+      off: `Lessons are off: the database is not reachable (${redact(e instanceof Error ? e.message : String(e))}).`,
+    };
+  }
 }
 
 async function Try() {
@@ -26,24 +51,55 @@ async function Try() {
   const env = projectEnv();
   const local = process.env.APP_MODE === "local" && env.APP_MODE === "local"; // must be explicit, as in the API route
   const live = tryAgent(env) === "live";
+  const { lessons, off } = await loadLessons();
 
   if (!local) {
     return (
-      <section className="mt-6 max-w-2xl rounded-xl border border-line p-5 text-ink-2">
-        <h2 className="text-lg font-semibold text-ink">The live demo runs on a local copy only</h2>
-        <p className="mt-2">
-          It calls the OpenAI API, so it needs a key. This public site deliberately has no AI key and makes no AI calls, so strangers cannot run up costs.
-          The Evals page shows the recorded results instead.
-        </p>
-        <p className="mt-2 text-sm">
-          To try it yourself: clone the repository, put APP_MODE=local in a .env file, run npm run dev, and open /try. It starts with a scripted mock agent; to use the real model, also add OPENAI_API_KEY, OPENAI_AGENT_MODEL, and LIVE_DEMO_PROVIDER=live.
-        </p>
-      </section>
+      <>
+        <section className="mt-6 max-w-2xl rounded-xl border border-line p-5 text-ink-2">
+          <h2 className="text-lg font-semibold text-ink">
+            The live demo runs on a local copy only
+          </h2>
+          <p className="mt-2">
+            It calls the OpenAI API, so it needs a key. This public site
+            deliberately has no AI key and makes no AI calls, so strangers
+            cannot run up costs. The Evals page shows the recorded results
+            instead.
+          </p>
+          <p className="mt-2 text-sm">
+            To try it yourself: clone the repository, put APP_MODE=local in a
+            .env file, run npm run dev, and open /try. It starts with a scripted
+            mock agent; to use the real model, also add OPENAI_API_KEY,
+            OPENAI_AGENT_MODEL, and LIVE_DEMO_PROVIDER=live.
+          </p>
+        </section>
+        <section className="mt-8 space-y-3" aria-label="Lessons learned">
+          <h2 className="text-lg font-semibold">
+            Lessons taught on a local copy
+          </h2>
+          <p className="max-w-2xl text-sm text-ink-2">
+            On the local Try page a person can correct the guarded agent: write
+            what it should have done, retry the same moment, and keep the lesson
+            only if the new reply is right. The model never changes. Soft
+            lessons are added to the instructions; hard lessons are checked by
+            code. This is a read-only record of those corrections, with the
+            reply before and after.
+          </p>
+          {off ? (
+            <p className="text-sm text-muted">
+              Lessons are not available right now.
+            </p>
+          ) : (
+            <LessonsLog lessons={lessons} />
+          )}
+        </section>
+      </>
     );
   }
 
   const customers: LiveCustomer[] = SCENARIOS.map((s) => {
-    const city = s.account.timezone === "America/Denver" ? "Denver" : "New York";
+    const city =
+      s.account.timezone === "America/Denver" ? "Denver" : "New York";
     const h = s.startHour;
     return {
       id: s.id,
@@ -58,17 +114,30 @@ async function Try() {
       <div className="rounded-lg border border-tint-2 bg-tint px-4 py-3 text-sm">
         <p className="font-semibold text-accent-ink">
           {live
-            ? `Live model: ${env.OPENAI_AGENT_MODEL}. Synthetic customers; nothing is sent or saved.`
-            : "Mock agent: scripted replies, no AI calls, no tokens spent. Synthetic customers; nothing is sent or saved."}
+            ? `Live model: ${env.OPENAI_AGENT_MODEL}. Synthetic customers; nothing is sent. Only lessons you accept are saved.`
+            : "Mock agent: scripted replies, no AI calls, no tokens spent. Synthetic customers; nothing is sent. Only lessons you accept are saved."}
         </p>
-        {!live && <p className="mt-1 text-ink-2">To use the real model, add LIVE_DEMO_PROVIDER=live to the .env file and restart the dev server.</p>}
+        {!live && (
+          <p className="mt-1 text-ink-2">
+            To use the real model, add LIVE_DEMO_PROVIDER=live to the .env file
+            and restart the dev server.
+          </p>
+        )}
         <p className="mt-1 text-ink-2">
-          Pick one of 13 situations real collections teams face, or any eval customer for free play. The guarded agent runs rules v2 here: a few
-          situations get a fixed reply from code with no AI call, and every draft is checked before it is sent. Under each guarded reply you can see
-          what the guard did.
+          Pick one of 13 situations real collections teams face, or any eval
+          customer for free play. The guarded agent runs rules v2 here: a few
+          situations get a fixed reply from code with no AI call, and every
+          draft is checked before it is sent. Under each guarded reply you can
+          see what the guard did.
         </p>
       </div>
-      <LiveChat customers={customers} presets={PRESETS} model={live ? env.OPENAI_AGENT_MODEL! : null} />
+      <LiveChat
+        customers={customers}
+        presets={PRESETS}
+        model={live ? env.OPENAI_AGENT_MODEL! : null}
+        initialLessons={lessons}
+        lessonsOff={off}
+      />
     </div>
   );
 }

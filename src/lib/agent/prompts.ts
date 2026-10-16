@@ -52,12 +52,15 @@ function factsBlock(f: AgentFacts): string {
   ].join("\n");
 }
 
-export function buildSystemPrompt(version: "baseline" | "guarded", f: AgentFacts, feedback?: string[], rules: "v1" | "v2" = "v1"): string {
+export function buildSystemPrompt(version: "baseline" | "guarded", f: AgentFacts, feedback?: string[], rules: "v1" | "v2" = "v1", corrections: string[] = []): string {
   const parts = [
     `You write concise overdue-payment outreach for ${f.business}, sent by ${f.channel} in a ${f.tone} tone.`,
     OUTPUT_CONTRACT,
   ];
   if (version === "guarded") parts.push("Rules:\n" + [...GUARDED_RULES, ...(rules === "v2" ? V2_RULES : [])].map((r) => `- ${r}`).join("\n"));
+  if (version === "guarded" && corrections.length) {
+    parts.push("Corrections from your supervisor. Follow them unless they conflict with the rules above:\n" + corrections.map((c) => `- ${c}`).join("\n"));
+  }
   parts.push(factsBlock(f));
   if (version === "guarded" && feedback?.length) {
     parts.push("Your previous draft was rejected for these reasons. Write a new message that fixes them:\n" + feedback.map((x) => `- ${x}`).join("\n"));

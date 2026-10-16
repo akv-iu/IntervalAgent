@@ -281,3 +281,48 @@ Four commands go with it:
 - Check 2: confirmed all four fixed. It found that a "not" anywhere earlier in a sentence still excused a later claim ("We cannot take full payment today, but we can offer a 50% discount"). Fixed: each part of a sentence is now checked on its own.
 
 **Honest limit:** these checks read words with patterns. Unusual wording can slip past or be rejected by mistake; a rejected draft falls back to the safe template, so the cost of a false alarm is a plainer message, not a bad one.
+
+
+---
+
+## Step 16b: teach the agent (Fix this, retry, lessons)
+
+**What this step is:** under the guarded agent's latest reply there are now two buttons, **Looks good** and **Fix this**.
+- **Fix this** asks what went wrong and what the agent should have done. You can also make it a **hard rule** picked from a short list (must not end the conversation, must offer the plan, must offer a person, must hand off).
+- **Retry with this lesson** reruns the same moment with your lesson and shows the old and new reply side by side. Then you **Accept** (the lesson is saved and the new reply replaces the old one), **Edit and retry** (up to 3 tries), or **Discard** (nothing is saved).
+- A **Lessons learned** panel lists every lesson: soft or hard, what you wrote, the before and after replies, how many replies it was sent with, a switch to turn it off, and delete. **Recheck lessons** replays each saved moment and, for hard lessons, says whether the model followed it, needed a rewrite, or the code had to step in.
+- The public site shows the same list read-only, so Connor can see the corrections without running anything.
+
+**How it works, honestly:** the model never changes. A soft lesson is added to the guarded agent's instructions, but only for the same kind of customer message (a refusal lesson is only sent when the customer refuses). A hard lesson is checked by code on every draft; if the draft breaks it, it is rewritten once, then a safe reply is sent. The built-in rules (STOP, quiet hours, threats, amounts, disputes, the fixed replies) always run first and a lesson cannot weaken them. The baseline never gets lessons, so it stays the "before". The recorded evals never get lessons either; the replay still matches all 35 recordings.
+
+**What went wrong:**
+- My own check: a normal chat message read lessons from the database before checking the message, so a copy with no database could not chat at all. Fixed: chat works without a database and simply says lessons are off.
+- One of my database tests had a wrong assumption (it counted the same lesson twice in one reply); the code was right, the test was fixed.
+
+**What Codex said:**
+- Check 1 (9 problems), all fixed with tests: if the model chose to go silent, the hard-lesson checks were skipped; a "hand off" lesson could replace the opening message (which must state the business, overdue, and balance); "offer the plan" and "offer a person" were too easy to satisfy ("Our team cannot help you" passed); Recheck guessed success from tags instead of checking the rule, and always rechecked the same newest 8; retries were not counted as uses; Start over could clash with a save in progress; and the page still said "nothing is saved".
+- Check 2: confirmed 7, and found 4 leftovers, all fixed with tests: "offer a person" passed even when nothing was sent; "We cannot offer two payments of $42.00" counted as offering the plan; "Do not talk to our team" counted as offering a person; and editing the lesson while a retry was running could save a lesson that was never tested.
+
+**Rule change for you to approve:** CLAUDE.md's "single exception" now also says the local live route is the only app file that writes to the database, and only the lessons table.
+
+**Honest limit:** the hard-rule checks read words with patterns, like the rest of the guard. Unusual phrasing can be rejected by mistake, which costs a plainer reply, not a bad one.
+
+
+### 16b, second round: after your browser test
+
+**What you found:** lessons taught on "Can I get a better payment options" were applied to the opening message of every conversation; "I don't want to pay this month, can I start next month?" was read as a refusal; a retry barely changed the reply; and the dropdowns were unclear.
+
+**Why it happened:** the code had no label for "asks about payment options", so that message was read as "general", and "general" lessons were sent with every reply, including the first. "Next month" was not in the pay-later patterns. The "What went wrong" dropdown was only a label and changed nothing.
+
+**What changed:**
+- Every lesson now says where it applies: **only when the customer does the same kind of thing** (the default), or **on every reply after the opening message**. You choose it in the Fix panel, and the lesson card shows it.
+- **Lessons never touch the opening message** (it must state the business, overdue, and balance). The Fix button is not offered there, and the server refuses it too.
+- New label "asks about payment options"; "next month", "next week", "payday", "pay later" now read as pay later. A firm refusal ("I will not pay later") still reads as a refusal.
+- "What went wrong" now fills in a suggested lesson and suggests a hard rule (for example "Gave up too early" suggests "Must offer someone on our team"). Your own edits are never overwritten.
+- The Fix panel explains soft and hard in one line each, and says exactly what the chosen hard rule makes the code check.
+- A "hand off" hard rule cannot be set to every reply (it would end every conversation). Both the page and the database refuse it.
+- If the agent ends a conversation without sending anything, you can now fix that silence too.
+
+**What Codex said:** two more catches, both fixed with tests: "I will not pay later" was read as pay later, and a silent ending could not be corrected.
+
+**Your existing lessons:** #2 and #3 were saved as "general" before this change, so they now only apply to messages that fit no label. If you meant them for payment-option questions, delete them and teach them again; the new panel will label them correctly. I did not change your saved data.

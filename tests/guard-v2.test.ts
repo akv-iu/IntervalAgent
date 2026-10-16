@@ -66,7 +66,7 @@ describe("draft checks: regenerate once, then a safe fallback", () => {
   test("a good draft passes untouched and the trace says how the message was read", async () => {
     const r = await guarded("I don't want to pay you", fixed("I hear you, Maya. If it helps, you can pay two payments of $42.00, or talk to someone on our team."));
     expect(r.flags).toEqual([]);
-    expect(r.trace[0]).toMatch(/refusal/);
+    expect(r.trace[0]).toMatch(/refuses to pay/);
   });
 });
 

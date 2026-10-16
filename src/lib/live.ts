@@ -2,11 +2,13 @@
 // checks as the evals. Nothing is stored. Only used by the local-only API route.
 import { z } from "zod";
 import type { CheckItem } from "./artifact";
+import type { HardRule, Lesson } from "./lessons";
 import { messageChecks } from "./checks";
 import type { LlmProvider } from "./llm/types";
 import { installments } from "./money";
 import { agentTurn, MAX_AGENT_TURNS } from "./sim/loop";
 import { SCENARIOS } from "./sim/scenarios";
+import { situationOf, type Situation } from "./situations";
 import { localToInstant, SIM_DATE } from "./time";
 
 export const MAX_TEXT = 500; // what a visitor can type
@@ -33,10 +35,30 @@ export interface LiveTurn {
   when: string; // local time for display
   flags: string[];
   trace: string[];
+  lessonsUsed: number[];
+  situation: Situation;
   checks: CheckItem[];
 }
 
-export async function liveTurn(input: unknown, provider: LlmProvider): Promise<LiveTurn> {
+// The account facts code checks need for a scenario (hard lessons, recheck).
+export function scenarioFacts(scenarioId: string) {
+  const a = SCENARIOS.find((x) => x.id === scenarioId)!.account;
+  return { business: a.business, firstName: a.firstName, balanceCents: a.balanceCents, plan: installments(a.balanceCents) };
+}
+
+// The situation a lesson belongs to: how the last customer message before the corrected reply reads.
+export function momentSituation(scenarioId: string, messages: { role: string; text: string }[]): Situation {
+  const s = SCENARIOS.find((x) => x.id === scenarioId);
+  const last = [...messages].reverse().find((m) => m.role === "customer");
+  return s && last ? situationOf(last.text, s.account.firstName) : "general";
+}
+
+export async function liveTurn(
+  input: unknown,
+  provider: LlmProvider,
+  lessons: Lesson[] = [],
+  draft?: { instruction: string; hardRule: HardRule | null },
+): Promise<LiveTurn> {
   const parsed = LiveInput.safeParse(input);
   if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join("; "));
   const { scenarioId, version, messages } = parsed.data;
@@ -61,6 +83,8 @@ export async function liveTurn(input: unknown, provider: LlmProvider): Promise<L
     turn: agentCount + 1,
     stats: { calls: 0 },
     rules: "v2", // the live page runs the newer situation rules; the pinned evals stay on v1
+    lessons, // applied to the guarded agent only (agentTurn ignores them otherwise)
+    draft,
   });
 
   const sentAt = t.sendAt.toISOString();
@@ -68,5 +92,5 @@ export async function liveTurn(input: unknown, provider: LlmProvider): Promise<L
     ? messageChecks({ seq: messages.length + 1, role: "agent", text: t.text, sentAt, guardFlags: t.flags, checks: [] }, a, agentCount === 0)
     : [];
   const when = new Intl.DateTimeFormat("en-US", { timeZone: a.timezone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(t.sendAt);
-  return { action: t.action, text: t.text, sentAt, when, flags: t.flags, trace: t.trace, checks };
+  return { action: t.action, text: t.text, sentAt, when, flags: t.flags, trace: t.trace, lessonsUsed: t.lessonsUsed, situation: t.situation, checks };
 }

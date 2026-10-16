@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileS
 import { dirname, join, resolve } from "node:path";
 
 // The public web app must never reach LLM code, the conversation loop, or database write code.
-const FORBIDDEN = ["src/lib/llm", "src/lib/sim/loop", "src/lib/sim/eval", "src/lib/db-admin"];
+const FORBIDDEN = ["src/lib/llm", "src/lib/sim/loop", "src/lib/sim/eval", "src/lib/db-admin", "src/lib/lessons-store"];
 const ROOT = resolve(".");
 
 function files(dir: string): string[] {
@@ -75,4 +75,6 @@ test("the live route is the single exception and guards itself", () => {
   const norm = (f: string) => f.replace(/\\/g, "/");
   const reachingLlm = allApi.filter((f) => [...reachable([f])].some((x) => norm(x).includes("src/lib/llm"))).map(norm);
   expect(reachingLlm).toEqual([norm(LIVE_ROUTE)]);
+  const reachingWrites = allApi.filter((f) => [...reachable([f])].some((x) => norm(x).includes("src/lib/lessons-store"))).map(norm);
+  expect(reachingWrites).toEqual([norm(LIVE_ROUTE)]);
 });
