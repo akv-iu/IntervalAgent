@@ -1,6 +1,7 @@
 // Code guard for the guarded system. Reads customer text only, never persona state.
 import { extractAmounts, formatCents } from "../money";
 import { findThreats, isDispute, isStop } from "../patterns";
+import { addDays, dateIn } from "../promise";
 import { isRefusal, requestedHour, situationLabel, situationOf, type Situation } from "../situations";
 import { localDate, notBeforeHour, scheduleInWindow, type Tz } from "../time";
 
@@ -119,10 +120,14 @@ export function validateOutbound(text: string, f: Facts): string[] {
   return problems;
 }
 
-// An amount stated as the balance itself: "balance is $X", "you owe $X", "$X balance".
+// An amount stated as the balance itself: "balance is $X", "balance: $X", "balance is now $X", "you now owe just $X",
+// "$X balance". Up to three words and a colon may sit between, but never plan wording ("total of two payments of $X"
+// and "balance in two $42.00 payments" are plans).
 const MONEY = String.raw`\$\s?\d[\d,]*(?:\.\d{1,2})?`;
+const GAP = String.raw`(?:\s+(?!(?:payments?|installments?|plan|split|with|in|into|over|as)\b)[a-z']+){0,3}\s*[:=]?\s*`;
+const NOT_PLAN_AMOUNT = String.raw`(?![\d.,]*\s+(?:each|payments?|installments?)\b)`;
 const BALANCE_AMOUNT = new RegExp(
-  String.raw`\b(?:balance|total|amount due|outstanding)\s+(?:is|of|was|comes to|stands at|totals)\s+(${MONEY})|\bowes?\s+(?:us\s+)?(${MONEY})|(${MONEY})\s+(?:overdue\s+|past[\s-]due\s+|outstanding\s+)?balance\b`,
+  String.raw`\b(?:balance|total|amount due|outstanding)${GAP}(${MONEY})${NOT_PLAN_AMOUNT}|\bowes?\s+(?:(?:us|now|just|only|still|currently)\s+){0,2}(${MONEY})|(${MONEY})\s+(?:overdue\s+|past[\s-]due\s+|outstanding\s+)?balance\b`,
   "gi",
 );
 
@@ -198,7 +203,15 @@ const NEGATED = new RegExp(
 );
 const HUMAN_CLAIM = [/\b(i'?m|i am)\s+(a\s+)?(real\s+)?(human|person)\b/i, /\b(speaking|talking|chatting)\s+(with|to)\s+(a\s+)?(real\s+)?(human|person)\b/i, /\bthis\s+is\s+(a\s+)?(real\s+)?(human|person)\b/i];
 const DENIES_BOT = /\b(not|n't)\s+(an?\s+)?(bot|robot|machine|ai)\b/i;
-const claimsHuman = (sentence: string) => DENIES_BOT.test(sentence) || (HUMAN_CLAIM.some((r) => r.test(sentence)) && !/\bnot\b|n't\b/i.test(sentence));
+// The "not" must belong to the claim itself ("you aren't speaking with a person"), not sit elsewhere in the clause
+// ("I'm a real person and not a scammer" is a claim).
+const NOT_BEFORE = /(?:\bnot|\bnever|n't)\s+(?:(?:really|actually|in fact|currently|now|even)\s+)*$/i;
+const claimsHuman = (clause: string) =>
+  DENIES_BOT.test(clause) ||
+  HUMAN_CLAIM.some((r) => {
+    const m = r.exec(clause);
+    return m !== null && !NOT_BEFORE.test(clause.slice(0, m.index));
+  });
 
 // ponytail: clause-level negation check (split on punctuation and "but"); "we can't offer a discount" passes, odd phrasing may be rejected and fall back.
 // refused: the customer's message contains a refusal anywhere, even when another situation was read first.
@@ -219,14 +232,29 @@ export function validateV2(text: string, action: string, situation: Situation, r
 // offer..."), so a "not" in one clause never excuses a claim in the next.
 const CLAUSES = /(?<=[.!?])\s+|[,;:]\s*|\s+(?:but|however|though|although)\s+|\s+(?:and|so)\s+(?=(?:i|we|you|they|it|i'm|we're|we'll|i'll|you're)\b)/i;
 
-// "[^.!?]" with a decimal point allowed, so "$84.00" does not end the sentence.
-const SAME_SENTENCE = String.raw`(?:[^.!?]|\.(?=\d))*`;
-const PAY_NOW = new RegExp(
-  String.raw`\b(?:pay|payment)\b${SAME_SENTENCE}\b(?:today|now|tonight|right away|immediately|asap)\b|\b(?:today|now|tonight|right away|immediately)\b${SAME_SENTENCE}\bpay\b`,
-  "i",
-);
+const PAY_NEGATED = /\b(?:don'?t|do not|no need|not|never|n't)\b(?:(?!\band\b)[^.!?])*\bpay|(?:\bnot|n't)\s+due\b/i;
 
-const PAY_NEGATED = /\b(?:don'?t|do not|no need|not|never|n't)\b(?:(?!\band\b)[^.!?])*\bpay/i;
+// A request to pay before the promised date: urgency ("today", "as soon as possible"), any date earlier than the
+// promise ("by tomorrow", "before Friday", "due by March 12"), or "please pay" with no date at all.
+const PAY = /\b(?:pay|payment)\b/i;
+const URGENT = /\b(?:today|now|tonight|right away|immediately|asap|as soon as possible|end of (?:the )?day)\b/i;
+const PLEASE_PAY =
+  /\b(?:please|kindly|could you|can you|need you to)\s+(?:[a-z']+\s+)?(?:pay\b|(?:make|submit|send|complete|process)\s+(?:a|the|your)\s+(?:[a-z$\d.,]+\s+)?payment)/i;
+function asksEarly(clause: string, today: string, promise: string): boolean {
+  if (!PAY.test(clause) || PAY_NEGATED.test(clause)) return false;
+  // Each "and"/"or" part on its own, so "$42.00 today and $42.00 Friday" sees both dates. "Today" or "now" counts
+  // only when the part names no other date ("now expecting your payment on Friday" is about Friday).
+  const dates = clause.split(/\s+(?:and|or|then)\s+/i).flatMap((part) => {
+    const d = dateIn(part, today, true);
+    if (!d) return URGENT.test(part) ? [today] : [];
+    return [BEFORE_DATE.test(part) ? addDays(d, -1) : AFTER_DATE.test(part) ? addDays(d, 1) : d];
+  });
+  return dates.length > 0 ? dates.some((d) => d < promise) : PLEASE_PAY.test(clause);
+}
+// "before Friday" shifts the date, "before noon" does not.
+const DATE_WORD = String.raw`\s+(?:the\s+|next\s+)?(?:mon|tue|wed|thu|fri|sat|sun|tomorrow|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{1,2}(?:st|nd|rd|th))`;
+const BEFORE_DATE = new RegExp(String.raw`\bbefore${DATE_WORD}`, "i");
+const AFTER_DATE = new RegExp(String.raw`\bafter${DATE_WORD}`, "i");
 
 export interface LiveRuleCtx {
   situation: Situation;
@@ -247,9 +275,12 @@ export function liveViolations(out: { action: string; message: string }, c: Live
     problems.push("the first message must be sent: name the business, say the account is past due, and state the balance");
   }
   if (!c.isFirst && c.needsPerson && out.action !== "handoff") problems.push("this request needs a person: use action handoff");
-  // "You do not need to pay today" is fine; only an actual request to pay now breaks the promise.
-  const asksNow = out.message.split(CLAUSES).some((cl) => PAY_NOW.test(cl) && !PAY_NEGATED.test(cl));
-  if (c.promise && localDate(c.sendAt, c.tz) < c.promise && asksNow) {
+  // "You do not need to pay today" is fine; only an actual request to pay before the date breaks the promise.
+  const today = localDate(c.sendAt, c.tz);
+  const promise = c.promise;
+  // Keep "Mar. 13" and "due: March 12" in one clause: drop month-abbreviation dots and colons before splitting.
+  const text = out.message.replace(/\b(jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec)\./gi, "$1").replace(/\s*:\s*/g, " ");
+  if (promise && today < promise && text.split(CLAUSES).some((cl) => asksEarly(cl, today, promise))) {
     problems.push(`the customer promised to pay on ${c.promise}; do not ask for payment before then`);
   }
   problems.push(...validateV2(out.message, ends ? "close" : out.action, c.situation, c.refused));

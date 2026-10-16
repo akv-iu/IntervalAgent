@@ -28,3 +28,7 @@ describe("Codex check 2 (16c)", () => {
     expect(parsePromise(text, sent, "America/Denver")).toBeNull());
   test("still a promise: I'll pay Friday, text me then", () => expect(parsePromise("I'll pay Friday, text me then", sent, "America/Denver")).toBe("2026-03-13"));
 });
+
+// Month names are read only in the agent's own deadlines (guard), not in customer promises (second review, check 2).
+test.each(["I paid on March 9", "I'll pay March 13, 2027"])("customer month dates are not promises: %s", (text) =>
+  expect(parsePromise(text, at("2026-03-10T17:00:00.000Z"), "America/Denver")).toBeNull());

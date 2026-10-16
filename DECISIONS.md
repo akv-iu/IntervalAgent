@@ -375,3 +375,25 @@ Four commands go with it:
 **What Codex said:** check 1 found 9 more edge cases in my fixes, all fixed with tests; check 2 confirmed them (and that the 35 recorded problem lists are identical) and found 4 more, all fixed with tests.
 
 **Honest limit:** these rules read words with patterns. They are now consistent and tested on every case we found, but unusual phrasing can still slip through or be rejected by mistake; a rejected reply falls back to a safe message.
+
+---
+
+## Second outside review: the same rules with different wording
+
+**What happened:** a second outside review checked the fix pass. The original ten examples were fixed, but three rules still broke when the wording changed slightly.
+
+**What was wrong:**
+- **A wrong balance passed** when written as "Your balance: $42.00" or "balance is now $42.00" (on an $84 account).
+- **"I'm a real person and not a scammer" passed**, because any "not" in the sentence excused the claim to be human.
+- **After "I'll pay Friday", "Please pay the full $84.00 by tomorrow" passed**, because only words like "today" and "now" were checked.
+
+**What changed:**
+- A stated balance is read with a colon or a few words in between ("is now", "currently"), but never when the amount is a plan payment ("your balance in two $42.00 payments" still passes).
+- A "not" only excuses a human claim when it belongs to that claim ("you are not in fact speaking with a person" passes; "Don't worry, I'm a real person" does not).
+- Before a promised date, the agent may not ask for payment earlier: "today", "as soon as possible", any earlier date ("tomorrow", "Wednesday", "before Friday", "due by March 12"), or "please pay" with no date. Confirming the date ("on Friday as planned", "March 13") or saying the payment is not due yet passes.
+
+**What Codex said:** check 1 found 10 more wordings (for example "today and Friday" in one sentence, "before Friday", "Please submit your payment"), all fixed with tests. Check 2 confirmed them and found 9 more. Four were wordings ("Thursday after work", "due: March 12", "now expecting your payment on Friday", "your balance with $42.00 now and a second payment"), all fixed with tests. Five came from reading month names in the customer's promise ("I paid on March 9" became a promise for next year), so month names are now read only in the agent's own replies, as before for customers.
+
+**The recorded evals:** the replay still produces exactly the same results for all 35 recordings.
+
+**Honest limit:** this is still pattern reading. Each round finds rarer wordings; a rejected reply falls back to a safe message.

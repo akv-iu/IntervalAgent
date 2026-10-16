@@ -154,3 +154,63 @@ describe("Codex check 2 (outside-review fixes)", () => {
   test("a waiver after a refused discount is still caught", () =>
     expect(liveViolations({ action: "send", message: "We cannot offer a discount and can waive the balance." }, ctx)).not.toEqual([]));
 });
+
+// Second outside review (2026-10-17): the same three rules with slightly different wording.
+describe("second review: the rules hold when the wording changes", () => {
+  test.each([
+    "Your balance: $42.00, payable in two payments of $42.00.",
+    "Your balance is now $42.00, payable in two payments of $42.00.",
+    "Your total is currently $42.00.",
+    "You now owe just $42.00.",
+  ])("wrong balance rejected: %s", (text) => expect(validateOutbound(text, f84)).toContain("stated balance must be $84.00"));
+  test("the real balance with plan wording still passes", () =>
+    expect(validateOutbound("Your balance: $84.00, payable in two payments of $42.00.", f84)).toEqual([]));
+
+  test.each(["I'm a real person and not a scammer.", "I am a real human, not a machine that makes mistakes."])("human claim rejected: %s", (text) =>
+    expect(liveViolations({ action: "send", message: text }, ctx)).not.toEqual([]));
+  test.each(["You aren't speaking with a real person; I'm an automated assistant.", "I am not a real person."])("denial passes: %s", (text) =>
+    expect(liveViolations({ action: "send", message: text }, ctx)).toEqual([]));
+
+  const promised = { ...ctx, promise: "2026-03-13" }; // Friday; ctx sends on Tuesday
+  test.each([
+    "Please pay the full $84.00 by tomorrow.",
+    "Please make your payment of $84.00.",
+    "Could you pay $84.00 on Wednesday instead?",
+    "We need the payment as soon as possible.",
+    "Please pay by end of day.",
+  ])("early request rejected: %s", (text) => expect(liveViolations({ action: "send", message: text }, promised)).not.toEqual([]));
+  test.each([
+    "Thanks, Maya. We will look for it on Friday.",
+    "Please make your payment on Friday as planned.",
+    "You do not need to pay tomorrow; Friday is fine.",
+  ])("on or after the promised date passes: %s", (text) => expect(liveViolations({ action: "send", message: text }, promised)).toEqual([]));
+});
+
+// Codex check 1 on the second review.
+describe("second review, check 1", () => {
+  test("two $42.00 payments is a plan, not a balance", () =>
+    expect(validateOutbound("You can clear your balance in two $42.00 payments.", f84)).toEqual([]));
+  test("'balance is now: $42.00' is a wrong balance", () =>
+    expect(validateOutbound("Your balance is now: $42.00, payable in two payments of $42.00.", f84)).toContain("stated balance must be $84.00"));
+  test("'Don't worry I'm a real person' is a claim", () => expect(liveViolations({ action: "send", message: "Don't worry I'm a real person." }, ctx)).not.toEqual([]));
+  test("'not in fact speaking with a real person' is a denial", () =>
+    expect(liveViolations({ action: "send", message: "You are not in fact speaking with a real person; I'm an automated assistant." }, ctx)).toEqual([]));
+  const promised = { ...ctx, promise: "2026-03-13" };
+  test.each(["Please pay $42.00 today and $42.00 Friday.", "Please pay before Friday.", "Your payment is due by March 12.", "Please submit your payment."])(
+    "early: %s",
+    (text) => expect(liveViolations({ action: "send", message: text }, promised)).not.toEqual([]),
+  );
+  test.each(["Please pay after Thursday.", "Please pay on March 13 as planned.", "Your payment isn't due tomorrow; Friday is fine."])("fine: %s", (text) =>
+    expect(liveViolations({ action: "send", message: text }, promised)).toEqual([]));
+});
+
+// Codex check 2 on the second review.
+describe("second review, check 2", () => {
+  const promised = { ...ctx, promise: "2026-03-13" };
+  test.each(["Please pay Thursday after work.", "Your payment is due: March 12."])("early: %s", (text) =>
+    expect(liveViolations({ action: "send", message: text }, promised)).not.toEqual([]));
+  test.each(["Please pay Friday before noon.", "We are now expecting your payment on Friday.", "Please pay on Mar. 13 as planned."])("fine: %s", (text) =>
+    expect(liveViolations({ action: "send", message: text }, promised)).toEqual([]));
+  test("'balance with $42.00 now and a second payment' is a plan", () =>
+    expect(validateOutbound("You can pay your balance with $42.00 now and a second payment of $42.00 Friday.", f84)).toEqual([]));
+});

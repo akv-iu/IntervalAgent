@@ -9,12 +9,18 @@ const PAYS = /\b(pay|paid|start|begin)\b/i; // a verb: "about my payment" is not
 const NEGATED = /\b(can'?t|cannot|can not|won'?t|will not|not|never|don'?t|do not|unable)\b/i;
 const clauses = (text: string) => text.split(/(?<=[.!?])\s+|[,;:]\s*|\s+but\s+/i);
 
-const addDays = (date: string, n: number) => {
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const MONTH_DAY =
+  /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)(?:uary|ruary|ch|il|e|y|ust|tember|t|ober|ember)?\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/;
+
+export const addDays = (date: string, n: number) => {
   const [y, m, d] = date.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
 };
 
-function dateIn(clause: string, today: string): string | null {
+// months: also read "March 13". Only the guard asks for it (the agent's deadlines); customer promises keep the
+// short list above, since "I paid on March 9" or "March 13, 2027" would need past and year handling.
+export function dateIn(clause: string, today: string, months = false): string | null {
   const [y, m, d] = today.split("-").map(Number);
   const t = clause.toLowerCase();
   if (/\btomorrow\b/.test(t)) return addDays(today, 1);
@@ -25,6 +31,16 @@ function dateIn(clause: string, today: string): string | null {
   if (day >= 0) {
     const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
     return addDays(today, (day - weekday + 7) % 7 || 7); // the same weekday means next week's
+  }
+
+  // "March 13" (agent deadlines only): this year if still ahead (or today), else next year.
+  const md = months ? t.match(MONTH_DAY) : null;
+  if (md) {
+    const month = MONTHS.indexOf(md[1]);
+    const day = Number(md[2]);
+    const year = month > m - 1 || (month === m - 1 && day >= d) ? y : y + 1;
+    if (day < 1 || day > new Date(Date.UTC(year, month + 1, 0)).getUTCDate()) return null;
+    return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
   }
 
   const nth = t.match(/\bthe (\d{1,2})(?:st|nd|rd|th)?\b/);
