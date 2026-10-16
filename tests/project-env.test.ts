@@ -1,7 +1,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { projectEnv } from "../src/lib/project-env";
+import { projectEnv, tryAgent } from "../src/lib/project-env";
 
 test("reads the .env file and ignores the shell environment", () => {
   const dir = mkdtempSync(join(tmpdir(), "env-"));
@@ -15,3 +15,12 @@ test("reads the .env file and ignores the shell environment", () => {
 });
 
 test("a missing .env gives an empty config", () => expect(projectEnv(join(tmpdir(), "does-not-exist.env"))).toEqual({}));
+
+describe("tryAgent: the Try page uses the mock agent unless live is switched on", () => {
+  const keyed = { OPENAI_API_KEY: "k", OPENAI_AGENT_MODEL: "m" };
+  test("off by default, even with a key", () => expect(tryAgent(keyed)).toBe("mock"));
+  test("live only when switched on and a key and model exist", () => {
+    expect(tryAgent({ ...keyed, LIVE_DEMO_PROVIDER: "live" })).toBe("live");
+    expect(tryAgent({ LIVE_DEMO_PROVIDER: "live" })).toBe("mock");
+  });
+});

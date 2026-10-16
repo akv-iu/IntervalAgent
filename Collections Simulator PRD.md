@@ -41,6 +41,8 @@ Scope change (2026-10-16, Akshay): the Evals page includes a short guided walkth
 
 Scope change (2026-10-16, Akshay): a "Try it" page where the visitor plays the customer and both agents answer live, side by side. It runs only on a local copy (APP_MODE=local and a key in the project .env file). The deployed public site still has no AI key and no working live endpoint; there the page explains how to run it locally.
 
+Scope change (2026-10-16, Akshay): Integration 16 makes the Try page teachable. It adds 13 realistic customer situations, live-only guard rules v2 (the pinned evals keep v1), human corrections saved as lessons (soft lessons go into the prompt, hard lessons are enforced by code, both only after the person accepts a retried reply), a read-only public log of lessons, and deeper conversations (10 messages, time jumps, promise dates, three-payment plans, a "what the agent knows" panel). The model itself never changes. Details: plan Part D.
+
 Use accessible tables and simple bars. These cuts preserve one working example of every job responsibility.
 
 ## Browser flow

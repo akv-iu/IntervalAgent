@@ -250,3 +250,13 @@ Four commands go with it:
 **What Codex said:**
 - Check 1 (6 problems): the missing-`APP_MODE` default above; replies had no output cap, so the budget could be under-reserved; the budget number from `.env` was not validated; one side failing could crash the whole page; you could change customer mid-chat; and the 500-character limit wrongly applied to the agent's own long replies. All fixed.
 - Check 2: confirmed all six, tried 8 combinations of settings and found no way for the public site to make a paid call. Two small follow-ups: the page crashed if the very first request failed, and the setup text did not mention `APP_MODE=local`. Both fixed.
+
+---
+
+## Small change: live AI calls on the Try page switched off for now
+
+**Why:** you asked not to burn tokens while we build and test Integration 16. The Try page now answers with the scripted mock agent (the same one the tests use) unless `.env` has `LIVE_DEMO_PROVIDER=live`. The page says clearly which agent is answering. Nothing else changed: the guard and checks still run, and the public site still cannot reach this page.
+
+**What Codex said:** no problems found.
+
+**To turn live back on:** add `LIVE_DEMO_PROVIDER=live` to `.env` and restart `npm run dev`. I will remind you before the final browser pass.

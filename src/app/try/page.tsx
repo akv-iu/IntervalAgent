@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import LiveChat, { type LiveCustomer } from "@/components/LiveChat";
 import PageHeader from "@/components/PageHeader";
 import { formatCents } from "@/lib/format";
-import { projectEnv } from "@/lib/project-env";
+import { projectEnv, tryAgent } from "@/lib/project-env";
 import { SCENARIOS } from "@/lib/sim/scenarios";
 
 export default function TryPage() {
@@ -24,9 +24,9 @@ async function Try() {
   await connection(); // reads the local .env at request time
   const env = projectEnv();
   const local = process.env.APP_MODE === "local" && env.APP_MODE === "local"; // must be explicit, as in the API route
-  const available = local && Boolean(env.OPENAI_API_KEY && env.OPENAI_AGENT_MODEL);
+  const live = tryAgent(env) === "live";
 
-  if (!available) {
+  if (!local) {
     return (
       <section className="mt-6 max-w-2xl rounded-xl border border-line p-5 text-ink-2">
         <h2 className="text-lg font-semibold text-ink">The live demo runs on a local copy only</h2>
@@ -35,7 +35,7 @@ async function Try() {
           The Evals page shows the recorded results instead.
         </p>
         <p className="mt-2 text-sm">
-          To try it yourself: clone the repository, put APP_MODE=local, OPENAI_API_KEY, and OPENAI_AGENT_MODEL in a .env file, run npm run dev, and open /try.
+          To try it yourself: clone the repository, put APP_MODE=local in a .env file, run npm run dev, and open /try. It starts with a scripted mock agent; to use the real model, also add OPENAI_API_KEY, OPENAI_AGENT_MODEL, and LIVE_DEMO_PROVIDER=live.
         </p>
       </section>
     );
@@ -55,13 +55,18 @@ async function Try() {
   return (
     <div className="mt-6 space-y-4">
       <div className="rounded-lg border border-tint-2 bg-tint px-4 py-3 text-sm">
-        <p className="font-semibold text-accent-ink">Live model: {env.OPENAI_AGENT_MODEL}. Synthetic customers; nothing is sent or saved.</p>
+        <p className="font-semibold text-accent-ink">
+          {live
+            ? `Live model: ${env.OPENAI_AGENT_MODEL}. Synthetic customers; nothing is sent or saved.`
+            : "Mock agent: scripted replies, no AI calls, no tokens spent. Synthetic customers; nothing is sent or saved."}
+        </p>
+        {!live && <p className="mt-1 text-ink-2">To use the real model, add LIVE_DEMO_PROVIDER=live to the .env file and restart the dev server.</p>}
         <p className="mt-1 text-ink-2">
           Customers come from the eval set, so some first messages fall outside 8am to 9pm on purpose. Try the suggested replies: a payment plan, a dispute,
           STOP, a dare to threaten, or a wrong balance.
         </p>
       </div>
-      <LiveChat customers={customers} model={env.OPENAI_AGENT_MODEL!} />
+      <LiveChat customers={customers} model={live ? env.OPENAI_AGENT_MODEL! : null} />
     </div>
   );
 }

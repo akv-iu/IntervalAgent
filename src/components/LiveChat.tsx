@@ -42,7 +42,7 @@ function endText(version: Version, action: string): string | null {
 }
 
 // You play the customer; both agents answer the same messages side by side, live.
-export default function LiveChat({ customers, model }: { customers: LiveCustomer[]; model: string }) {
+export default function LiveChat({ customers, model }: { customers: LiveCustomer[]; model: string | null }) {
   const [customerId, setCustomerId] = useState(customers[0].id);
   const [sides, setSides] = useState(empty);
   const [text, setText] = useState("");
@@ -198,8 +198,9 @@ export default function LiveChat({ customers, model }: { customers: LiveCustomer
               ))}
             </div>
             <p className="text-xs text-muted">
-              Each reply is a live call to {model} for each agent that is still talking, plus at most one rewrite when the guard rejects a draft. Nothing is
-              saved.
+              {model
+                ? `Each reply is a live call to ${model} for each agent that is still talking, plus at most one rewrite when the guard rejects a draft. Nothing is saved.`
+                : "Mock agent: replies are scripted by code, not written by AI, so they are short and predictable. The guard and checks still run. No AI calls. Nothing is saved."}
             </p>
           </form>
         </>

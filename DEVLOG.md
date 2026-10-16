@@ -174,3 +174,8 @@ Honest record of what was built, how it was checked, and what changed after revi
 - Changed after review (Codex gpt-6.1-sol):
   - Check 1: unset APP_MODE defaulted to local (now must be explicit, test added); no output cap so budget reservation could be short (600-token cap, reservation includes it); budget env not validated (now via loadEnv); one failed side crashed the client (allSettled); customer select editable mid-chat (disabled); 500-char cap applied to agent history (customer only, test added).
   - Check 2: confirmed; 8 env combinations, no public path to a paid call. Follow-ups fixed: crash when an opening request failed; setup copy now names APP_MODE=local.
+
+## Try page mock switch  (2026-10-16)
+- Asked for (Akshay): no live calls while building Integration 16. `tryAgent(env)` in `src/lib/project-env.ts` returns live only with `LIVE_DEMO_PROVIDER=live` plus key and model; otherwise the route uses `mockProvider` and needs no key. Replies carry `agent: "mock" | "live"`; the page labels it.
+- Tests first: `tests/project-env.test.ts` (2 cases) and `tests/live-route-mock.test.ts` failed, then passed. `npm test` 321 passed, `eval:replay` PASS, build OK. Codex gpt-6.1-sol: NONE.
+- Also planned Integration 16 (plan Part D, PRD scope note).

@@ -4,9 +4,10 @@
 import { loadEnv, redact } from "@/lib/env";
 import { liveTurn } from "@/lib/live";
 import { createBudget } from "@/lib/llm/budget";
+import { mockProvider } from "@/lib/llm/mock";
 import { openaiProvider } from "@/lib/llm/openai";
 import type { LlmProvider } from "@/lib/llm/types";
-import { projectEnv } from "@/lib/project-env";
+import { projectEnv, tryAgent } from "@/lib/project-env";
 
 const MAX_TURNS_PER_MINUTE = 30;
 const LIVE_MAX_OUTPUT_TOKENS = 600; // replies are a few sentences; recorded calls averaged about 115 output tokens
@@ -19,9 +20,7 @@ export async function POST(req: Request) {
   const env = projectEnv();
   // Off unless both the host and the .env file explicitly say APP_MODE=local. A missing value means off.
   if (process.env.APP_MODE !== "local" || env.APP_MODE !== "local") return json({ error: "not found" }, 404);
-  if (!env.OPENAI_API_KEY || !env.OPENAI_AGENT_MODEL) {
-    return json({ error: "The live demo needs OPENAI_API_KEY and OPENAI_AGENT_MODEL in the project .env file." }, 503);
-  }
+  const agent = tryAgent(env); // mock unless LIVE_DEMO_PROVIDER=live, so no tokens are spent by default
 
   const now = Date.now();
   while (recent.length && now - recent[0] > 60_000) recent.shift();
@@ -31,6 +30,7 @@ export async function POST(req: Request) {
   try {
     // One budget per server process, so a long demo session cannot run away. loadEnv validates the
     // budget as a finite positive integer; replies are capped so each reservation covers the real maximum.
+    if (agent === "mock") return json({ ...(await liveTurn(await req.json(), mockProvider())), agent });
     if (!provider) {
       const live = loadEnv(["live"], env);
       provider = openaiProvider({
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
         maxOutputTokens: LIVE_MAX_OUTPUT_TOKENS,
       });
     }
-    return json(await liveTurn(await req.json(), provider));
+    return json({ ...(await liveTurn(await req.json(), provider)), agent });
   } catch (e) {
     const message = redact(e instanceof Error ? e.message : String(e));
     return json({ error: /budget/i.test(message) ? "The token budget for this server session is used up. Restart the dev server to reset it." : message }, 400);

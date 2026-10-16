@@ -23,6 +23,7 @@ SPEC, PRD, and CLAUDE.md were revised after this plan was written. These amendme
 3. **Installment validation (SPEC 6).** `validateOutbound` checks stated installment count, amounts, and exact total, not a whitelist. On 46001: reject "two payments of $230.00", reject "two payments of $230.01", accept "$230.00 and $230.01". Reject unsupported counts (three payments, etc.) and numeric proposals the parser cannot verify. Generic "we can set up a plan" without numbers is allowed. Tests added to Task 4.
 4. **Handoff carries sendAt.** `GuardDecision` handoff is `{ kind: "handoff"; text; sendAt }`. Conversation clock advances from actual `sentAt`. Test in Task 6: opening at 20:50, dispute reply at 21:00, ack proposed at 21:10 lands at 08:00 next local day with zero extra model calls.
 5. **Replay CI job is independent.** Task 9 adds a separate `replay` job in `ci.yml` (no `needs:` on the unit job). Establish green replay CI before the guard-mutation branch. Never merge the broken branch.
+7. **Integration 16 (2026-10-16, Akshay).** Before Tasks 14 and 15, build the teachable Try page in Part D: Tasks 16a, 16b, 16c in that order, each with two Codex checks and Akshay's browser pass. 16d (new eval scenarios with a new recording) is optional and needs his approval for live calls. Then 14, 15, final review.
 6. **Early integration.** Task 13a builds the real Customer page (metrics plus conversation detail) against the one-account bulk import, reusing final modules. 13b adds Evals and Picker pages later.
 
 ## Part A: Requirements
@@ -675,3 +676,77 @@ Resolved on 2026-10-15: picker required; no tone judge, Groq, walkthrough, or ba
 Still open:
 1. Model name for the live agent. Needed before Task 9.
 2. Database URLs (DATABASE_URL, TEST_DATABASE_URL). Request during Task 1; needed for the early slice of Task 12 after Task 6. Continue offline work while waiting.
+
+---
+
+## Part D: Integration 16, the teachable Try page
+
+Agreed with Akshay on 2026-10-16. The local Try page grows from "chat with both agents" into a page where a person can push the agent through realistic situations, correct it, watch the correction work, and keep it. The model never changes: every call starts from zero. What persists is ours: lessons in PostgreSQL, sent in the prompt (soft) or enforced by code (hard).
+
+### D1. Requirements
+
+| ID | Requirement | How it is checked |
+| --- | --- | --- |
+| FR-80 | Situation presets: 13 starting situations on the Try page (refusal, hardship, promise to pay, partial payment, settlement request, wrong person, bereavement, lawyer, "text me after 6pm", proof of bill, "are you a bot", rule override, abusive), each with a customer, suggested replies, and a one-line expected behavior. | Data test; browser pass. |
+| FR-81 | Situation classifier: `situationOf(text)` maps customer text to one situation or `general`, by code patterns. Never reads persona state. | Unit tests per situation, plus near misses. |
+| FR-82 | Guard rules v2 (live only): wrong person gets a fixed reply with no amounts and no debt details, then contact ends; bereavement and lawyer get a fixed handoff; refusal may not be answered with `close`; settlement and override replies may not offer discounts, waivers, or percentages; "are you a bot" replies may not claim to be human; a requested earliest hour is honored on top of quiet hours. | Unit tests per rule; regenerate-then-fallback path tested with a bad mock. |
+| FR-83 | Eval behavior unchanged: the eval runners use rules v1. The pinned replay passes with no missing recordings, which proves the requests did not change. | `npm run eval:replay` PASS; unit test that v1 ignores the new situations. |
+| FR-84 | Review flow on guarded replies: "Looks good" marks reviewed; "Fix this" takes a reason and an instruction (max 300 characters), retries the same moment with the draft lesson, shows before and after, then Accept (save lesson, replace reply), Edit and retry (max 3 tries), or Discard (nothing saved). Baseline replies cannot be corrected; baseline is the control. | Unit tests on the route ops; browser pass. |
+| FR-85 | Lessons store: table `lessons` (migration 002). A lesson has situation, reason, instruction, optional hard rule, the moment (history JSON, customer text, scenario), before text, after text, active flag, times used. Written only by the local route. | test:db: insert, toggle, delete, CHECK rejects a bad situation or rule. |
+| FR-86 | Soft lessons: up to 8 active lessons for the current situation (plus `general`), newest first, go into the guarded prompt under "Corrections from your supervisor. Follow them unless they conflict with the rules above." Each reply lists the lesson IDs used and shows "lesson #N applied". | Prompt test; v1 prompt unchanged test. |
+| FR-87 | Hard lessons: rule chosen from a fixed list (`no_close`, `mention_plan`, `offer_person`, `handoff`). Checked by code on the draft; a break regenerates once with the reason, then falls back to a safe template that satisfies the rule. Built-in rules (STOP, quiet hours, threats, amounts, disputes) always run first and cannot be weakened by a lesson. | Unit tests per rule, including the fallback. |
+| FR-88 | Recheck lessons: replays each active lesson's saved moment live and shows the new reply; hard lessons show pass or fail from code; soft lessons say "no automatic check, read it yourself". | Route test with the mock provider; browser pass. |
+| FR-89 | Public lessons log: in public mode the Try page shows a read-only list of lessons (situation, reason, instruction, soft or hard, before and after, times used) from PostgreSQL. `recovery_reader` gets SELECT on `lessons` only. | Render test with empty and filled results; grant in `readonly_role.sql`. |
+| FR-90 | Deeper conversations: live limit 10 agent messages (evals keep 6). "Reply later" choices (10 minutes, 1 hour, next day, 3 days) set the customer message time; times must not go backwards. | Input tests. |
+| FR-91 | Promise to pay: `parsePromise(text, sentAt, tz)` reads "Friday", "tomorrow", "on the 20th", "next week". The guarded agent gets the promised date as a fact and confirms it; "Customer goes quiet" asks for a follow-up turn proposed at 10:00 local on the promised date (or the next day if none). | Unit tests for dates across week and month edges in both time zones. |
+| FR-92 | Custom plans (live only): a request for 3 payments allows a 3-way split computed by `installmentsN(balance, 3)` that sums exactly; the guard accepts that split only after the customer asked for it. | Unit tests: 46001 / 3 = 15334 + 15334 + 15333; v1 still rejects 3. |
+| FR-93 | "What the agent knows" panel per side: balance, plan offered, promised date, requested earliest hour, stopped, disputed, handed off, next send time, and the guard trace for the last reply (draft rejected because X, rewritten, fallback). | Unit test on the state builder; browser pass. |
+| NFR-30 | Local only, unchanged: every new op lives on `/api/live` behind the same APP_MODE=local check; lesson writes use the owner URL only in local mode; the public build has no write path. | Route tests; import-graph test. |
+| NFR-31 | Cost: retries and rechecks count against the same rate limit and token budget. Recheck runs at most 8 lessons per click. | Route test. |
+| NFR-32 | Honesty: copy says lessons change instructions and code checks, not the model; soft lessons are not guaranteed. No claim that lessons improve real-world results. | Copy review; grep for em dashes. |
+
+### D2. Design notes
+
+- **Rules version.** `TurnInput` gains `rules?: "v1" | "v2"` (default v1) and `lessons?: Lesson[]`. Evals never pass them, so their prompts and requests do not change. Guarded live uses v2. v2 adds a pre-step (`preGenerateV2`) and extra draft checks (`validateV2`) on top of v1; it never removes a v1 check.
+- **One route.** `/api/live` takes `op`: `turn` (default), `retry` (with `draftLesson`), `accept`, `toggle`, `delete`, `recheck`. One APP_MODE check, one rate limit, one budget. Lesson writes live in `src/lib/lessons-store.ts`, which joins the import-graph forbidden list; only the live route may reach it.
+- **What counts as "used".** A lesson is used when it is sent in a prompt. The UI says "used in N replies", not "worked N times".
+- **Situation scope.** A lesson is tagged with the situation of the customer message it corrected, and is only sent when the current customer message has the same situation (or the lesson is `general`).
+- **Time requests.** The earliest requested hour is read from all customer messages so far, latest request wins; the send time is the later of quiet hours and the request.
+- **CLAUDE.md.** The single-exception note is widened to say the live route also writes the `lessons` table, local only. Akshay approves this wording in 16b.
+
+### Task 16a: Situations and guard rules v2
+
+Covers: FR-80, 81, 82, 83.
+
+**Files:** `src/lib/patterns.ts` (new pattern groups), `src/lib/situations.ts` (`situationOf`, `SITUATIONS` presets), `src/lib/agent/guard.ts` (`preGenerateV2`, `validateV2`, fixed texts for wrong person, bereavement, lawyer, `refusalFallback`), `src/lib/agent/prompts.ts` (v2 rule lines, added only when rules is v2), `src/lib/sim/loop.ts` (rules option, guard trace), `src/lib/live.ts`, `src/components/LiveChat.tsx`, `src/app/try/page.tsx`, tests `tests/situations.test.ts`, `tests/guard-v2.test.ts`, `tests/live.test.ts`.
+
+- [ ] **Step 1: failing tests.** `situationOf` for each of the 13 situations plus near misses ("I lost my keys" is not hardship; "stop by Friday" is not STOP). v2: "This isn't Grace, wrong number" gives the fixed reply, no `$`, contact ends, zero model calls; "she passed away" and "talk to my lawyer" hand off with zero calls; refusal plus a mock that returns `close` regenerates, then falls back to a reply that offers the plan and a person; "settle for half?" plus a mock that offers "50% off" is rejected; "are you a bot?" plus "I'm a real person" is rejected; "text me after 6pm" at 10:10 moves the send to 18:00 local. v1 on the same inputs behaves exactly as before.
+- [ ] **Step 2: run them, watch them fail.**
+- [ ] **Step 3: implement.** Then the Try page: a situation picker (13 presets, each with its suggested replies and expected-behavior line); the guarded side runs v2; a "Rules v2" label.
+- [ ] **Step 4:** `npm run typecheck && npm run lint && npm test && npm run eval:replay` all pass, with replay showing no missing recordings. Codex check 1 and check 2. DEVLOG and DECISIONS. Browser checklist for Akshay. Commit after his pass.
+
+### Task 16b: Teach and review (lessons)
+
+Covers: FR-84 to 89, NFR-30, 31, 32.
+
+**Files:** `db/migrations/002_lessons.sql`, `db/ops/readonly_role.sql` (grant select on lessons), `src/lib/lessons.ts` (types, Zod, `pickLessons(all, situation)`, `checkHardRule`), `src/lib/lessons-store.ts` (insert, list, toggle, delete, bump used), `src/lib/reports.ts` (`lessonsLog`), `src/lib/agent/prompts.ts` (supervisor section), `src/lib/sim/loop.ts` (lessons option), `src/app/api/live/route.ts` (ops), `src/components/LiveChat.tsx` (review panel, lessons panel), `src/components/LessonsLog.tsx`, `src/app/try/page.tsx`, `CLAUDE.md`, tests `tests/lessons.test.ts`, `tests/live-route.test.ts`, `tests/import-graph.test.ts`, `tests/db/lessons.test.ts`.
+
+- [ ] **Step 1: failing tests.** `pickLessons` returns at most 8, same situation plus general, newest first, inactive skipped. The prompt with lessons has the supervisor section after the rules; the v1 prompt and the guarded prompt with no lessons are unchanged (compared with the current string). `checkHardRule("no_close", {action: "close"})` fails, and the fallback for each rule satisfies it. Route: `retry` without `draftLesson` gives 400; an instruction over 300 characters gives 400; public mode gives 404 for every op; `recheck` runs at most 8. Import graph: only the live route reaches `lessons-store`. DB: insert and read back, toggle, delete, a bad situation rejected by a CHECK, and the `recovery_reader` grant present in the script.
+- [ ] **Step 2: run them, watch them fail.**
+- [ ] **Step 3: implement.** Then `npm run db:migrate` on the dev DB.
+- [ ] **Step 4:** full checks including `npm run test:db` and `npm run build`. Codex checks. Docs. Browser checklist: correct "I don't want to pay you", retry, accept, start over, see "lesson #1 applied" and no giving up; baseline still gives up; make it hard, recheck; public-mode log renders. Commit after his pass.
+
+### Task 16c: Deeper conversations
+
+Covers: FR-90 to 93.
+
+**Files:** `src/lib/promise.ts` (`parsePromise`), `src/lib/money.ts` (`installmentsN`), `src/lib/agent/guard.ts` (v2 plan options), `src/lib/agent/prompts.ts` (promise and plan facts, v2 only), `src/lib/live.ts` (10-turn limit, follow-up turn, time order, state builder), `src/components/LiveChat.tsx` (reply-later choices, "Customer goes quiet", state panel), tests `tests/promise.test.ts`, `tests/money.test.ts`, `tests/guard-v2.test.ts`, `tests/live.test.ts`.
+
+- [ ] **Step 1: failing tests.** "I'll pay Friday" sent Tuesday 2026-03-10 in Denver is Friday 2026-03-13; "on the 20th" sent on the 25th is the 20th of next month; "tomorrow" at 23:30 New York is the next local day. `installmentsN(46001, 3)` is `[15334, 15334, 15333]` and sums to 46001. v2 accepts the 3-way split only after the customer asked for 3; v1 still rejects 3. Live: an 11th agent message is refused; a customer time before the previous message is refused; a follow-up with a promise is proposed at 10:00 local on the promised date. State builder: after a plan offer and a promise, the panel shows both and the next send time.
+- [ ] **Step 2: run them, watch them fail.**
+- [ ] **Step 3: implement.**
+- [ ] **Step 4:** full checks, replay unchanged. Codex checks. Docs. Browser checklist: promise Friday, go quiet, follow-up on Friday at 10:00; ask for 3 payments; "text me after 6pm" then reply next day; read the panel. Commit after his pass.
+
+### Task 16d (optional, needs Akshay's approval): promote situations to evals
+
+Add 4 or 5 scripted scenarios (S13 to S17: wrong person, settlement, promise to pay, refusal, bereavement) with personas, specific checks, and rules v2 for guarded; record a new pinned set with `--limit 2` first, then the rest; update the Evals page numbers from the new run; PRD and SPEC updated first. Live calls only after he approves the cost estimate.
