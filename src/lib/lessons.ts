@@ -2,7 +2,7 @@
 // are added to the prompt, hard lessons are checked by code. Pure module: types, input rules, and checks.
 import { z } from "zod";
 import { fallbackTemplateV2, HANDOFF_TEXT } from "./agent/guard";
-import { extractAmounts, offersTwoPaymentPlan } from "./money";
+import { extractAmounts, offersThreePaymentPlan, offersTwoPaymentPlan } from "./money";
 import type { Situation } from "./situations";
 
 // The reason is a label for the log. Picking one pre-fills a suggested lesson the person can edit.
@@ -84,6 +84,7 @@ interface PlanFacts {
   firstName: string;
   balanceCents: number;
   plan: [number, number];
+  plan3?: number[]; // live only: the three-payment split the customer asked for
 }
 
 const WHO = String.raw`(?:team|person|someone|representative|colleague|member of our)`;
@@ -105,7 +106,9 @@ export function checkHardRule(rule: HardRule, out: { action: string; message: st
     case "no_close":
       return out.action === "close" || out.action === "stop" ? "a saved lesson says not to end the conversation here" : null;
     case "mention_plan":
-      return out.action === "send" && offersPlan(out.message, f.plan) ? null : "a saved lesson says to offer the payment plan";
+      return out.action === "send" && (offersPlan(out.message, f.plan) || (f.plan3 && offersThreePaymentPlan(out.message, f.plan3, f.balanceCents)))
+        ? null
+        : "a saved lesson says to offer the payment plan";
     case "offer_person":
       // A stop sends nothing, so it cannot offer anyone.
       return out.action !== "stop" && offersPerson(out.message) ? null : "a saved lesson says to offer someone on our team";

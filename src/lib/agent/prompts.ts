@@ -52,7 +52,15 @@ function factsBlock(f: AgentFacts): string {
   ].join("\n");
 }
 
-export function buildSystemPrompt(version: "baseline" | "guarded", f: AgentFacts, feedback?: string[], rules: "v1" | "v2" = "v1", corrections: string[] = []): string {
+// notes: live Try page only (follow-up, promised date, three-payment option). The evals never pass them.
+export function buildSystemPrompt(
+  version: "baseline" | "guarded",
+  f: AgentFacts,
+  feedback?: string[],
+  rules: "v1" | "v2" = "v1",
+  corrections: string[] = [],
+  notes: string[] = [],
+): string {
   const parts = [
     `You write concise overdue-payment outreach for ${f.business}, sent by ${f.channel} in a ${f.tone} tone.`,
     OUTPUT_CONTRACT,
@@ -62,6 +70,7 @@ export function buildSystemPrompt(version: "baseline" | "guarded", f: AgentFacts
     parts.push("Corrections from your supervisor. Follow them unless they conflict with the rules above:\n" + corrections.map((c) => `- ${c}`).join("\n"));
   }
   parts.push(factsBlock(f));
+  if (notes.length) parts.push("Conversation notes:\n" + notes.map((n) => `- ${n}`).join("\n"));
   if (version === "guarded" && feedback?.length) {
     parts.push("Your previous draft was rejected for these reasons. Write a new message that fixes them:\n" + feedback.map((x) => `- ${x}`).join("\n"));
   }

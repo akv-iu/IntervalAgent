@@ -38,7 +38,7 @@ export function localHour(instant: Date, tz: Tz): number {
   return p.h + p.mi / 60 + p.s / 3600;
 }
 
-function localDate(instant: Date, tz: Tz, addDays = 0): string {
+export function localDate(instant: Date, tz: Tz, addDays = 0): string {
   const p = localParts(instant, tz);
   return new Date(Date.UTC(p.y, p.mo - 1, p.d + addDays)).toISOString().slice(0, 10);
 }

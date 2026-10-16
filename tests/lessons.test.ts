@@ -183,3 +183,10 @@ describe("lesson scope (Akshay's review)", () => {
     expect(r.situation).toBe("plan_request");
   });
 });
+
+describe("Codex check 1 (16c)", () => {
+  test("mention_plan accepts an allowed three-payment offer", () => {
+    const f = { business: "Northside Fitness", firstName: "Luis", balanceCents: 46001, plan: installments(46001), plan3: [15333, 15334, 15334] };
+    expect(checkHardRule("mention_plan", { action: "send", message: "Sure: three payments of $153.33, $153.34 and $153.34." }, f)).toBeNull();
+  });
+});

@@ -24,6 +24,33 @@ interface Facts {
   balanceCents: number;
   plan: [number, number];
   isFirst: boolean;
+  plan3?: number[]; // live Try page only, after the customer asked for three payments; the evals never set it
+}
+
+const THREE = /\b(?:three|3)\s+(?:\w+\s+)?(?:payments|installments)\b|\bthird\s+(?:payment|installment)\b/i;
+
+// A three-payment offer must list exactly the three computed amounts (or one amount when all three are equal).
+function checkThree(text: string, f: Facts, plan3: number[]): string[] {
+  const problems: string[] = [];
+  const amounts = extractAmounts(text);
+  const allowed = new Set([f.balanceCents, ...plan3]);
+  for (const a of amounts) if (!allowed.has(a)) problems.push(`unsupported amount ${formatCents(a)}`);
+  for (const m of text.matchAll(COUNT)) {
+    const n = COUNT_WORDS[m[1].toLowerCase()] ?? Number(m[1]);
+    if (n !== 3) problems.push(`unsupported installment count: ${n}`);
+  }
+  if (/\b(fourth|fifth|sixth|4th|5th|6th)\s+(?:payment|installment)/i.test(text)) problems.push("unsupported installment count: more than 3");
+  // After "three payments", the rest of that sentence lists payments, so the balance may not appear there.
+  const tail = text.slice(text.search(THREE)).split(/(?<=[.!?])\s+/)[0];
+  if (extractAmounts(tail).includes(f.balanceCents)) problems.push("the balance cannot be one of the three payments");
+  const listed = amounts.filter((a) => a !== f.balanceCents).sort((a, b) => a - b);
+  const want = [...plan3].sort((a, b) => a - b);
+  const allEqual = want.every((a) => a === want[0]);
+  const exact = listed.length === 3 && listed.every((a, i) => a === want[i]);
+  if (!exact && !(allEqual && listed.length === 1 && listed[0] === want[0])) {
+    problems.push(`three payments must be ${want.map(formatCents).join(", ")} = ${formatCents(f.balanceCents)}`);
+  }
+  return problems;
 }
 
 const COUNT_WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
@@ -48,6 +75,9 @@ export function validateOutbound(text: string, f: Facts): string[] {
   for (const t of findThreats(text)) problems.push(`prohibited wording: ${t}`);
 
   if ((text.match(DOLLAR_TOKEN)?.length ?? 0) > (text.match(DOLLAR_PARSED)?.length ?? 0)) problems.push("unverifiable amount");
+
+  // Live only: the three-payment offer replaces the two-payment checks; the balance and opening checks still apply.
+  if (f.plan3 && THREE.test(text)) return [...problems, ...checkThree(text, f, f.plan3), ...balanceAndNotice(text, f)];
 
   const [first, second] = f.plan;
   const amounts = extractAmounts(text);
@@ -75,11 +105,7 @@ export function validateOutbound(text: string, f: Facts): string[] {
     checkPair(x, y, m[2] ? `payments of ${formatCents(x)} and ${formatCents(y)}` : `two payments of ${formatCents(x)}`);
   }
 
-  // A sentence about the balance (and not about a plan) may only state the balance.
-  for (const sentence of text.split(/(?<=[.!?])\s+/)) {
-    if (!BALANCE_WORDS.test(sentence) || PLAN_WORDS.test(sentence)) continue;
-    if (extractAmounts(sentence).some((a) => a !== f.balanceCents)) problems.push(`stated balance must be ${formatCents(f.balanceCents)}`);
-  }
+  problems.push(...balanceSentences(text, f));
 
   const planAmounts = amounts.filter((a) => a !== f.balanceCents);
   if (planAmounts.length > 2) problems.push("more than two installment amounts");
@@ -87,13 +113,30 @@ export function validateOutbound(text: string, f: Facts): string[] {
     problems.push(`installments must be ${formatCents(first)} and ${formatCents(second)}`);
   }
 
-  if (f.isFirst) {
-    if (!text.toLowerCase().includes(f.business.toLowerCase())) problems.push("first message must name the business");
-    if (!/\b(overdue|past[\s-]due)\b/i.test(text)) problems.push("first message must say overdue or past due");
-    if (!amounts.includes(f.balanceCents)) problems.push("first message must state the exact balance");
+  problems.push(...openingNotice(text, f));
+  return problems;
+}
+
+// A sentence about the balance (and not about a plan) may only state the balance.
+function balanceSentences(text: string, f: Facts): string[] {
+  const problems: string[] = [];
+  for (const sentence of text.split(/(?<=[.!?])\s+/)) {
+    if (!BALANCE_WORDS.test(sentence) || PLAN_WORDS.test(sentence)) continue;
+    if (extractAmounts(sentence).some((a) => a !== f.balanceCents)) problems.push(`stated balance must be ${formatCents(f.balanceCents)}`);
   }
   return problems;
 }
+
+function openingNotice(text: string, f: Facts): string[] {
+  if (!f.isFirst) return [];
+  const problems: string[] = [];
+  if (!text.toLowerCase().includes(f.business.toLowerCase())) problems.push("first message must name the business");
+  if (!/\b(overdue|past[\s-]due)\b/i.test(text)) problems.push("first message must say overdue or past due");
+  if (!extractAmounts(text).includes(f.balanceCents)) problems.push("first message must state the exact balance");
+  return problems;
+}
+
+const balanceAndNotice = (text: string, f: Facts) => [...balanceSentences(text, f), ...openingNotice(text, f)];
 
 export function fallbackTemplate(a: { business: string; firstName: string; balanceCents: number; plan: [number, number] }): string {
   const [first, second] = a.plan;
@@ -130,7 +173,7 @@ export function preGenerateV2(lastCustomerText: string | null, proposedAt: Date,
   return { kind: "generate", sendAt, ...base };
 }
 
-const formatHour = (h: number) => `${Math.floor(h) % 12 || 12}:${String(Math.round((h % 1) * 60)).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+export const formatHour = (h: number) => `${Math.floor(h) % 12 || 12}:${String(Math.round((h % 1) * 60)).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 
 const OFFER_WORD = String.raw`(?:discount|waive|waiving|forgive|settle|settlement|reduce|reduced|lower(?:ed)?\s+(?:the|your)\s+(?:balance|amount)|\d+\s?%|percent)`;
 const OFFER = new RegExp(OFFER_WORD, "i");

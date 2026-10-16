@@ -10,7 +10,17 @@ function checksLine(m: DetailMessage): string | null {
   return failed.length ? `Checks: failed ${failed.join(", ")}` : `Checks: all ${m.checks.length} passed`;
 }
 
-export default function Thread({ messages, current, showChecks = false }: { messages: DetailMessage[]; current?: number; showChecks?: boolean }) {
+export default function Thread({
+  messages,
+  current,
+  showChecks = false,
+  customer = WHO.customer,
+}: {
+  messages: DetailMessage[];
+  current?: number;
+  showChecks?: boolean;
+  customer?: string;
+}) {
   return (
     <ol className="space-y-3">
       {messages.map((m, i) => {
@@ -18,7 +28,7 @@ export default function Thread({ messages, current, showChecks = false }: { mess
         return (
           <li key={m.seq} className={`flex flex-col ${mine ? "items-end" : m.role === "system" ? "items-center" : "items-start"}`}>
             <span className="mb-1 text-xs text-muted">
-              {WHO[m.role]}, {m.when}
+              {m.role === "customer" ? customer : WHO[m.role]}, {m.when}
             </span>
             <p
               className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm ${

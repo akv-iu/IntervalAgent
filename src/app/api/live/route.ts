@@ -134,7 +134,7 @@ function model(agent: "live" | "mock", env: Record<string, string>): LlmProvider
 async function recheck(l: Lesson, lessons: Lesson[], p: LlmProvider) {
   const t = await liveTurn({ scenarioId: l.scenarioId, version: "guarded", messages: l.moment }, p, lessons);
   // The rule itself decides; tags only say whether the model or the code got there.
-  const followed = l.hardRule ? checkHardRule(l.hardRule, { action: t.action, message: t.text }, scenarioFacts(l.scenarioId)) === null : null;
+  const followed = l.hardRule ? checkHardRule(l.hardRule, { action: t.action, message: t.text }, { ...scenarioFacts(l.scenarioId), plan3: t.plan3 }) === null : null;
   const verdict =
     followed === null
       ? "no automatic check: read it yourself"

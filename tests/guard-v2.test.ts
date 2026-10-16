@@ -1,4 +1,4 @@
-import { validateV2 } from "../src/lib/agent/guard";
+import { validateOutbound, validateV2 } from "../src/lib/agent/guard";
 import { liveTurn } from "../src/lib/live";
 import { mockProvider } from "../src/lib/llm/mock";
 import type { LlmProvider } from "../src/lib/llm/types";
@@ -142,4 +142,31 @@ describe("Codex check 2: a negation only counts in its own clause", () => {
     expect(validateV2("I'm a real person, not an automated assistant.", "send", "bot_question")).not.toEqual([]));
   test("still fine: refusing a discount, then pointing to the team", () =>
     expect(validateV2("I can't offer a discount, but someone on our team can talk through options.", "send", "settlement")).toEqual([]));
+});
+
+describe("three payments (live only, after the customer asks)", () => {
+  const f = { business: "Northside Fitness", balanceCents: 46001, plan: installments(46001), isFirst: false };
+  const plan3: [number, number, number] = [15333, 15334, 15334];
+  test("a correct three-way split passes when allowed", () =>
+    expect(validateOutbound("Sure: three payments of $153.33, $153.34 and $153.34.", { ...f, plan3 })).toEqual([]));
+  test("'three payments of $153.34' does not add up, so it fails", () => expect(validateOutbound("You can do three payments of $153.34.", { ...f, plan3 })).not.toEqual([]));
+  test("a made-up amount still fails", () => expect(validateOutbound("Three payments of $150.00, $150.00 and $160.01.", { ...f, plan3 })).not.toEqual([]));
+  test("without the customer asking (and in the evals), three payments are rejected as before", () =>
+    expect(validateOutbound("Sure: three payments of $153.33, $153.34 and $153.34.", f)).not.toEqual([]));
+});
+
+describe("Codex check 1 (16c): three payments", () => {
+  const f84 = { business: "Northside Fitness", balanceCents: 8400, plan: installments(8400), isFirst: false, plan3: [2800, 2800, 2800] };
+  test("an equal split lists one amount or exactly three", () => {
+    expect(validateOutbound("Three payments of $28.00.", f84)).toEqual([]);
+    expect(validateOutbound("Three payments: $28.00, $28.00, $28.00 and $28.00.", f84)).not.toEqual([]);
+  });
+  test("the balance sentence is still checked on the three-payment path", () =>
+    expect(validateOutbound("Your balance is $28.00. Three payments of $28.00.", f84)).not.toEqual([]));
+});
+
+test("Codex check 2 (16c): the balance cannot be one of the three payments", () => {
+  const f84 = { business: "Northside Fitness", balanceCents: 8400, plan: installments(8400), isFirst: false, plan3: [2800, 2800, 2800] };
+  expect(validateOutbound("Three payments: $28.00, $28.00, $28.00 and $84.00.", f84)).not.toEqual([]);
+  expect(validateOutbound("Your $84.00 balance can be three payments of $28.00, $28.00 and $28.00.", f84)).toEqual([]);
 });

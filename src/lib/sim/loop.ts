@@ -40,6 +40,8 @@ export interface TurnInput {
   rules?: "v1" | "v2"; // v2 (live Try page only) adds situation handling; the evals use v1
   lessons?: Lesson[]; // v2 only: saved lessons; the ones for this situation are applied
   draft?: { instruction: string; hardRule: HardRule | null }; // v2 only: a lesson being tried, not yet saved
+  notes?: string[]; // live only: conversation notes for the prompt (follow-up, promised date, three-payment option)
+  plan3?: number[]; // live guarded only: three-payment amounts the guard accepts after the customer asked
 }
 export interface TurnResult {
   action: "send" | "handoff" | "close" | "stop"; // stop: nothing is sent
@@ -58,7 +60,7 @@ export async function agentTurn(t: TurnInput): Promise<TurnResult> {
   const v2 = version === "guarded" && t.rules === "v2";
   let attempt = 0;
   const generate = async (feedback?: string[]): Promise<AgentOutput> => {
-    let system = buildSystemPrompt(version, facts, feedback, v2 ? "v2" : "v1", corrections);
+    let system = buildSystemPrompt(version, facts, feedback, v2 ? "v2" : "v1", corrections, t.notes);
     for (let i = 1; i <= OUTPUT_ATTEMPTS; i++) {
       t.stats.calls++;
       attempt++;
@@ -120,12 +122,12 @@ export async function agentTurn(t: TurnInput): Promise<TurnResult> {
   const check = (o: AgentOutput) =>
     o.action === "stop"
       ? v2
-        ? [...validateV2(o.message, "close", situation, refused), ...hardRules.flatMap((r) => checkHardRule(r, o, facts) ?? [])]
+        ? [...validateV2(o.message, "close", situation, refused), ...hardRules.flatMap((r) => checkHardRule(r, o, { ...facts, plan3: t.plan3 }) ?? [])]
         : []
       : [
-          ...(o.message.trim() || !v2 ? validateOutbound(o.message, { ...facts, isFirst: t.isFirst }) : []),
+          ...(o.message.trim() || !v2 ? validateOutbound(o.message, { ...facts, isFirst: t.isFirst, plan3: t.plan3 }) : []),
           ...(v2 ? validateV2(o.message, o.action, situation, refused) : []),
-          ...hardRules.flatMap((r) => checkHardRule(r, o, facts) ?? []),
+          ...hardRules.flatMap((r) => checkHardRule(r, o, { ...facts, plan3: t.plan3 }) ?? []),
         ];
   let out = await generate();
   if (version === "guarded" && (v2 || (out.action !== "stop" && out.message.trim()))) {

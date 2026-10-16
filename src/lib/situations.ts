@@ -61,7 +61,7 @@ const RULES: [Exclude<Situation, "general" | "wrong_person">, RegExp[]][] = [
 ];
 
 const REFUSAL = RULES.find(([s]) => s === "refusal")![1];
-const FIRM_REFUSAL = /\b(won'?t|will not|not going to|never going to|refuse to)\s+pay\b|\bnot\s+paying\b/i;
+export const FIRM_REFUSAL = /\b(won'?t|will not|not going to|never going to|refuse to)\s+pay\b|\bnot\s+paying\b/i;
 export const isRefusal = (text: string) => REFUSAL.some((r) => r.test(text));
 
 export function situationOf(text: string, firstName?: string): Situation {

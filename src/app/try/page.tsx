@@ -124,11 +124,13 @@ async function Try() {
           </p>
         )}
         <p className="mt-1 text-ink-2">
-          Pick one of 13 situations real collections teams face, or any eval
-          customer for free play. The guarded agent runs rules v2 here: a few
-          situations get a fixed reply from code with no AI call, and every
-          draft is checked before it is sent. Under each guarded reply you can
-          see what the guard did.
+          Pick a situation and play the customer. The grey lines under each
+          guarded reply show what the guard did.
+        </p>
+        <p className="mt-1 text-ink-2">
+          Try &quot;I&apos;ll pay Friday&quot;, ask for three payments, or click
+          &quot;Customer goes quiet&quot;. Then open &quot;What the agent
+          knows&quot;.
         </p>
       </div>
       <LiveChat

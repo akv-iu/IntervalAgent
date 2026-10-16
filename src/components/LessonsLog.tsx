@@ -12,15 +12,15 @@ export function LessonCard({ lesson: l, children }: { lesson: Lesson; children?:
         <p className="font-semibold text-ink">
           Lesson #{l.id}
           <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${l.hardRule ? "bg-tint-2 text-accent-ink" : "bg-neutral-100 text-ink-2"}`}>
-            {l.hardRule ? `hard rule: ${label(HARD_RULES, l.hardRule)}` : "soft: added to the instructions"}
+            {l.hardRule ? `hard rule: ${label(HARD_RULES, l.hardRule)}` : "soft: the agent reads it"}
           </span>
         </p>
         <p className="text-xs text-muted">
-          {l.active ? "on" : "off"}, sent with {l.timesUsed} {l.timesUsed === 1 ? "reply" : "replies"}
+          {l.active ? "On" : "Off"}, used in {l.timesUsed} {l.timesUsed === 1 ? "reply" : "replies"}
         </p>
       </div>
       <p className="mt-1 text-xs text-muted">
-        Applies {l.appliesTo === "all" ? "on every reply after the opening message" : `when the customer ${situationLabel(l.situation)}`}. Reason:{" "}
+        Applies {l.appliesTo === "all" ? "to every reply after the first message" : `when the customer ${situationLabel(l.situation)}`}. Reason:{" "}
         {label(REASONS, l.reason)}.
       </p>
       <p className="mt-1 text-ink-2">{l.instruction}</p>

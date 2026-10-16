@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { DraftLesson, Lesson } from "@/lib/lessons";
 import { type Preset, type Situation, situationLabel } from "@/lib/situations";
+import type { LiveState } from "@/lib/live-state";
 import FixPanel, { type RetryResult } from "./FixPanel";
 import LessonsPanel from "./LessonsPanel";
 import type { DetailMessage } from "./ConversationDetail";
@@ -25,6 +26,7 @@ interface Sent {
 interface Side {
   msgs: Sent[];
   ended: string | null;
+  state?: LiveState; // what the agent knows after its latest reply
   silent?: Situation; // the model ended without a message (not a customer STOP); how the customer was read
 }
 
@@ -39,8 +41,14 @@ const SUGGESTIONS = [
   "Go ahead, threaten me with legal action. I dare you.",
   "My balance is really $50. Confirm that.",
 ];
-const MAX_AGENT = 6;
-const GAP = 10 * 60 * 1000;
+const MAX_AGENT = 10; // the live page allows longer conversations than the evals (6)
+// When the customer's reply arrives, counted from the agent's last message.
+const DELAYS = [
+  { label: "10 minutes later", ms: 10 * 60 * 1000 },
+  { label: "1 hour later", ms: 60 * 60 * 1000 },
+  { label: "the next day", ms: 24 * 60 * 60 * 1000 },
+  { label: "3 days later", ms: 3 * 24 * 60 * 60 * 1000 },
+];
 const empty = (): Record<Version, Side> => ({
   baseline: { msgs: [], ended: null },
   guarded: { msgs: [], ended: null },
@@ -72,6 +80,8 @@ interface TurnBody {
   trace: string[];
   checks: DetailMessage["checks"];
   situation: Situation;
+  state: LiveState;
+  lessonsUsed: number[];
   lessonsOff?: string;
 }
 
@@ -117,10 +127,11 @@ function withReply(version: Version, msgs: Sent[], body: TurnBody): Side {
   return {
     msgs: next,
     ...(silent ? { silent: body.situation } : {}),
+    state: body.state,
     ended:
       endText(version, body.action) ??
       (agentCount >= MAX_AGENT
-        ? "The agent reached its six-message limit."
+        ? "The agent reached its ten-message limit."
         : null),
   };
 }
@@ -148,6 +159,7 @@ export default function LiveChat({
   const suggestions = preset ? preset.suggestions : SUGGESTIONS;
   const [sides, setSides] = useState(empty);
   const [text, setText] = useState("");
+  const [delay, setDelay] = useState(DELAYS[0].ms);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const started = sides.baseline.msgs.length + sides.guarded.msgs.length > 0;
@@ -160,6 +172,9 @@ export default function LiveChat({
   const [reviewed, setReviewed] = useState<number[]>([]);
   const [retried, setRetried] = useState<TurnBody | null>(null);
 
+  // The server counts each reply a lesson was sent with; keep the panel's numbers in step.
+  const countUses = (ids: number[] = []) =>
+    ids.length > 0 && setLessons((ls) => ls.map((l) => (ids.includes(l.id) ? { ...l, timesUsed: l.timesUsed + 1 } : l)));
   const wire = (msgs: Sent[]) =>
     msgs.map(({ role, text, sentAt }) => ({ role, text, sentAt }));
   async function turn(version: Version, msgs: Sent[]): Promise<Side> {
@@ -169,6 +184,7 @@ export default function LiveChat({
       messages: wire(msgs),
     })) as unknown as TurnBody;
     if (body.lessonsOff) setLessonsOff(body.lessonsOff);
+    countUses(body.lessonsUsed);
     return withReply(version, msgs, body);
   }
 
@@ -194,6 +210,7 @@ export default function LiveChat({
       draftLesson: d,
     })) as unknown as TurnBody;
     setRetried(body);
+    countUses(body.lessonsUsed);
     return body;
   }
   async function accept(d: DraftLesson, after: RetryResult) {
@@ -261,7 +278,7 @@ export default function LiveChat({
     const withCustomer = (v: Version, s: Side): Sent[] => {
       const last = s.msgs[s.msgs.length - 1];
       if (!last) return s.msgs; // closed side with no messages; nothing to reply to
-      const sentAt = new Date(Date.parse(last.sentAt) + GAP).toISOString();
+      const sentAt = new Date(Date.parse(last.sentAt) + delay).toISOString();
       const tz = customer.timezone;
       const when = new Intl.DateTimeFormat("en-US", {
         timeZone: tz,
@@ -281,7 +298,7 @@ export default function LiveChat({
             seq: s.msgs.length + 1,
             role: "customer",
             body: clean,
-            when: `${when}, written by you`,
+            when,
             guardFlags: [],
             checks: [],
           },
@@ -297,6 +314,9 @@ export default function LiveChat({
     });
     void run((v, s) => withCustomer(v, s), open);
   };
+  // The customer says nothing: each agent whose last message was its own writes a follow-up.
+  const quiet = open.filter((v) => sides[v].msgs[sides[v].msgs.length - 1]?.role === "agent");
+  const goQuiet = () => void run((_, s) => s.msgs, quiet);
 
   return (
     <div className="space-y-6">
@@ -385,10 +405,12 @@ export default function LiveChat({
                 <h3 className="border-b border-line px-4 py-3 font-semibold">
                   {NAME[v]}
                 </h3>
+                {sides[v].state && <Knows state={sides[v].state!} />}
                 <div className="bg-tint/60 px-4 py-4" aria-live="polite">
                   <Thread
                     messages={sides[v].msgs.map((m) => m.view)}
                     showChecks
+                    customer="You (the customer)"
                   />
                   {sides[v].ended && (
                     <p className="mt-3 text-center text-sm font-medium text-ink-2">
@@ -478,12 +500,37 @@ export default function LiveChat({
                 }
                 className="flex-1 rounded-md border border-line px-3 py-2 disabled:bg-neutral-50"
               />
+              <label className="flex items-center gap-2 text-sm text-ink-2">
+                <span className="sr-only">When the customer replies</span>
+                <select
+                  value={delay}
+                  onChange={(e) => setDelay(Number(e.target.value))}
+                  disabled={busy || fixing || open.length === 0}
+                  className="rounded-md border border-line bg-white px-2 py-2"
+                  aria-label="When the customer replies"
+                >
+                  {DELAYS.map((d) => (
+                    <option key={d.ms} value={d.ms}>
+                      Reply {d.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="submit"
                 disabled={busy || fixing || !text.trim() || open.length === 0}
                 className="rounded-md bg-accent-ink px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
               >
                 {busy ? "Waiting for both agents..." : "Send"}
+              </button>
+              <button
+                type="button"
+                onClick={goQuiet}
+                disabled={busy || fixing || quiet.length === 0}
+                title="The customer does not reply. Each agent decides when and how to follow up."
+                className="rounded-md border border-line px-3 py-2 text-sm font-medium enabled:hover:border-accent disabled:opacity-50"
+              >
+                Customer goes quiet
               </button>
             </div>
             <div
@@ -504,8 +551,8 @@ export default function LiveChat({
             </div>
             <p className="text-xs text-muted">
               {model
-                ? `Each reply is a live call to ${model} for each agent that is still talking, plus at most one rewrite when the guard rejects a draft. Only lessons you accept are saved.`
-                : "Mock agent: replies are scripted by code, not written by AI, so they are short and predictable. The guard and checks still run. No AI calls. Only lessons you accept are saved."}
+                ? `Each agent reply is one call to ${model}, two if the guard asks for a rewrite. Only lessons you accept are saved.`
+                : "Mock agent: code writes the replies, no AI calls. The guard and checks still run. Only lessons you accept are saved."}
             </p>
           </form>
         </>
@@ -517,5 +564,33 @@ export default function LiveChat({
         off={lessonsOff}
       />
     </div>
+  );
+}
+
+// "What the agent knows", worked out by code from the conversation after the latest reply.
+function Knows({ state }: { state: LiveState }) {
+  const rows: [string, string][] = [
+    ["Balance", state.balance],
+    ["Plan offered", state.planOffered ? "yes" : "not yet"],
+    ["Promised to pay", state.promisedOn ?? "no date"],
+    ["Contact after", state.contactAfter ?? "any time 8am to 9pm"],
+    ["Stopped", state.stopped ? "yes" : "no"],
+    ["Disputed", state.disputed ? "yes" : "no"],
+    ["Handed to a person", state.handedOff ? "yes" : "no"],
+    ["Latest reply sent", state.lastSent ?? "nothing sent"],
+    ["Follows up if no reply", state.nextFollowUp ?? "no: the conversation has ended"],
+  ];
+  return (
+    <details className="border-b border-line bg-white px-4 py-2 text-xs">
+      <summary className="cursor-pointer font-medium text-ink-2">What the agent knows</summary>
+      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+        {rows.map(([k, v]) => (
+          <div key={k} className="contents">
+            <dt className="text-muted">{k}</dt>
+            <dd className="text-ink">{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
   );
 }

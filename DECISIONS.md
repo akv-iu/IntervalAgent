@@ -326,3 +326,28 @@ Four commands go with it:
 **What Codex said:** two more catches, both fixed with tests: "I will not pay later" was read as pay later, and a silent ending could not be corrected.
 
 **Your existing lessons:** #2 and #3 were saved as "general" before this change, so they now only apply to messages that fit no label. If you meant them for payment-option questions, delete them and teach them again; the new panel will label them correctly. I did not change your saved data.
+
+
+---
+
+## Step 16c: deeper conversations
+
+**What this step is:** conversations on the Try page can now go further.
+- Up to **10 agent messages** (the recorded evals keep 6).
+- You choose **when the customer replies**: 10 minutes, 1 hour, the next day, or 3 days later.
+- **Customer goes quiet**: each agent decides when to follow up. If the customer promised a date ("I'll pay Friday"), the guarded agent follows up on that day at 10:00 their time (and after 6pm if they asked); otherwise the next morning.
+- **Promise dates** are read by code ("Friday", "tomorrow", "next week", "next month", "the 20th") in the customer's time zone, and the guarded agent is told the date so it confirms it and does not push for payment before it.
+- **Three payments**: if the customer asks, code works out three amounts that add up exactly (for $460.01: $153.33 + $153.34 + $153.34) and the guard accepts only that split. Without the request (and in the recorded evals) three payments are still refused.
+- **What the agent knows**: a small panel on each side shows the balance, whether a plan was offered, the promised date, the requested time, stop or dispute, hand-off, when the last reply went out, and when it would follow up next.
+
+**Decision I made:** the plan said the extra cent goes on the first payments; I put it on the last ones, matching how the two-payment split already works. Both add up exactly; the plan text is updated.
+
+**What went wrong:** a test I wrote used the scripted mock agent, which ends the conversation after a promise, so there was correctly no follow-up time; the test now uses an agent that keeps talking. The safety test also caught the page importing a type from the file that reaches the AI code; the type moved to its own small file instead of loosening the test.
+
+**What Codex said:**
+- Check 1 (8 real problems, all fixed with tests): listing $28 four times passed as "three payments"; the three-payment path skipped the balance and opening checks; "I do not want three payments" unlocked them; "Text me Friday" was read as a promise to pay; a later "I will not pay" did not cancel the promise; a "must offer the plan" lesson rejected a valid three-payment offer; an equal three-way offer was not counted as a plan offer; and the panel lacked the next follow-up time. (It also flagged my cent-order decision, which is intentional.)
+- Check 2: confirmed all eight and found 6 edge cases, all fixed with tests: the balance slipped in as a fourth amount; "text me in three days" and "I can't do three payments" unlocked three payments; "Text me Friday about my payment" and "I can't pay Friday" became promises; Recheck did not know about the three-payment split; the 10th reply advertised a follow-up that can never happen; and the baseline's correct three-payment offer was not counted.
+
+**Recorded evals:** untouched; the replay still matches every recording, including the order of guard messages that feed the rewrite step.
+
+**After your browser check:** the flow was working (the follow-up fix replaced the old reply; the hard rule caught a draft and the rewrite passed). Fixed: the lesson panel showed "sent with 0 replies" because the page never refreshed the count the server kept (it now counts replies, retries and rechecks as they happen); the live thread said "Customer (scripted), written by you" (now "You (the customer)"); "1 replies". Shortened the wording in the Fix panel, the lessons panel, and the page intro to short sentences that name the agent. Note for demos: a soft lesson set to "every reply" is read on every reply, which is why the plan answer asked for a reason; set such lessons to "only when the customer refuses to pay".

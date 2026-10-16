@@ -13,10 +13,10 @@ const MAX_TRIES = 3;
 
 // What each hard rule makes the code check, in words a viewer can follow.
 const RULE_CHECK: Record<HardRule, string> = {
-  no_close: "the reply fails if the agent ends the conversation or goes silent",
-  mention_plan: "the reply fails unless it states the payment plan amounts and does not take them back",
-  offer_person: "the reply fails unless it offers to connect the customer with someone on our team",
-  handoff: "the reply fails unless the agent passes the conversation to a person",
+  no_close: "the agent must not end the conversation",
+  mention_plan: "the agent must offer the payment plan amounts",
+  offer_person: "the agent must offer someone on our team",
+  handoff: "the agent must hand off to a person",
 };
 
 const suggestionFor = (reason: DraftLesson["reason"]) => REASONS.find((r) => r.id === reason)!.suggest;
@@ -82,10 +82,7 @@ export default function FixPanel({
     <div className="mt-3 space-y-3 rounded-lg border border-accent bg-white p-3 text-sm" role="group" aria-label="Fix this reply">
       {!after ? (
         <fieldset disabled={busy} className="space-y-3">
-          <p className="text-xs text-ink-2">
-            The model itself never changes. Your lesson changes what it is told (soft) and, if you choose a rule, what the code checks before a reply is sent
-            (hard).
-          </p>
+          <p className="text-xs text-ink-2">Teach the agent what to do next time. The AI model itself never changes.</p>
           <label className="flex flex-col gap-1 font-medium">
             What went wrong
             <select value={draft.reason} onChange={(e) => pickReason(e.target.value as DraftLesson["reason"])} className="rounded-md border border-line px-2 py-1.5 font-normal">
@@ -95,10 +92,10 @@ export default function FixPanel({
                 </option>
               ))}
             </select>
-            <span className="text-xs font-normal text-muted">A label for the log. Picking one fills in a suggested lesson below; edit it freely.</span>
+            <span className="text-xs font-normal text-muted">Fills in a suggested lesson. Edit it freely.</span>
           </label>
           <label className="flex flex-col gap-1 font-medium">
-            What should it have done? (soft lesson)
+            What should the agent do instead?
             <textarea
               value={draft.instruction}
               maxLength={MAX_INSTRUCTION}
@@ -111,12 +108,11 @@ export default function FixPanel({
               className="rounded-md border border-line px-2 py-1.5 font-normal"
             />
             <span className="text-xs font-normal text-muted">
-              {draft.instruction.length}/{MAX_INSTRUCTION}. Soft: this sentence is added to the guarded agent&apos;s instructions. It usually follows it,
-              but nothing checks that it did.
+              {draft.instruction.length}/{MAX_INSTRUCTION}. Soft lesson: the agent reads this and usually follows it.
             </span>
           </label>
           <label className="flex flex-col gap-1 font-medium">
-            Also make it a hard rule (optional)
+            Make it a hard rule? (optional)
             <select
               value={draft.hardRule ?? ""}
               onChange={(e) => {
@@ -126,7 +122,7 @@ export default function FixPanel({
               }}
               className="rounded-md border border-line px-2 py-1.5 font-normal"
             >
-              <option value="">No: soft lesson only</option>
+              <option value="">No, soft lesson only</option>
               {HARD_RULES.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.label}
@@ -135,12 +131,12 @@ export default function FixPanel({
             </select>
             <span className="text-xs font-normal text-muted">
               {draft.hardRule
-                ? `Hard: code checks every draft. Here, ${RULE_CHECK[draft.hardRule]}. A failing draft is rewritten once, then a safe reply is sent.`
-                : "Hard rules are checked by code on every draft, so they always hold."}
+                ? `Hard rule: ${RULE_CHECK[draft.hardRule]}. The code checks every reply; if the agent misses it, the reply is rewritten.`
+                : "A hard rule is checked by code on every reply, so it always holds."}
             </span>
           </label>
           <fieldset className="space-y-1">
-            <legend className="font-medium">Where it applies</legend>
+            <legend className="font-medium">When should the agent use it?</legend>
             <label className="flex items-start gap-2">
               <input type="radio" name="scope" checked={draft.appliesTo === "situation"} onChange={() => setDraft({ ...draft, appliesTo: "situation" })} className="mt-1" />
               <span>Only when the customer {situation}</span>
@@ -155,11 +151,11 @@ export default function FixPanel({
                 className="mt-1"
               />
               <span>
-                On every reply after the opening message
-                {draft.hardRule === "handoff" && <span className="text-xs text-muted"> (not with a hand-off rule: it would end every conversation)</span>}
+                On every reply
+                {draft.hardRule === "handoff" && <span className="text-xs text-muted"> (not with hand-off: it would end every conversation)</span>}
               </span>
             </label>
-            <p className="text-xs text-muted">The opening message always follows its fixed rules; lessons start with the first customer reply.</p>
+            <p className="text-xs text-muted">Never on the first message, which has fixed rules.</p>
           </fieldset>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={retry} disabled={busy || !draft.instruction.trim() || tries >= MAX_TRIES} className="rounded-md bg-accent-ink px-3 py-1.5 font-semibold text-white disabled:opacity-60">

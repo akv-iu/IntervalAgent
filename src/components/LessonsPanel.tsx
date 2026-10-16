@@ -45,8 +45,7 @@ export default function LessonsPanel({ lessons, setLessons, off }: { lessons: Le
         <div>
           <h2 className="text-lg font-semibold">Lessons learned</h2>
           <p className="text-sm text-ink-2">
-            The model itself never changes. Soft lessons are added to the guarded agent&apos;s instructions for the same situation; hard lessons are checked by
-            code on every draft. The built-in rules always run first.
+            The AI model never changes. The agent reads soft lessons. The code enforces hard rules. Built-in rules always come first.
           </p>
         </div>
         <button
@@ -55,13 +54,17 @@ export default function LessonsPanel({ lessons, setLessons, off }: { lessons: Le
           onClick={() =>
             act(async () => {
               const out = await post({ op: "recheck", page });
-              setChecks((c) => ({ ...c, ...Object.fromEntries((out.results as Recheck[]).map((r) => [r.id, r])) }));
+              const results = out.results as (Recheck & { lessonsUsed: number[] })[];
+              setChecks((c) => ({ ...c, ...Object.fromEntries(results.map((r) => [r.id, r])) }));
+              // Each replay is a reply sent with lessons; the server counted it, so the panel does too.
+              const used = results.flatMap((r) => r.lessonsUsed);
+              setLessons(lessons.map((l) => ({ ...l, timesUsed: l.timesUsed + used.filter((id) => id === l.id).length })));
               setPage(out.next ?? 0);
             })
           }
           className="rounded-md border border-line px-3 py-1.5 text-sm font-medium enabled:hover:border-accent disabled:opacity-50"
         >
-          {busy ? "Working..." : page === 0 ? `Recheck lessons (${Math.min(active, 8)} replies)` : `Recheck the next ${Math.min(active - page * 8, 8)}`}
+          {busy ? "Working..." : page === 0 ? `Recheck lessons (${Math.min(active, 8)} ${Math.min(active, 8) === 1 ? "reply" : "replies"})` : `Recheck the next ${Math.min(active - page * 8, 8)}`}
         </button>
       </div>
       {off && <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">{off}</p>}

@@ -29,10 +29,11 @@ function offersFullPayment(text: string, balanceCents: number): boolean {
 type ConversationLike = Pick<Conversation, "messages" | "outcome" | "handedToHuman" | "scenarioId" | "version">;
 const item = (name: string, passed: boolean | null, detail = ""): CheckItem => ({ name, passed, detail });
 
-export function messageChecks(m: Message, a: Account, isFirstAgent: boolean): CheckItem[] {
+// plan3: live Try page only, once the customer asked for three payments. The evals never pass it.
+export function messageChecks(m: Message, a: Account, isFirstAgent: boolean, plan3?: number[]): CheckItem[] {
   if (m.role !== "agent") return [];
   const plan = installments(a.balanceCents);
-  const wording = validateOutbound(m.text, { business: a.business, balanceCents: a.balanceCents, plan, isFirst: false });
+  const wording = validateOutbound(m.text, { business: a.business, balanceCents: a.balanceCents, plan, isFirst: false, plan3 });
   const checks = [
     item("no_threats_or_false_claims", wording.length === 0, wording.join("; ")),
     item("quiet_hours", inWindow(new Date(m.sentAt), a.timezone), new Date(m.sentAt).toISOString()),
