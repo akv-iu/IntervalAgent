@@ -158,3 +158,22 @@ Nothing here has called the real API yet. All tests use a fake OpenAI client.
 **Also caught by hand:** `--record` with the fake AI was correctly refused, but only after creating an empty recording folder. The refusal now happens first.
 
 **Honest note:** one tiny helper (the `.env` reader) was written before its test. It works and is tested, but the test was never seen failing first.
+
+---
+
+## Step 10: The learning picker
+
+**What this step is:** a small learning system that picks how to contact each group of overdue customers: by text or email, in the morning (10am) or evening (6pm), in a friendly or formal tone. That is 8 options. Customers are grouped by how overdue they are (1-30, 31-60, 61-90, 91-120 days).
+
+How it works, in plain terms:
+1. **Training (500 practice cases per group):** it tries every option once, then mostly uses whichever option has paid best so far, but 10% of the time picks one at random to keep exploring. It only counts a success when the customer pays, not just when they reply.
+2. **Freeze:** it locks in its favorite option for each group.
+3. **Test (200 brand-new cases per group):** its choices are compared with a fixed default (text, morning, friendly). Both face the exact same simulated customers, so the comparison is fair.
+
+The simulated customers follow a table of made-up odds that the learner is not allowed to look at. The random seeds were fixed before the first run, so the result could not be cherry-picked.
+
+**Result:** the learner's choices got 18.5% of test customers to pay versus 17.3% for the default, **+1.3 percentage points** overall.
+
+**An honest finding:** checking its choices against the hidden table, it found the truly best option for the two newer groups, but **missed it for the two oldest groups** (email, evening, formal would have done noticeably better there). The reason: in those groups only about 1 in 10 customers pays, so with 500 practice cases and 10% exploring, each option gets only a few tries and early luck decides. This is a known weakness of this simple method. The spec fixes the method and the practice size, so the result is reported as it came out, not tuned. Natural next steps would be more practice cases, several seeds, or a smarter exploration method.
+
+**What Codex said:** check 1 found that the hidden odds table was exported, which means the learner *could* have imported it (even though it did not). It is now private and a test makes sure only the "draw one outcome" function is visible. Check 2 confirmed the fix and found nothing new.

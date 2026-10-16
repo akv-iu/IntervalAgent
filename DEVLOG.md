@@ -93,3 +93,23 @@ Honest record of what was built, how it was checked, and what changed after revi
   - Check 2: confirmed all 6, and pointed out that the real SDK names its connection errors "Error", so my name-based retry check would never fire. Verified against the installed SDK, switched to `instanceof APIConnectionError`, test now throws real SDK error objects.
 - Process slip: `scripts/project-env.ts` was written before its test, so that test never failed first. Small helper, but noted honestly.
 - Not yet verified: the adapter has never talked to the real API. That happens in Task 9 with Akshay's approval.
+
+## Phase 4c: learning picker  (2026-10-16)
+- Asked for: an epsilon-greedy picker over channel x send window x tone for four aging segments, rewarded on payment, trained then frozen, and compared with a fixed baseline (sms, morning, friendly) on new held-out cases.
+- Built: `src/lib/picker.ts` (learner, summary), `src/lib/picker-env.ts` (made-up probability table, private; only `drawOutcome` is exported), `scripts/picker.ts`. Seeds fixed before the first run: train 11, test 22, explore 33.
+- Checked by hand:
+  - `npm test`: 279 passed (279).
+  - `npm run picker` (first and only run with these seeds):
+    ```
+    1-30    sms/morning/friendly      31-60   sms/evening/friendly
+    61-90   sms/morning/formal        91-120  sms/morning/friendly
+    segment    n   fixed pay  learned pay   difference
+    1-30     200    33.0%      33.0%     +0.0 pts
+    31-60    200    20.5%      22.5%     +2.0 pts
+    61-90    200     9.5%      12.5%     +3.0 pts
+    91-120   200     6.0%       6.0%     +0.0 pts
+    all      800    17.3%      18.5%     +1.3 pts
+    ```
+  - Compared the frozen choices with the hidden table (analysis only, outside the learner): it found the best option for 1-30 and 31-60, but missed it for 61-90 and 91-120, where email/evening/formal is best (about 17.0% and 10.2% expected payment vs 11.6% and 6.6% for the fixed choice). With payment rates near 10%, 500 training cases and 10% exploration give each option only a few tries, so early luck decides. Reported as is; not tuned.
+- Changed after review (Codex gpt-6.1-sol): check 1 found the hidden table was exported (importable by the learner). Made it private; a test now asserts the module exports only `ENV_VERSION` and `drawOutcome`. Check 2 confirmed, no new findings.
+- Limits: one synthetic split, made-up probabilities, no uncertainty intervals. This illustrates the method, not real lift.

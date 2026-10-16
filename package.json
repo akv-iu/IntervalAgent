@@ -11,7 +11,8 @@
     "test": "vitest run --config vitest.config.ts",
     "simulate": "tsx scripts/simulate.ts",
     "show": "tsx scripts/show-conversation.ts",
-    "eval": "tsx scripts/eval.ts"
+    "eval": "tsx scripts/eval.ts",
+    "picker": "tsx scripts/picker.ts"
   },
   "dependencies": {
     "dotenv": "18.0.8",
