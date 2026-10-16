@@ -196,3 +196,21 @@ The simulated customers follow a table of made-up odds that the learner is not a
 - Check 2: confirmed those fixes and that the real messages still pass, and found one more gap: "three **equal** $90 payments" slipped through because of the word "equal" before the amount. Fixed.
 
 **Usage check (resolved):** after the full run your usage page showed about 10k input and 4k output tokens, which matches the roughly 14,300 tokens the API reported for this project. Nothing else is using the key.
+
+---
+
+## Step 12: The database
+
+**What this step is:** the PostgreSQL database that the website will read from (your Neon project). It has six tables: accounts, runs, conversations, messages, eval results, and picker trials. The database itself enforces key rules, so bad data is refused even if code has a bug: money can never be negative or a fraction of a cent, a payment cannot come before the agreement, and a payment plan cannot have a receipt.
+
+Four commands go with it:
+- `npm run db:migrate` creates the tables (running it again does nothing).
+- `npm run db:seed` loads the 112 fixed accounts (running it again does nothing, and it refuses to quietly change an account that past results depend on).
+- `npm run db:import -- results/<file>.json` loads one results file **all or nothing**: it checks the rules first (demo accounts only in the dashboard run, eval accounts only in eval runs, all 12 scenarios present, no impossible payments), and if anything fails, nothing is saved. Importing the same run twice is refused.
+- `npm run test:db` runs the database tests against your throwaway `recovery_test` database only, in a private area it deletes afterwards. The normal `npm test` never touches a database.
+
+**What is in your database now:** the 100-customer dashboard run, the picker run, and a replay of the real recorded AI conversations. I checked the dashboard numbers two ways (by SQL and straight from the results file) and they match exactly: $2,262.94 recovered out of $16,178.61 contacted (14.0%), 2.1 days on average from first message to payment. These come from fake outreach and simulated payments, as the dashboard will say.
+
+**What Codex said:**
+- Check 1 (3 problems): an eval results file could include accounts the database knows as dashboard accounts; the "paid before agreeing" rule compared times as text, which can be wrong when one time has milliseconds; and guard notes were packed in a way that could garble unusual characters. All fixed with tests.
+- Check 2: confirmed those, and found that asking for "the latest eval run" could return a newer *fake* run instead of the real recorded one. The spec says the Evals page must show the pinned real recording, so eval selection now requires it.

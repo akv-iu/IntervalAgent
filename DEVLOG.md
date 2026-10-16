@@ -138,3 +138,18 @@ Honest record of what was built, how it was checked, and what changed after revi
 - CI: added a `replay` job that runs `npm run eval:replay` with no secrets and does not depend on the unit job.
 - Regression demo (SPEC 8, PRD release check): replay CI was green on `main` at 6b73182 (run 38831478500: unit success, replay success). On branch `demo/break-quiet-hours`, `scheduleInWindow` was made to return its input, tests untouched. Local `npm run eval:replay`: exit 1, "S11 guarded: quiet_hours failed", "S12 guarded: quiet_hours failed", no missing recordings. CI run https://github.com/akv-iu/IntervalAgent/actions/runs/38831592545: replay job failure (quiet_hours on S11 and S12), unit job also failure (scheduling tests). Back on `main` the guard is intact and replay exits 0. The demo branch is kept on GitHub as evidence and must never be merged.
 - Usage reconciled (Akshay, by hand): after the full run his OpenAI usage page showed about 10k input and 4k output tokens, matching the 1,024 + 13,311 = 14,335 tokens the API reported for this project. The earlier 5,576 reading did not indicate other usage.
+
+## Phase 1c: database, seed, transactional import, reporting queries  (2026-10-16)
+- Asked for: the six-table schema from SPEC 4 as a plain SQL migration, a migration runner, a seed that never rewrites history, an all-or-nothing importer that enforces the run rules, the SPEC 5 reporting queries, a read-only role script, and an explicit DB test suite.
+- Setup by Akshay: one Neon project (Postgres 18.6), databases `neondb` (app) and `recovery_test` (throwaway, tests only), direct connections, strings in `.env`.
+- Built: `db/migrations/001_init.sql`, `src/lib/db-admin.ts` (migrate, seed, import; write side, never imported by the web app), `src/lib/reports.ts` and `src/lib/db.ts` (read side), `scripts/migrate.ts`, `seed.ts`, `import.ts`, `db-pool.ts`, `db/ops/readonly_role.sql` (password passed as a psql variable, never written down), `vitest.db.config.ts`, `tests/db/`.
+- Checked by hand:
+  - `npm run test:db`: 25 passed (25). Each test file creates its own `test_<random>` schema in `recovery_test` and drops it; afterwards 0 leftover test schemas.
+  - `npm test`: 288 passed, with and without `TEST_DATABASE_URL` set (DB tests never run there). With `.env` moved aside, `test:db` stops with "npm run test:db needs TEST_DATABASE_URL".
+  - Dev DB: `db:migrate` applied `001_init.sql`, then "up to date, nothing applied"; `db:seed` 112 inserted, then 112 unchanged.
+  - Imported fresh artifacts: bulk (100 conversations), picker (3,600 trials), replay of the pinned live eval (24 conversations). Importing the bulk file again: "run ... was already imported; runs are never merged".
+  - SQL vs JSON cross-check on the bulk run: both give $2,262.94 recovered of $16,178.61 contacted, 14.0%, 2.1 days from first message to payment. Picker SQL totals match the CLI (fixed 17.25%, learned 18.5% paid).
+  - `EXPLAIN ANALYZE` on the overview query: index scan on `runs_kind_status_created` for the run, hash join of conversations and accounts with sequential scans (100 and 112 rows), 0.2 ms. Expected at this size; it says nothing about behavior at scale.
+- Changed after review (Codex gpt-6.1-sol):
+  - Check 1: eval imports did not require eval-classified accounts (fixed); paid-before-agreed compared timestamp text instead of instants (fixed); guard flags were joined with `|`, which is lossy (now JSON). DB tests added for each.
+  - Check 2: confirmed the three and found that "latest eval run" could return a newer mock run, against SPEC 5. Eval selection now requires the pinned recording set and a live or replay origin. Test added.
