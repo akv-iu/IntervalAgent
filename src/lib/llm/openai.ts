@@ -1,7 +1,7 @@
 // Live OpenAI adapter. All retrying happens here (SDK retries are off) so attempts never multiply.
 import OpenAI, { APIConnectionError } from "openai";
 import { redact } from "../env";
-import { type Budget, estimateTokens } from "./budget";
+import { type Budget, estimateTokens, OUTPUT_ALLOWANCE } from "./budget";
 import { TRANSPORT_ATTEMPTS } from "./limits";
 import type { LlmProvider, LlmRequest } from "./types";
 
@@ -9,6 +9,7 @@ interface ChatBody {
   model: string;
   messages: { role: "developer" | "assistant" | "user"; content: string }[];
   response_format: { type: "json_object" };
+  max_completion_tokens?: number;
 }
 interface ChatResult {
   choices: { message: { content: string | null } }[];
@@ -35,6 +36,7 @@ export function openaiProvider(o: {
   budget: Budget;
   client?: OpenAILike;
   sleep?: (ms: number) => Promise<void>;
+  maxOutputTokens?: number; // when set, sent to the API and reserved in full instead of the default allowance
 }): LlmProvider {
   // The SDK client's overloaded create() is wider than the slice we use; cast to that slice.
   const client = o.client ?? (new OpenAI({ apiKey: o.apiKey, maxRetries: 0 }) as unknown as OpenAILike);
@@ -48,13 +50,15 @@ export function openaiProvider(o: {
       const body: ChatBody = {
         model: o.model,
         response_format: { type: "json_object" },
+        ...(o.maxOutputTokens ? { max_completion_tokens: o.maxOutputTokens } : {}),
         messages: [
           { role: "developer", content: req.system },
           ...req.messages.map((m) => ({ role: m.role === "agent" ? ("assistant" as const) : ("user" as const), content: m.text })),
         ],
       };
       for (let attempt = 1; ; attempt++) {
-        o.budget.reserve(estimateTokens(req)); // before every paid attempt, retries included
+        // Before every paid attempt, retries included.
+        o.budget.reserve(estimateTokens(req) + (o.maxOutputTokens ? o.maxOutputTokens - OUTPUT_ALLOWANCE : 0));
         try {
           const res = await client.chat.completions.create(body);
           const usage = res.usage ? { input: res.usage.prompt_tokens, output: res.usage.completion_tokens } : undefined;

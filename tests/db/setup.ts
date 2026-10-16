@@ -1,4 +1,4 @@
-import { projectEnv } from "../../scripts/project-env";
+import { projectEnv } from "../../src/lib/project-env";
 
 // Fail loudly instead of silently skipping the suite.
 const url = process.env.TEST_DATABASE_URL || projectEnv().TEST_DATABASE_URL;

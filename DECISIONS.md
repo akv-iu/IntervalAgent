@@ -233,3 +233,20 @@ Four commands go with it:
 **What Codex said:**
 - Check 1: the conversation list counted payments after the reporting cutoff, and the safety test that keeps AI code out of the website missed one kind of import. Both fixed.
 - Check 2 (after the redesign): the most important catch was that the S10 walkthrough claimed the guard did nothing, when it was the guard that stopped the conversation. Also: some gray and blue text was too faint to read comfortably, a few walkthrough numbers came from a fixture file instead of the database, and the Picker page had a hard-coded "10%". All fixed.
+
+---
+
+## Extra step: the "Try it" page (live, local only)
+
+**What this step is:** a page where you play the overdue customer and both agents (baseline and guarded) answer you live with the real `gpt-6-luna`, side by side. Under each agent message you see what the guard did and whether the message passed the checks. It runs only on your own machine.
+
+**Why it is safe:** the website's one rule is that the public site never talks to the AI. This page is the single, written exception (in CLAUDE.md). Its server route answers "not found" unless `APP_MODE=local` is set both in the server's environment and in `.env`, reads the key only from `.env` (never your shell), caps each reply at 600 tokens, allows 6 agent messages per chat and 30 requests a minute, and stops at the token budget from `.env`. A test checks that no other part of the website can reach AI code.
+
+**What went wrong:**
+- To reuse the exact agent logic from the evals, I pulled one "agent turn" out of the conversation loop. The pinned replay still passes with no missing recordings, which proves the AI receives exactly the same requests as before.
+- I wrote two files (the live turn and the `.env` reader move) before writing their tests. The tests were added right after and pass, but they were not seen failing first.
+- A test caught that with `APP_MODE` missing, the route treated itself as local. Fixed: it now has to say `local` explicitly.
+
+**What Codex said:**
+- Check 1 (6 problems): the missing-`APP_MODE` default above; replies had no output cap, so the budget could be under-reserved; the budget number from `.env` was not validated; one side failing could crash the whole page; you could change customer mid-chat; and the 500-character limit wrongly applied to the agent's own long replies. All fixed.
+- Check 2: confirmed all six, tried 8 combinations of settings and found no way for the public site to make a paid call. Two small follow-ups: the page crashed if the very first request failed, and the setup text did not mention `APP_MODE=local`. Both fixed.

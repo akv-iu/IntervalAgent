@@ -7,6 +7,7 @@ const NAV = [
   ["/", "Customer"],
   ["/evals", "Evals"],
   ["/picker", "Picker"],
+  ["/try", "Try it"],
 ] as const;
 
 export default function NavLinks() {

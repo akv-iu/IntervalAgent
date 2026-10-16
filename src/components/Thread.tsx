@@ -1,10 +1,16 @@
 import type { DetailMessage } from "./ConversationDetail";
-import { flagText } from "./verdict";
+import { checkText, flagText } from "./verdict";
 
 const WHO = { agent: "Agent", customer: "Customer (scripted)", system: "System note" } as const;
 
 // Text-message style thread. The agent writes on the right in blue, the scripted customer on the left.
-export default function Thread({ messages, current }: { messages: DetailMessage[]; current?: number }) {
+function checksLine(m: DetailMessage): string | null {
+  if (!m.checks.length) return null;
+  const failed = m.checks.filter((c) => c.passed === false).map((c) => checkText(c.name));
+  return failed.length ? `Checks: failed ${failed.join(", ")}` : `Checks: all ${m.checks.length} passed`;
+}
+
+export default function Thread({ messages, current, showChecks = false }: { messages: DetailMessage[]; current?: number; showChecks?: boolean }) {
   return (
     <ol className="space-y-3">
       {messages.map((m, i) => {
@@ -22,6 +28,9 @@ export default function Thread({ messages, current }: { messages: DetailMessage[
               {m.body}
             </p>
             {m.guardFlags.length > 0 && <span className="mt-1 text-xs font-medium text-accent-ink">Guard: {m.guardFlags.map(flagText).join(", ")}</span>}
+            {showChecks && checksLine(m) && (
+              <span className={`mt-0.5 text-xs font-medium ${m.checks.some((c) => c.passed === false) ? "text-fail" : "text-pass"}`}>{checksLine(m)}</span>
+            )}
           </li>
         );
       })}

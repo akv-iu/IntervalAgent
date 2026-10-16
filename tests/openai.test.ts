@@ -105,3 +105,13 @@ test("retries a dropped connection but not an unrelated statusless error", async
   await expect(provider(other).complete(req)).rejects.toThrow();
   expect(other.calls).toHaveLength(1);
 });
+
+test("an output cap is sent to the API and reserved in the budget", async () => {
+  const budget = createBudget(100000);
+  const c = fakeClient([ok]);
+  await openaiProvider({ apiKey: "k", model: "m", budget, client: c, sleep: async () => {}, maxOutputTokens: 600 }).complete(req);
+  expect(c.calls[0]).toMatchObject({ max_completion_tokens: 600 });
+  const plain = createBudget(100000);
+  await openaiProvider({ apiKey: "k", model: "m", budget: plain, client: fakeClient([ok]), sleep: async () => {} }).complete(req);
+  expect(budget.used() - plain.used()).toBe(200); // 600 reserved instead of the default 400
+});

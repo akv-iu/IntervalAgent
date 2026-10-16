@@ -1,7 +1,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { projectEnv } from "../scripts/project-env";
+import { projectEnv } from "../src/lib/project-env";
 
 test("reads the .env file and ignores the shell environment", () => {
   const dir = mkdtempSync(join(tmpdir(), "env-"));

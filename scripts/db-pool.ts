@@ -1,6 +1,6 @@
 import { Pool } from "pg";
 import { loadEnv, redact } from "../src/lib/env";
-import { projectEnv } from "./project-env";
+import { projectEnv } from "../src/lib/project-env";
 
 // Scripts use the owner credential from .env (never deployed).
 export function ownerPool(): Pool {

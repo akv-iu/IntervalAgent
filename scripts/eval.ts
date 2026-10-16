@@ -10,7 +10,7 @@ import type { LlmProvider } from "../src/lib/llm/types";
 import { runEval } from "../src/lib/sim/eval";
 import { SCENARIOS } from "../src/lib/sim/scenarios";
 import { newRunId, writeArtifact } from "./artifact-file";
-import { projectEnv } from "./project-env";
+import { projectEnv } from "../src/lib/project-env";
 
 const PIN_FILE = "fixtures/replay-set.json";
 

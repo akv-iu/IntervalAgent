@@ -166,3 +166,11 @@ Honest record of what was built, how it was checked, and what changed after revi
 - Changed after review (Codex gpt-6.1-sol):
   - Check 1: the conversation list counted payments made after the reporting cutoff (fixed, DB test added); the import-graph walker missed bare imports (fixed).
   - Check 2: S10's walkthrough said "the guard did not need to step in" although the guard stopped the conversation (stops leave no message flag; now read from the stop check, test added); muted and white-on-blue text failed 4.5:1 (darkened); walkthrough balances and times came from the fixture instead of the database (now from the queried conversations); a hard-coded "near 10%" on the Picker page (now computed: 6.0%); the walker still missed `"use client"; import "..."` on one line (fixed, test added).
+
+## Extra: local-only live "Try it" page  (2026-10-16)
+- Asked for (Akshay, scope change recorded in the PRD): a page where a visitor plays the customer and the real model answers; option chosen: "Live AI chat", local only.
+- Built: `agentTurn` extracted from `src/lib/sim/loop.ts` (runConversation now calls it); `src/lib/live.ts` (Zod input, one turn, checks); `src/app/api/live/route.ts` (the single LLM-reaching app file); `src/app/try/page.tsx`; `src/components/LiveChat.tsx`; `scripts/project-env.ts` moved to `src/lib/project-env.ts`; `openaiProvider` gained `maxOutputTokens` (sends `max_completion_tokens`, budget reserves the cap). CLAUDE.md records the exception; `tests/import-graph.test.ts` enforces it is the only one.
+- Checked: `npm test` 318 passed; `npm run eval:replay` PASS with no missing keys after the refactor (requests unchanged); `/try` 200 locally. TDD slip: `live.ts` and the project-env move were written before their tests were seen failing.
+- Changed after review (Codex gpt-6.1-sol):
+  - Check 1: unset APP_MODE defaulted to local (now must be explicit, test added); no output cap so budget reservation could be short (600-token cap, reservation includes it); budget env not validated (now via loadEnv); one failed side crashed the client (allSettled); customer select editable mid-chat (disabled); 500-char cap applied to agent history (customer only, test added).
+  - Check 2: confirmed; 8 env combinations, no public path to a paid call. Follow-ups fixed: crash when an opening request failed; setup copy now names APP_MODE=local.

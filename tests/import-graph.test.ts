@@ -38,8 +38,12 @@ function reachable(entries: string[]): Set<string> {
   return seen;
 }
 
+// The only exception: the local-only live demo route, which refuses to run unless APP_MODE is local
+// and a key is present in the project .env file (the deployed site has neither).
+const LIVE_ROUTE = join("src", "app", "api", "live", "route.ts");
+
 test("app and components never import LLM, loop, or write-side code", () => {
-  const entries = [...files("src/app"), ...(existsSync("src/components") ? files("src/components") : [])];
+  const entries = [...files("src/app"), ...(existsSync("src/components") ? files("src/components") : [])].filter((f) => !f.endsWith(LIVE_ROUTE));
   expect(entries.length).toBeGreaterThan(0);
   const bad = [...reachable(entries)].map((f) => f.replace(ROOT, "").replace(/\\/g, "/").replace(/^\//, "")).filter((f) => FORBIDDEN.some((x) => f.startsWith(x)));
   expect(bad).toEqual([]);
@@ -59,4 +63,16 @@ test("the walker also follows bare side-effect imports", () => {
   } finally {
     unlinkSync(probe);
   }
+});
+
+test("the live route is the single exception and guards itself", () => {
+  const src = readFileSync(LIVE_ROUTE, "utf8");
+  expect(src).toContain('process.env.APP_MODE !== "local"'); // host must explicitly be local
+  expect(src).toContain('env.APP_MODE !== "local"'); // and the .env file too
+  expect(src).toContain("projectEnv()"); // key read from the .env file, never the host environment
+  expect(src).toContain('{ error: "not found" }, 404');
+  const allApi = files(join("src", "app", "api"));
+  const norm = (f: string) => f.replace(/\\/g, "/");
+  const reachingLlm = allApi.filter((f) => [...reachable([f])].some((x) => norm(x).includes("src/lib/llm"))).map(norm);
+  expect(reachingLlm).toEqual([norm(LIVE_ROUTE)]);
 });

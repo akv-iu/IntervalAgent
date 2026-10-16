@@ -15,6 +15,7 @@ Complete one narrow example of each job responsibility before adding depth. Docu
 - Pin one recording set. Missing/mismatched recordings fail closed; never search other folders or fall back to live calls.
 - Separate demo/eval accounts. Seed by stable key without truncation. Imports are transactional and reject duplicate run IDs.
 - Public pages read PostgreSQL only. No LLM imports in their dependency graph, LLM credentials on the host, or write endpoints.
+- Single exception (Akshay, 2026-10-16): `src/app/api/live/route.ts` powers the local-only Try page. It returns 404 unless APP_MODE is local on the host and in `.env`, reads the key only from the `.env` file, and is rate- and budget-limited. Never deploy a key; tests/import-graph.test.ts enforces that no other app file reaches LLM code.
 - No secrets in git, logs, or artifacts. Ignore .env* but explicitly allow .env.example.
 - No network in unit tests or replay CI. Keep tests/db excluded from npm test regardless of env. Explicit npm run test:db uses only TEST_DATABASE_URL and fails if it is missing. Test risky behavior and known regressions, not implementation trivia.
 - No fabricated results, forced live baseline failures, legal-compliance claims, or real-world lift claims. No em dashes in project copy.
