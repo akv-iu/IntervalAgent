@@ -14,6 +14,7 @@ const s = vi.hoisted(() => ({
   lessons: [] as Lesson[],
   count: 0,
   failFirst: false,
+  readerDown: false,
 }));
 
 // The deployed site has no .env file; tryMode gets that explicitly (never the real local .env).
@@ -21,7 +22,12 @@ vi.mock("../src/lib/project-env", async (orig) => {
   const m = await orig<typeof import("../src/lib/project-env")>();
   return { ...m, projectEnv: () => ({}), tryMode: (host = process.env) => m.tryMode(host, {}) };
 });
-vi.mock("../src/lib/reports", () => ({ lessonsLog: async (): Promise<Lesson[]> => s.lessons }));
+vi.mock("../src/lib/reports", () => ({
+  lessonsLog: async (): Promise<Lesson[]> => {
+    if (s.readerDown) throw new Error("password authentication failed for user 'recovery_try_writer'");
+    return s.lessons;
+  },
+}));
 vi.mock("../src/lib/lessons-store", () => ({
   insertLesson: async () => {
     s.inserted++;
@@ -90,11 +96,16 @@ const lesson = (id: number): Lesson => ({
   timesUsed: 0,
 });
 
+// The route's per-minute limits live in module memory; each test starts two minutes after the last.
+let clock = Date.now();
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime((clock += 120_000));
   Object.assign(process.env, HOST);
-  Object.assign(s, { room: true, reserved: [], adjusted: [], inserted: 0, calls: 0, done: 0, managed: 0, lessons: [], count: 0, failFirst: false });
+  Object.assign(s, { room: true, reserved: [], adjusted: [], inserted: 0, calls: 0, done: 0, managed: 0, lessons: [], count: 0, failFirst: false, readerDown: false });
 });
 afterEach(() => {
+  vi.useRealTimers();
   for (const k of Object.keys(HOST)) delete process.env[k];
 });
 
@@ -164,4 +175,13 @@ test("server errors reach visitors as a plain message, never database details", 
   const body = await r.json();
   expect(r.status).toBe(503);
   expect(body.error).not.toMatch(/password|recovery_|postgres/i);
+});
+
+test("when lessons cannot be read, the chat still works and visitors see no database details", async () => {
+  s.readerDown = true;
+  const r = await post(opening);
+  const body = await r.json();
+  expect(r.status).toBe(200);
+  expect(body.lessonsOff).toBeTruthy();
+  expect(body.lessonsOff).not.toMatch(/password|recovery_|postgres/i);
 });

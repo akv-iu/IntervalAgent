@@ -115,7 +115,11 @@ export async function POST(req: Request) {
       lessons = (await lessonsLog()).filter((l) => l.active);
     } catch (e) {
       if (op.op !== "turn") throw e;
-      lessonsOff = `Lessons are off: the database is not reachable (${redact(e instanceof Error ? e.message : String(e))}).`;
+      // Visitors on the public site get no database details; locally the reason helps fix the setup.
+      lessonsOff = isPublic
+        ? "Lessons are unavailable right now. The chat still works."
+        : `Lessons are off: the database is not reachable (${redact(e instanceof Error ? e.message : String(e))}).`;
+      if (isPublic) console.error(`live route: lessons unreadable: ${redact(e instanceof Error ? e.message : String(e))}`);
     }
 
     // Recheck replays 8 lessons per click; the next click continues with the next 8.

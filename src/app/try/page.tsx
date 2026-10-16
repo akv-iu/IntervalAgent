@@ -32,7 +32,8 @@ export default function TryPage() {
 }
 
 // Lessons come from PostgreSQL. Without a database the chat still works and lessons are off.
-async function loadLessons(): Promise<{
+// Visitors on the public site see no database details; locally the reason helps fix the setup.
+async function loadLessons(isPublic: boolean): Promise<{
   lessons: Lesson[];
   off: string | null;
 }> {
@@ -41,7 +42,9 @@ async function loadLessons(): Promise<{
   } catch (e) {
     return {
       lessons: [],
-      off: `Lessons are off: the database is not reachable (${redact(e instanceof Error ? e.message : String(e))}).`,
+      off: isPublic
+        ? "Lessons are unavailable right now. The chat still works."
+        : `Lessons are off: the database is not reachable (${redact(e instanceof Error ? e.message : String(e))}).`,
     };
   }
 }
@@ -51,7 +54,7 @@ async function Try() {
   const mode = tryMode(); // the same switch as the API route
   const isPublic = mode.kind === "public";
   const model = mode.kind === "public" ? mode.model : mode.kind === "local" && mode.agent === "live" ? mode.env.OPENAI_AGENT_MODEL : null;
-  const { lessons, off } = await loadLessons();
+  const { lessons, off } = await loadLessons(isPublic);
 
   if (mode.kind === "off") {
     return (
