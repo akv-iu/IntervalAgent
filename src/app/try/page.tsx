@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import LiveChat, { type LiveCustomer } from "@/components/LiveChat";
 import PageHeader from "@/components/PageHeader";
 import { formatCents } from "@/lib/format";
-import { projectEnv, tryAgent } from "@/lib/project-env";
+import { tryMode } from "@/lib/project-env";
 import LessonsLog from "@/components/LessonsLog";
 import type { Lesson } from "@/lib/lessons";
 import { redact } from "@/lib/env";
@@ -48,12 +48,12 @@ async function loadLessons(): Promise<{
 
 async function Try() {
   await connection(); // reads the local .env at request time
-  const env = projectEnv();
-  const local = process.env.APP_MODE === "local" && env.APP_MODE === "local"; // must be explicit, as in the API route
-  const live = tryAgent(env) === "live";
+  const mode = tryMode(); // the same switch as the API route
+  const isPublic = mode.kind === "public";
+  const model = mode.kind === "public" ? mode.model : mode.kind === "local" && mode.agent === "live" ? mode.env.OPENAI_AGENT_MODEL : null;
   const { lessons, off } = await loadLessons();
 
-  if (!local) {
+  if (mode.kind === "off") {
     return (
       <>
         <section className="mt-6 max-w-2xl rounded-xl border border-line p-5 text-ink-2">
@@ -113,11 +113,13 @@ async function Try() {
     <div className="mt-6 space-y-4">
       <div className="rounded-lg border border-tint-2 bg-tint px-4 py-3 text-sm">
         <p className="font-semibold text-accent-ink">
-          {live
-            ? `Live model: ${env.OPENAI_AGENT_MODEL}. Synthetic customers; nothing is sent. Only lessons you accept are saved.`
-            : "Mock agent: scripted replies, no AI calls, no tokens spent. Synthetic customers; nothing is sent. Only lessons you accept are saved."}
+          {isPublic
+            ? `Live model: ${model}. Synthetic customers; nothing is sent. Lessons you accept are saved and shown here to everyone.`
+            : model
+              ? `Live model: ${model}. Synthetic customers; nothing is sent. Only lessons you accept are saved.`
+              : "Mock agent: scripted replies, no AI calls, no tokens spent. Synthetic customers; nothing is sent. Only lessons you accept are saved."}
         </p>
-        {!live && (
+        {!model && (
           <p className="mt-1 text-ink-2">
             To use the real model, add LIVE_DEMO_PROVIDER=live to the .env file
             and restart the dev server.
@@ -136,9 +138,10 @@ async function Try() {
       <LiveChat
         customers={customers}
         presets={PRESETS}
-        model={live ? env.OPENAI_AGENT_MODEL! : null}
+        model={model}
         initialLessons={lessons}
         lessonsOff={off}
+        canManage={!isPublic}
       />
     </div>
   );

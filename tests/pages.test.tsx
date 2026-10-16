@@ -2,6 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import ConversationDetail, { stepIndex } from "../src/components/ConversationDetail";
 import { verdictText } from "../src/components/verdict";
 import EmptyState from "../src/components/EmptyState";
+import LessonsPanel from "../src/components/LessonsPanel";
+import type { Lesson } from "../src/lib/lessons";
 
 const msgs = [
   { seq: 1, role: "agent" as const, body: "Hello from Northside Fitness", when: "3/10, 10:00 AM", guardFlags: [], checks: [{ name: "quiet_hours", passed: true, detail: "" }] },
@@ -47,4 +49,14 @@ test("empty database shows setup guidance and no invented numbers", () => {
   expect(html).toContain("No data imported yet");
   expect(html).toContain("npm run db:import");
   expect(html.replace(/npm run [a-z:]+|results\/[^ <]+|db:[a-z]+/g, "")).not.toMatch(/\$\d|\d+%/);
+});
+
+describe("LessonsPanel", () => {
+  const lesson: Lesson = {
+    id: 1, createdAt: "2026-10-16T12:00:00.000Z", situation: "refusal", reason: "gave_up", instruction: "Offer the plan.", hardRule: null,
+    appliesTo: "situation", scenarioId: "S01", moment: [], beforeText: "b", afterText: "a", active: true, timesUsed: 0,
+  };
+  const html = (canManage: boolean) => renderToStaticMarkup(<LessonsPanel lessons={[lesson]} setLessons={() => {}} off={null} canManage={canManage} />);
+  test("locally a lesson can be turned off or deleted", () => expect(html(true)).toMatch(/Turn off[\s\S]*Delete/));
+  test("on the public site those buttons are not shown", () => expect(html(false)).not.toMatch(/Turn off|Delete/));
 });

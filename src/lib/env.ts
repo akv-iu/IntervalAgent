@@ -13,6 +13,7 @@ const Base = z.object({
   DATABASE_URL: z.string().optional(),
   TEST_DATABASE_URL: z.string().optional(),
   DATABASE_URL_READONLY: z.string().optional(),
+  DATABASE_URL_LESSONS: z.string().optional(),
   APP_MODE: z.enum(["local", "public"]).default("local"),
   LLM_PROVIDER: z.enum(["mock", "mock-bad", "openai", "replay"]).default("mock"),
 });

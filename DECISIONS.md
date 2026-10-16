@@ -409,3 +409,21 @@ Four commands go with it:
 **What Codex said:** check 1 and check 2 found no bugs. My own check against the real development data found one mismatch: the CSV said "14" where the page says "14.0%". Fixed with a test so both show one decimal.
 
 **Hand check:** the four aging rows add up to the overview totals ($16,178.61 contacted, $2,262.94 recovered), and 2,262.94 / 16,178.61 = 14.0%.
+
+---
+
+## The Try page runs live on the public site
+
+**Why:** reviewers get a link, not a call, so the Try page has to work on the deployed site. You chose "live, open to anyone" and "save lessons in the database". This changes an earlier rule (the public host had no AI key and wrote nothing), so CLAUDE.md and the PRD now say exactly what the exception allows.
+
+**How it is kept safe:**
+- It is on only when the host sets `APP_MODE=public`, `PUBLIC_TRY=live`, its own `TRY_OPENAI_API_KEY` and `TRY_OPENAI_MODEL`, and the lessons login. The usual `OPENAI_API_KEY` never turns it on, so the key in your shell cannot.
+- The key belongs to a separate OpenAI project with a small hard spend limit.
+- Every request reserves tokens from a daily cap stored in the database before it calls the model, so many servers at once still share one cap. Unused tokens are given back after a success. A failed request keeps its reservation, because OpenAI may have charged for a reply that was lost.
+- Each visitor gets 12 requests a minute.
+- Lessons go through a database login that can only add lessons, count their use and reserve tokens. Visitors cannot turn lessons off or delete them (you still can, locally). At most 200 lessons.
+- Every other page still reads through the read-only login.
+
+**What Codex said:** check 1 found 7 problems. The most important: a role created with Neon's "Add role" button is automatically an admin member (`neon_superuser`), so it would not have been read-only at all. Both role scripts now create roles with SQL instead. The others were spending holes (simultaneous requests slipping under the cap, rechecks leaving calls uncounted, empty rechecks not rate-limited, unlimited lessons). All fixed with tests, including one against the real database where 10 simultaneous reservations only let 3 through. Check 2 confirmed them and found 4 more: two fixed (refunds crossing midnight; refunds after failures), two kept as stated limits (token estimates can undershoot for unusual text; the lesson cap can overshoot by a few under simultaneous accepts).
+
+**A test scare, and what it was:** after the first change, the local route tests suddenly took 3 seconds each. The new code read the real `.env` (with live on) instead of the test's fake settings. No call went out: the tests block all network, and the OpenAI client failed with "Connection error". The tests now pass the fake settings explicitly.

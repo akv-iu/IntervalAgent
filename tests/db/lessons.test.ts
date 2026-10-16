@@ -1,5 +1,6 @@
-import { deleteLesson, bumpUsed, insertLesson, setActive } from "../../src/lib/lessons-store";
+import { adjustTryTokens, deleteLesson, bumpUsed, insertLesson, lessonCount, reserveTryTokens, setActive } from "../../src/lib/lessons-store";
 import { lessonsLog } from "../../src/lib/reports";
+import { readFileSync } from "node:fs";
 import { testSchema } from "./helpers";
 
 let db: Awaited<ReturnType<typeof testSchema>>;
@@ -42,4 +43,59 @@ test("scope is stored, and the database refuses a hand-off rule on every reply",
   const id = await insertLesson({ ...base, situation: "plan_request", appliesTo: "all" }, db.pool);
   expect((await lessonsLog(db.pool)).find((l) => l.id === id)).toMatchObject({ situation: "plan_request", appliesTo: "all" });
   await expect(insertLesson({ ...base, hardRule: "handoff", appliesTo: "all" }, db.pool)).rejects.toThrow();
+});
+
+const tokensOn = async (day: string) => Number((await db.pool.query("select tokens from try_usage where day = $1", [day])).rows[0]?.tokens ?? 0);
+
+test("reservations never go over the daily cap, even all at once", async () => {
+  const ok = await Promise.all(Array.from({ length: 10 }, () => reserveTryTokens("2026-10-17", 300, 1000, db.pool)));
+  expect(ok.filter(Boolean)).toHaveLength(3);
+  expect(await tokensOn("2026-10-17")).toBe(900);
+  expect(await reserveTryTokens("2026-10-18", 1001, 1000, db.pool)).toBe(false); // too big for an empty day
+  expect(await tokensOn("2026-10-18")).toBe(0);
+});
+
+test("unused reservation is given back, never below zero", async () => {
+  await reserveTryTokens("2026-10-19", 500, 1000, db.pool);
+  await adjustTryTokens("2026-10-19", -200, db.pool);
+  expect(await tokensOn("2026-10-19")).toBe(300);
+  await adjustTryTokens("2026-10-19", -999, db.pool);
+  expect(await tokensOn("2026-10-19")).toBe(0);
+});
+
+test("lessons are counted for the public cap", async () => {
+  const before = await lessonCount(db.pool);
+  await insertLesson(base, db.pool);
+  expect(await lessonCount(db.pool)).toBe(before + 1);
+});
+
+// The grants in db/ops/try_writer_role.sql, applied to a throwaway role in this test schema.
+test("the public lessons login can add lessons and count use, nothing else", async () => {
+  const role = `tw_${db.schema.slice(5)}`;
+  const grants = readFileSync("db/ops/try_writer_role.sql", "utf8")
+    .split("\n")
+    .filter((line) => !line.startsWith("create role")) // the test makes its own role, without a password
+    .join("\n")
+    .replaceAll("recovery_try_writer", role)
+    .replace("schema public", `schema ${db.schema}`);
+  const c = await db.pool.connect();
+  try {
+    await c.query(`create role ${role} nologin`);
+    await c.query(`grant ${role} to current_user`);
+    await c.query(grants);
+    await c.query(`set role ${role}`);
+    const id = await insertLesson(base, c);
+    await bumpUsed([id], c);
+    expect(await reserveTryTokens("2026-10-20", 10, 1000, c)).toBe(true);
+    await adjustTryTokens("2026-10-20", -5, c);
+    expect(await lessonCount(c)).toBeGreaterThan(0);
+    for (const sql of [`delete from lessons where id = ${id}`, `update lessons set active = false where id = ${id}`, "select * from runs", "delete from try_usage"]) {
+      await expect(c.query(sql)).rejects.toThrow(/permission denied/);
+    }
+  } finally {
+    await c.query("reset role");
+    await c.query(`drop owned by ${role}`);
+    await c.query(`drop role ${role}`);
+    c.release();
+  }
 });

@@ -20,7 +20,18 @@ async function post(body: unknown) {
 }
 
 // The lessons this copy has learned: turn them on or off, delete them, or replay each saved moment.
-export default function LessonsPanel({ lessons, setLessons, off }: { lessons: Lesson[]; setLessons: (l: Lesson[]) => void; off: string | null }) {
+// canManage: false on the public site, where visitors can add lessons but not turn them off or delete them.
+export default function LessonsPanel({
+  lessons,
+  setLessons,
+  off,
+  canManage,
+}: {
+  lessons: Lesson[];
+  setLessons: (l: Lesson[]) => void;
+  off: string | null;
+  canManage: boolean;
+}) {
   const [checks, setChecks] = useState<Record<number, Recheck>>({});
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -84,14 +95,16 @@ export default function LessonsPanel({ lessons, setLessons, off }: { lessons: Le
                   <span className="font-semibold text-ink">Recheck, {checks[l.id].verdict}:</span> {checks[l.id].text || `(nothing sent; ${checks[l.id].action})`}
                 </p>
               )}
-              <div className="mt-2 flex gap-2">
-                <button type="button" disabled={busy} onClick={() => act(async () => setLessons((await post({ op: "toggle", id: l.id, active: !l.active })).lessons))} className="rounded-md border border-line px-2 py-1 text-xs">
-                  {l.active ? "Turn off" : "Turn on"}
-                </button>
-                <button type="button" disabled={busy} onClick={() => act(async () => setLessons((await post({ op: "delete", id: l.id })).lessons))} className="rounded-md border border-line px-2 py-1 text-xs text-fail">
-                  Delete
-                </button>
-              </div>
+              {canManage && (
+                <div className="mt-2 flex gap-2">
+                  <button type="button" disabled={busy} onClick={() => act(async () => setLessons((await post({ op: "toggle", id: l.id, active: !l.active })).lessons))} className="rounded-md border border-line px-2 py-1 text-xs">
+                    {l.active ? "Turn off" : "Turn on"}
+                  </button>
+                  <button type="button" disabled={busy} onClick={() => act(async () => setLessons((await post({ op: "delete", id: l.id })).lessons))} className="rounded-md border border-line px-2 py-1 text-xs text-fail">
+                    Delete
+                  </button>
+                </div>
+              )}
             </LessonCard>
           ))}
         </ol>

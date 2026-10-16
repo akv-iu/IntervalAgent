@@ -4,10 +4,11 @@ import type { Lesson } from "../src/lib/lessons";
 
 const db = vi.hoisted(() => ({ lessons: [] as Lesson[], inserted: [] as unknown[], bumped: [] as number[][], down: false, reads: 0 }));
 
-vi.mock("../src/lib/project-env", async (orig) => ({
-  ...(await orig<typeof import("../src/lib/project-env")>()),
-  projectEnv: () => ({ APP_MODE: "local" }),
-}));
+// tryMode calls projectEnv inside its own module, so it gets the fake .env explicitly (never the real one).
+vi.mock("../src/lib/project-env", async (orig) => {
+  const m = await orig<typeof import("../src/lib/project-env")>();
+  return { ...m, projectEnv: () => ({ APP_MODE: "local" }), tryMode: (host = process.env) => m.tryMode(host, { APP_MODE: "local" }) };
+});
 vi.mock("../src/lib/reports", () => ({
   lessonsLog: async () => {
     db.reads++;

@@ -67,10 +67,9 @@ test("the walker also follows bare side-effect imports", () => {
 
 test("the live route is the single exception and guards itself", () => {
   const src = readFileSync(LIVE_ROUTE, "utf8");
-  expect(src).toContain('process.env.APP_MODE !== "local"'); // host must explicitly be local
-  expect(src).toContain('env.APP_MODE !== "local"'); // and the .env file too
-  expect(src).toContain("projectEnv()"); // key read from the .env file, never the host environment
-  expect(src).toContain('{ error: "not found" }, 404');
+  // Who may run it is decided by tryMode (tests/try-mode.test.ts); anything else is a 404.
+  expect(src).toContain("const mode = tryMode();");
+  expect(src).toContain('if (mode.kind === "off") return json({ error: "not found" }, 404);');
   const allApi = files(join("src", "app", "api"));
   const norm = (f: string) => f.replace(/\\/g, "/");
   const reachingLlm = allApi.filter((f) => [...reachable([f])].some((x) => norm(x).includes("src/lib/llm"))).map(norm);
