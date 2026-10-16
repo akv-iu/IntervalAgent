@@ -32,6 +32,7 @@ export interface LiveTurn {
   sentAt: string;
   when: string; // local time for display
   flags: string[];
+  trace: string[];
   checks: CheckItem[];
 }
 
@@ -59,6 +60,7 @@ export async function liveTurn(input: unknown, provider: LlmProvider): Promise<L
     subject: `live-${scenarioId}`,
     turn: agentCount + 1,
     stats: { calls: 0 },
+    rules: "v2", // the live page runs the newer situation rules; the pinned evals stay on v1
   });
 
   const sentAt = t.sendAt.toISOString();
@@ -66,5 +68,5 @@ export async function liveTurn(input: unknown, provider: LlmProvider): Promise<L
     ? messageChecks({ seq: messages.length + 1, role: "agent", text: t.text, sentAt, guardFlags: t.flags, checks: [] }, a, agentCount === 0)
     : [];
   const when = new Intl.DateTimeFormat("en-US", { timeZone: a.timezone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(t.sendAt);
-  return { action: t.action, text: t.text, sentAt, when, flags: t.flags, checks };
+  return { action: t.action, text: t.text, sentAt, when, flags: t.flags, trace: t.trace, checks };
 }

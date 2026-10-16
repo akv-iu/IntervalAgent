@@ -11,6 +11,7 @@ export interface DetailMessage {
   when: string; // already formatted in the account's local time
   guardFlags: string[];
   checks: { name: string; passed: boolean | null; detail: string }[];
+  notes?: string[]; // live page only: the guard's steps for this reply, in plain words
 }
 
 export const stepIndex = (i: number, delta: number, length: number) => Math.min(Math.max(i + delta, 0), Math.max(length - 1, 0));

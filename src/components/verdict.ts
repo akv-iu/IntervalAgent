@@ -7,6 +7,8 @@ const FLAG_TEXT: Record<string, string> = {
   fallback: "safe template used",
   handoff: "handed to a person",
   fixed_ack: "fixed acknowledgement, no model call",
+  fixed_reply: "fixed reply, no model call",
+  customer_time: "held until the time the customer asked for",
 };
 export const flagText = (f: string) => FLAG_TEXT[f] ?? f;
 export const checkText = (name: string) => name.replace(/_/g, " ");

@@ -54,3 +54,10 @@ export function inWindow(instant: Date, tz: Tz): boolean {
   const h = localHour(instant, tz);
   return h >= WINDOW_START && h < WINDOW_END;
 }
+
+// Inside the window, wait until a customer-requested hour (8 <= hour < 21) on the same local day.
+export function notBeforeHour(instant: Date, hour: number, tz: Tz): Date {
+  const at = scheduleInWindow(instant, tz);
+  if (localHour(at, tz) >= hour) return at;
+  return localToInstant(localDate(at, tz), Math.floor(hour), Math.round((hour % 1) * 60), tz);
+}

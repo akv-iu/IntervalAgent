@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { Preset } from "@/lib/situations";
 import type { DetailMessage } from "./ConversationDetail";
 import Thread from "./Thread";
 
@@ -22,7 +23,7 @@ interface Side {
   ended: string | null;
 }
 
-const NAME: Record<Version, string> = { baseline: "Baseline: simple prompt, no guard", guarded: "Guarded: stricter prompt plus code guard" };
+const NAME: Record<Version, string> = { baseline: "Baseline: simple prompt, no guard", guarded: "Guarded: stricter prompt plus code guard (rules v2)" };
 const SUGGESTIONS = [
   "Is there a payment plan?",
   "I already paid this last month.",
@@ -42,8 +43,15 @@ function endText(version: Version, action: string): string | null {
 }
 
 // You play the customer; both agents answer the same messages side by side, live.
-export default function LiveChat({ customers, model }: { customers: LiveCustomer[]; model: string | null }) {
-  const [customerId, setCustomerId] = useState(customers[0].id);
+type PresetView = Pick<Preset, "id" | "title" | "scenarioId" | "suggestions" | "expect">;
+
+export default function LiveChat({ customers, presets, model }: { customers: LiveCustomer[]; presets: PresetView[]; model: string | null }) {
+  // "p:<preset id>" for a situation, "s:<scenario id>" for any eval customer.
+  const [choice, setChoice] = useState(`p:${presets[0].id}`);
+  const preset = choice.startsWith("p:") ? presets.find((p) => `p:${p.id}` === choice) : undefined;
+  const customerId = preset ? preset.scenarioId : choice.slice(2);
+  const customer = customers.find((c) => c.id === customerId)!;
+  const suggestions = preset ? preset.suggestions : SUGGESTIONS;
   const [sides, setSides] = useState(empty);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -60,7 +68,7 @@ export default function LiveChat({ customers, model }: { customers: LiveCustomer
     const body = await res.json();
     if (!res.ok) throw new Error(body.error ?? `request failed (${res.status})`);
     const next = body.text
-      ? [...msgs, { role: "agent" as const, text: body.text, sentAt: body.sentAt, view: { seq: msgs.length + 1, role: "agent" as const, body: body.text, when: body.when, guardFlags: body.flags, checks: body.checks } }]
+      ? [...msgs, { role: "agent" as const, text: body.text, sentAt: body.sentAt, view: { seq: msgs.length + 1, role: "agent" as const, body: body.text, when: body.when, guardFlags: body.flags, checks: body.checks, notes: body.trace } }]
       : msgs;
     const agentCount = next.filter((m) => m.role === "agent").length;
     return { msgs: next, ended: endText(version, body.action) ?? (agentCount >= MAX_AGENT ? "The agent reached its six-message limit." : null) };
@@ -98,7 +106,7 @@ export default function LiveChat({ customers, model }: { customers: LiveCustomer
       const last = s.msgs[s.msgs.length - 1];
       if (!last) return s.msgs; // closed side with no messages; nothing to reply to
       const sentAt = new Date(Date.parse(last.sentAt) + GAP).toISOString();
-      const tz = customers.find((c) => c.id === customerId)!.timezone;
+      const tz = customer.timezone;
       const when = new Intl.DateTimeFormat("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(new Date(sentAt));
       return [...s.msgs, { role: "customer", text: clean, sentAt, view: { seq: s.msgs.length + 1, role: "customer", body: clean, when: `${when}, written by you`, guardFlags: [], checks: [] } }];
     };
@@ -115,18 +123,30 @@ export default function LiveChat({ customers, model }: { customers: LiveCustomer
     <div className="space-y-6">
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-line p-4">
         <label className="flex min-w-[16rem] flex-1 flex-col gap-1 text-sm font-medium">
-          Customer to contact
+          Situation to try
           <select
-            value={customerId}
+            value={choice}
             disabled={started || busy}
-            onChange={(e) => setCustomerId(e.target.value)}
+            onChange={(e) => setChoice(e.target.value)}
             className="rounded-md border border-line bg-white px-2 py-2 font-normal disabled:bg-neutral-50"
           >
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}, first message at {c.startsAt}
-              </option>
-            ))}
+            <optgroup label="Situations">
+              {presets.map((p) => {
+                const c = customers.find((x) => x.id === p.scenarioId)!;
+                return (
+                  <option key={p.id} value={`p:${p.id}`}>
+                    {p.title}: {c.label}
+                  </option>
+                );
+              })}
+            </optgroup>
+            <optgroup label="Any eval customer (free play)">
+              {customers.map((c) => (
+                <option key={c.id} value={`s:${c.id}`}>
+                  {c.label}, first message at {c.startsAt}
+                </option>
+              ))}
+            </optgroup>
           </select>
         </label>
         {!started ? (
@@ -139,6 +159,12 @@ export default function LiveChat({ customers, model }: { customers: LiveCustomer
           </button>
         )}
       </div>
+
+      {preset && (
+        <p className="rounded-md border border-line px-3 py-2 text-sm text-ink-2">
+          <span className="font-semibold text-ink">What a good guarded reply does:</span> {preset.expect} Start, then send the first suggested reply.
+        </p>
+      )}
 
       {error && (
         <p role="alert" className="rounded-md bg-fail-bg px-3 py-2 text-sm text-fail">
@@ -185,7 +211,7 @@ export default function LiveChat({ customers, model }: { customers: LiveCustomer
               </button>
             </div>
             <div className="flex flex-wrap gap-2" aria-label="Suggested replies">
-              {SUGGESTIONS.map((s) => (
+              {suggestions.map((s) => (
                 <button
                   key={s}
                   type="button"

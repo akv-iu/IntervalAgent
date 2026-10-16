@@ -28,6 +28,13 @@ export default function Thread({ messages, current, showChecks = false }: { mess
               {m.body}
             </p>
             {m.guardFlags.length > 0 && <span className="mt-1 text-xs font-medium text-accent-ink">Guard: {m.guardFlags.map(flagText).join(", ")}</span>}
+            {m.notes && m.notes.length > 0 && (
+              <ul className="mt-1 max-w-[88%] space-y-0.5 text-right text-xs text-muted" aria-label="What the guard did">
+                {m.notes.map((n, k) => (
+                  <li key={k}>{n}</li>
+                ))}
+              </ul>
+            )}
             {showChecks && checksLine(m) && (
               <span className={`mt-0.5 text-xs font-medium ${m.checks.some((c) => c.passed === false) ? "text-fail" : "text-pass"}`}>{checksLine(m)}</span>
             )}

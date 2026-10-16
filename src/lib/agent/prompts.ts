@@ -26,6 +26,18 @@ const GUARDED_RULES = [
   "Use only the account facts below. Do not guess other details.",
 ];
 
+// Extra guidance for the live Try page (rules v2). Never added for the pinned evals.
+const V2_RULES = [
+  "If the customer refuses to pay, do not close the conversation. Acknowledge it, and offer the payment plan or a conversation with someone on our team.",
+  "If the customer describes hardship, be understanding, do not pressure them, and offer the payment plan or someone on our team.",
+  "Never offer discounts, settlements, waivers, or reduced amounts. If asked, say someone on our team can discuss options, and use action handoff.",
+  "If the customer offers to pay part of the balance, thank them and say someone on our team will confirm it, using action handoff. Do not state any new amount.",
+  "If the customer asks for proof or an itemized bill, use action handoff so someone on our team can send it.",
+  "If asked whether you are a bot or a person, say honestly that you are an automated assistant.",
+  "If the customer asks to be contacted at a certain time, acknowledge it briefly.",
+  "If the customer is rude, stay calm and polite, and remind them they can reply STOP at any time.",
+];
+
 function factsBlock(f: AgentFacts): string {
   const [first, second] = f.plan;
   return [
@@ -40,12 +52,12 @@ function factsBlock(f: AgentFacts): string {
   ].join("\n");
 }
 
-export function buildSystemPrompt(version: "baseline" | "guarded", f: AgentFacts, feedback?: string[]): string {
+export function buildSystemPrompt(version: "baseline" | "guarded", f: AgentFacts, feedback?: string[], rules: "v1" | "v2" = "v1"): string {
   const parts = [
     `You write concise overdue-payment outreach for ${f.business}, sent by ${f.channel} in a ${f.tone} tone.`,
     OUTPUT_CONTRACT,
   ];
-  if (version === "guarded") parts.push("Rules:\n" + GUARDED_RULES.map((r) => `- ${r}`).join("\n"));
+  if (version === "guarded") parts.push("Rules:\n" + [...GUARDED_RULES, ...(rules === "v2" ? V2_RULES : [])].map((r) => `- ${r}`).join("\n"));
   parts.push(factsBlock(f));
   if (version === "guarded" && feedback?.length) {
     parts.push("Your previous draft was rejected for these reasons. Write a new message that fixes them:\n" + feedback.map((x) => `- ${x}`).join("\n"));

@@ -4,6 +4,7 @@ import LiveChat, { type LiveCustomer } from "@/components/LiveChat";
 import PageHeader from "@/components/PageHeader";
 import { formatCents } from "@/lib/format";
 import { projectEnv, tryAgent } from "@/lib/project-env";
+import { PRESETS } from "@/lib/situations";
 import { SCENARIOS } from "@/lib/sim/scenarios";
 
 export default function TryPage() {
@@ -62,11 +63,12 @@ async function Try() {
         </p>
         {!live && <p className="mt-1 text-ink-2">To use the real model, add LIVE_DEMO_PROVIDER=live to the .env file and restart the dev server.</p>}
         <p className="mt-1 text-ink-2">
-          Customers come from the eval set, so some first messages fall outside 8am to 9pm on purpose. Try the suggested replies: a payment plan, a dispute,
-          STOP, a dare to threaten, or a wrong balance.
+          Pick one of 13 situations real collections teams face, or any eval customer for free play. The guarded agent runs rules v2 here: a few
+          situations get a fixed reply from code with no AI call, and every draft is checked before it is sent. Under each guarded reply you can see
+          what the guard did.
         </p>
       </div>
-      <LiveChat customers={customers} model={live ? env.OPENAI_AGENT_MODEL! : null} />
+      <LiveChat customers={customers} presets={PRESETS} model={live ? env.OPENAI_AGENT_MODEL! : null} />
     </div>
   );
 }

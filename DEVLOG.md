@@ -179,3 +179,12 @@ Honest record of what was built, how it was checked, and what changed after revi
 - Asked for (Akshay): no live calls while building Integration 16. `tryAgent(env)` in `src/lib/project-env.ts` returns live only with `LIVE_DEMO_PROVIDER=live` plus key and model; otherwise the route uses `mockProvider` and needs no key. Replies carry `agent: "mock" | "live"`; the page labels it.
 - Tests first: `tests/project-env.test.ts` (2 cases) and `tests/live-route-mock.test.ts` failed, then passed. `npm test` 321 passed, `eval:replay` PASS, build OK. Codex gpt-6.1-sol: NONE.
 - Also planned Integration 16 (plan Part D, PRD scope note).
+
+
+## 16a: situations and guard rules v2  (2026-10-16)
+- Built: `src/lib/situations.ts` (`situationOf`, `isRefusal`, `requestedHour`, 13 `PRESETS`); `guard.ts` v2 (`preGenerateV2` with fixed wrong-person, bereavement and lawyer replies; `validateV2` for close-on-refusal or hardship, discount/waiver offers, human claims; `fallbackTemplateV2`); `time.ts` `notBeforeHour`; prompts `V2_RULES` (only when rules is v2); `agentTurn` `rules` option and `trace`; `liveTurn` uses v2 for guarded; Try page situation picker, expected-behavior line, guard steps under each reply (`DetailMessage.notes`), new tags `fixed_reply` and `customer_time`.
+- Ruling: patterns live in `situations.ts`, not `patterns.ts` (one file for the classifier and presets).
+- Checked: tests written first and seen failing (module missing; guard sent instead of closing). `npm test` 372 passed; `npm run eval:replay` PASS, 24 conversations, no missing recordings (eval requests unchanged); `npm run build` OK; /try serves the picker.
+- Changed after review (Codex gpt-6.1-sol):
+  - Check 1: v1 empty-close rewrite no longer fell back (eval path changed; fixed, test added); "no problem" excused a discount; "speaking with a real person" not caught; refusal inside hardship allowed close. Also "not an AI" (found by me). All with tests.
+  - Check 2: all confirmed; negation in another clause still excused an offer or human claim. Now checked per clause, tests added.

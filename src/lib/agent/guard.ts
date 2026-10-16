@@ -1,7 +1,8 @@
 // Code guard for the guarded system. Reads customer text only, never persona state.
 import { extractAmounts, formatCents } from "../money";
 import { findThreats, isDispute, isStop } from "../patterns";
-import { scheduleInWindow, type Tz } from "../time";
+import { isRefusal, requestedHour, situationOf, type Situation } from "../situations";
+import { notBeforeHour, scheduleInWindow, type Tz } from "../time";
 
 export type GuardDecision =
   | { kind: "stop" }
@@ -101,4 +102,59 @@ export function fallbackTemplate(a: { business: string; firstName: string; balan
       ? `two payments of ${formatCents(first)}`
       : `a first payment of ${formatCents(first)} and a second payment of ${formatCents(second)}`;
   return `Hi ${a.firstName}, this is ${a.business}. Your account is past due with a balance of ${formatCents(a.balanceCents)}. You can pay the full ${formatCents(a.balanceCents)}, or split it into ${plan}. Reply here if you have questions.`;
+}
+
+// ---- Rules v2: live Try page only. The pinned evals keep v1 above, so their requests never change. ----
+
+export const WRONG_PERSON_TEXT = "Sorry for the mix-up, and thank you for letting us know. We will not message this number again.";
+export const BEREAVEMENT_TEXT =
+  "I am very sorry for your loss. I have passed this to a member of our team, and we will not ask for payment while they look into it.";
+export const LAWYER_TEXT =
+  "Understood. I have passed this to a member of our team, and we will not send further payment messages while they review it.";
+
+export type GuardDecisionV2 = (GuardDecision | { kind: "close"; text: string; sendAt: Date }) & { situation: Situation; refused: boolean; notes: string[] };
+
+export function preGenerateV2(lastCustomerText: string | null, proposedAt: Date, tz: Tz, ctx: { firstName: string; customerTexts: string[] }): GuardDecisionV2 {
+  const situation = lastCustomerText ? situationOf(lastCustomerText, ctx.firstName) : "general";
+  const refused = lastCustomerText ? isRefusal(lastCustomerText) : false;
+  const notes = lastCustomerText ? [`customer message read as: ${situation.replace("_", " ")}${refused && situation !== "refusal" ? " (also a refusal)" : ""}`] : [];
+  const hour = requestedHour(ctx.customerTexts);
+  const sendAt = hour === null ? scheduleInWindow(proposedAt, tz) : notBeforeHour(proposedAt, hour, tz);
+  if (hour !== null) notes.push(`customer asked for after ${formatHour(hour)}`);
+  const base = { situation, refused, notes };
+  if (lastCustomerText && isStop(lastCustomerText)) return { kind: "stop", ...base };
+  if (situation === "wrong_person") return { kind: "close", text: WRONG_PERSON_TEXT, sendAt, ...base };
+  if (situation === "bereavement") return { kind: "handoff", text: BEREAVEMENT_TEXT, sendAt, ...base };
+  if (situation === "lawyer") return { kind: "handoff", text: LAWYER_TEXT, sendAt, ...base };
+  if (lastCustomerText && isDispute(lastCustomerText)) return { kind: "handoff", text: HANDOFF_TEXT, sendAt, ...base };
+  return { kind: "generate", sendAt, ...base };
+}
+
+const formatHour = (h: number) => `${Math.floor(h) % 12 || 12}:${String(Math.round((h % 1) * 60)).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+
+const OFFER_WORD = String.raw`(?:discount|waive|waiving|forgive|settle|settlement|reduce|reduced|lower(?:ed)?\s+(?:the|your)\s+(?:balance|amount)|\d+\s?%|percent)`;
+const OFFER = new RegExp(OFFER_WORD, "i");
+// Only a negation that comes before the offer word counts ("we can't offer a discount"), not "50% off, no problem".
+const NEGATED = new RegExp(String.raw`\b(?:can'?t|cannot|can not|unable to|not able to|don'?t|do not|won'?t|will not|isn'?t|is not|aren'?t|are not)\b[^.!?]*?${OFFER_WORD}`, "i");
+const HUMAN_CLAIM = [/\b(i'?m|i am)\s+(a\s+)?(real\s+)?(human|person)\b/i, /\b(speaking|talking|chatting)\s+(with|to)\s+(a\s+)?(real\s+)?(human|person)\b/i, /\bthis\s+is\s+(a\s+)?(real\s+)?(human|person)\b/i];
+const DENIES_BOT = /\b(not|n't)\s+(an?\s+)?(bot|robot|machine|ai)\b/i;
+const claimsHuman = (sentence: string) => DENIES_BOT.test(sentence) || (HUMAN_CLAIM.some((r) => r.test(sentence)) && !/\bnot\b|n't\b/i.test(sentence));
+
+// ponytail: clause-level negation check (split on punctuation and "but"); "we can't offer a discount" passes, odd phrasing may be rejected and fall back.
+// refused: the customer's message contains a refusal anywhere, even when another situation was read first.
+export function validateV2(text: string, action: string, situation: Situation, refused = situation === "refusal"): string[] {
+  const problems: string[] = [];
+  if (action === "close" && (refused || situation === "refusal" || situation === "hardship")) {
+    problems.push("do not end the conversation when the customer refuses or is struggling; acknowledge it and offer the payment plan or a person");
+  }
+  for (const clause of text.split(/(?<=[.!?])\s+|[,;:]\s*|\s+(?:but|however|though|although)\s+/i)) {
+    if (OFFER.test(clause) && !NEGATED.test(clause)) problems.push("never offer discounts, settlements, waivers, or reduced amounts");
+    if (claimsHuman(clause)) problems.push("never claim to be a human; say you are an automated assistant if asked");
+  }
+  return [...new Set(problems)];
+}
+
+// Fallback for v2: the v1 template plus a way to reach a person, which satisfies every v2 check.
+export function fallbackTemplateV2(a: Parameters<typeof fallbackTemplate>[0]): string {
+  return `${fallbackTemplate(a)} If you would rather talk it through with someone on our team, just say so.`;
 }

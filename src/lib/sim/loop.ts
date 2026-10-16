@@ -1,5 +1,6 @@
 // One conversation: agent opens, scripted customer replies, until an ending or the turn cap.
-import { fallbackTemplate, preGenerate, validateOutbound } from "../agent/guard";
+import { fallbackTemplate, fallbackTemplateV2, preGenerate, preGenerateV2, validateOutbound, validateV2 } from "../agent/guard";
+import type { Situation } from "../situations";
 import { parseAgentOutput, type AgentOutput } from "../agent/output";
 import { buildSystemPrompt, type AgentFacts } from "../agent/prompts";
 import type { Conversation, Message, Outcome } from "../artifact";
@@ -8,7 +9,7 @@ import type { LlmMessage, LlmProvider } from "../llm/types";
 import { installments } from "../money";
 import { redact } from "../env";
 import { randInt, type Rng } from "../rng";
-import type { Tz } from "../time";
+import { scheduleInWindow, type Tz } from "../time";
 import type { Account } from "./accounts";
 import { initialPersonaState, personaReply, type PersonaState } from "./personas";
 import type { Script } from "./scenarios";
@@ -35,21 +36,24 @@ export interface TurnInput {
   subject: string; // scenario or account key, for recording keys only
   turn: number;
   stats: { calls: number }; // incremented per model call, even if the turn then fails
+  rules?: "v1" | "v2"; // v2 (live Try page only) adds situation handling; the evals use v1
 }
 export interface TurnResult {
   action: "send" | "handoff" | "close" | "stop"; // stop: nothing is sent
   text: string;
   sendAt: Date;
   flags: string[];
+  trace: string[]; // what the guard did, in plain words, for display only
 }
 
 // One agent turn: the guard decides first (guarded only), then the model writes, then the guard checks
 // the draft, regenerates once with feedback, and falls back to the template. Shared by evals and the live demo.
 export async function agentTurn(t: TurnInput): Promise<TurnResult> {
   const { version, facts, provider } = t;
+  const v2 = version === "guarded" && t.rules === "v2";
   let attempt = 0;
   const generate = async (feedback?: string[]): Promise<AgentOutput> => {
-    let system = buildSystemPrompt(version, facts, feedback);
+    let system = buildSystemPrompt(version, facts, feedback, v2 ? "v2" : "v1");
     for (let i = 1; i <= OUTPUT_ATTEMPTS; i++) {
       t.stats.calls++;
       attempt++;
@@ -69,29 +73,53 @@ export async function agentTurn(t: TurnInput): Promise<TurnResult> {
 
   let sendAt = t.proposedAt;
   const flags: string[] = [];
-  if (version === "guarded") {
+  const trace: string[] = [];
+  let situation: Situation = "general";
+  let refused = false;
+  if (v2) {
+    const customerTexts = t.history.filter((m) => m.role === "customer").map((m) => m.text);
+    const d = preGenerateV2(t.lastCustomer, t.proposedAt, t.tz, { firstName: facts.firstName, customerTexts });
+    situation = d.situation;
+    refused = d.refused;
+    trace.push(...d.notes);
+    if (d.kind === "stop") return { action: "stop", text: "", sendAt, flags, trace: [...trace, "stop request: nothing sent"] };
+    const windowed = scheduleInWindow(t.proposedAt, t.tz).getTime();
+    if (d.sendAt.getTime() !== windowed) flags.push("customer_time");
+    else if (windowed !== t.proposedAt.getTime()) flags.push("rescheduled");
+    if (d.kind === "handoff") return { action: "handoff", text: d.text, sendAt: d.sendAt, flags: [...flags, "handoff", "fixed_ack"], trace: [...trace, "fixed handoff sent, no AI call"] };
+    if (d.kind === "close") return { action: "close", text: d.text, sendAt: d.sendAt, flags: [...flags, "fixed_reply"], trace: [...trace, "fixed reply sent, no AI call; contact ends"] };
+    sendAt = d.sendAt;
+  } else if (version === "guarded") {
     const d = preGenerate(t.lastCustomer, t.proposedAt, t.tz);
-    if (d.kind === "stop") return { action: "stop", text: "", sendAt, flags };
+    if (d.kind === "stop") return { action: "stop", text: "", sendAt, flags, trace };
     if (d.sendAt.getTime() !== t.proposedAt.getTime()) flags.push("rescheduled");
-    if (d.kind === "handoff") return { action: "handoff", text: d.text, sendAt: d.sendAt, flags: [...flags, "handoff", "fixed_ack"] };
+    if (d.kind === "handoff") return { action: "handoff", text: d.text, sendAt: d.sendAt, flags: [...flags, "handoff", "fixed_ack"], trace };
     sendAt = d.sendAt;
   }
 
+  // v1 exactly as before: the first draft is checked only when it has text, a rewrite always (an empty rewrite falls back).
+  // v2 also checks the action itself, and lets an empty close through unless the customer refused.
+  const check = (o: AgentOutput) =>
+    o.action === "stop"
+      ? []
+      : [...(o.message.trim() || !v2 ? validateOutbound(o.message, { ...facts, isFirst: t.isFirst }) : []), ...(v2 ? validateV2(o.message, o.action, situation, refused) : [])];
   let out = await generate();
-  if (version === "guarded" && out.action !== "stop" && out.message.trim()) {
-    let problems = validateOutbound(out.message, { ...facts, isFirst: t.isFirst });
+  if (version === "guarded" && (v2 || (out.action !== "stop" && out.message.trim()))) {
+    let problems = check(out);
     if (problems.length) {
       flags.push("regenerated");
+      trace.push(`draft rejected: ${problems.join("; ")}`);
       out = await generate(problems);
-      problems = out.action === "stop" ? [] : validateOutbound(out.message, { ...facts, isFirst: t.isFirst });
+      problems = check(out);
       if (problems.length) {
         flags.push("fallback");
-        out = { message: fallbackTemplate(facts), action: "send" };
-      }
+        trace.push(`rewrite rejected too: ${problems.join("; ")}`, "safe template sent");
+        out = { message: v2 ? fallbackTemplateV2(facts) : fallbackTemplate(facts), action: "send" };
+      } else trace.push("rewrite passed");
     }
   }
-  if (out.action === "stop") return { action: "stop", text: "", sendAt, flags };
-  return { action: out.action, text: out.message, sendAt, flags: out.action === "handoff" ? [...flags, "handoff"] : flags };
+  if (out.action === "stop") return { action: "stop", text: "", sendAt, flags, trace };
+  return { action: out.action, text: out.message, sendAt, flags: out.action === "handoff" ? [...flags, "handoff"] : flags, trace };
 }
 
 export interface RunOptions {

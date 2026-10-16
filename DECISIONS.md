@@ -260,3 +260,24 @@ Four commands go with it:
 **What Codex said:** no problems found.
 
 **To turn live back on:** add `LIVE_DEMO_PROVIDER=live` to `.env` and restart `npm run dev`. I will remind you before the final browser pass.
+
+
+---
+
+## Step 16a: 13 situations and guard rules v2 (Try page)
+
+**What this step is:** the Try page now has 13 situations real collections teams face (refusal, lost job, promise to pay, part payment, discount request, wrong person, death in the family, lawyer, "text me after 6pm", proof of the bill, "are you a bot", rule-breaking tricks, rudeness), plus free play with any eval customer. Each situation shows what a good reply looks like. The guarded agent on this page runs **rules v2**:
+- Some situations never reach the AI. Wrong person gets a fixed reply with no money details and contact ends. A death or a lawyer gets a fixed handoff to a person.
+- Every AI draft is also checked for: giving up on a refusal or a struggling customer, offering a discount or waiver, and claiming to be human. A bad draft is rewritten once; if the rewrite is still bad, a safe template that offers the plan and a person is sent.
+- "Text me after 6pm" holds the next message until 6pm local, on top of the 8am to 9pm rule.
+- Under each guarded reply you can now read what the guard did, in plain words ("customer message read as: refusal", "draft rejected: ...", "rewrite passed").
+
+**Why the evals did not change:** the recorded evals keep the old rules (v1). The replay of all 35 recorded AI calls still finds every recording, which proves the evals send exactly the same requests as before. Your "3 of 12 vs 0 of 12" result is untouched.
+
+**What went wrong:** nothing broke for you, but my first version had holes that Codex found.
+
+**What Codex said:**
+- Check 1 (4 problems): my change quietly altered the recorded-eval path in one rare case (an empty "close" rewrite was accepted when it used to fall back to the template); "We can offer a 50% discount, no problem" got through because "no" looked like a refusal of the offer; "You are speaking with a real person" was not caught; and "I lost my job and I will not pay" was read as hardship only, so the agent could still give up. All four fixed with tests. I also caught "I'm not an AI" myself.
+- Check 2: confirmed all four fixed. It found that a "not" anywhere earlier in a sentence still excused a later claim ("We cannot take full payment today, but we can offer a 50% discount"). Fixed: each part of a sentence is now checked on its own.
+
+**Honest limit:** these checks read words with patterns. Unusual wording can slip past or be rejected by mistake; a rejected draft falls back to the safe template, so the cost of a false alarm is a plainer message, not a bad one.
