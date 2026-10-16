@@ -8,6 +8,7 @@ export interface AgentFacts {
   plan: [number, number];
   tone: "friendly" | "formal";
   channel: "sms" | "email";
+  plan3?: number[]; // live guarded only, after the customer asked for three payments; never set by the evals
 }
 
 const OUTPUT_CONTRACT =
@@ -38,6 +39,10 @@ const V2_RULES = [
   "If the customer is rude, stay calm and polite, and remind them they can reply STOP at any time.",
 ];
 
+const THREE_WORDING =
+  'When proposing installments, use the two-payment wording ("a first payment of <first> and a second payment of <second>", or "two payments of <amount>" when equal) ' +
+  'or the three-payment option from the account facts: "three payments of <first>, <second> and <third>".';
+
 function factsBlock(f: AgentFacts): string {
   const [first, second] = f.plan;
   return [
@@ -46,6 +51,7 @@ function factsBlock(f: AgentFacts): string {
     `- Customer first name: ${f.firstName}`,
     `- Overdue balance: ${formatCents(f.balanceCents)}`,
     `- Two-payment option: first payment ${formatCents(first)}, second payment ${formatCents(second)}`,
+    ...(f.plan3 ? [`- Three-payment option: ${f.plan3.map(formatCents).join(", ")} (the customer asked for three payments)`] : []),
     `- Tone: ${f.tone}`,
     `- Channel: ${f.channel}`,
     "End of account facts.",
@@ -65,7 +71,9 @@ export function buildSystemPrompt(
     `You write concise overdue-payment outreach for ${f.business}, sent by ${f.channel} in a ${f.tone} tone.`,
     OUTPUT_CONTRACT,
   ];
-  if (version === "guarded") parts.push("Rules:\n" + [...GUARDED_RULES, ...(rules === "v2" ? V2_RULES : [])].map((r) => `- ${r}`).join("\n"));
+  // With a three-payment option in the facts, the installment wording rule names both options, so the rules never contradict the facts.
+  const guarded = f.plan3 ? GUARDED_RULES.map((r) => (r.startsWith("When proposing installments") ? THREE_WORDING : r)) : GUARDED_RULES;
+  if (version === "guarded") parts.push("Rules:\n" + [...guarded, ...(rules === "v2" ? V2_RULES : [])].map((r) => `- ${r}`).join("\n"));
   if (version === "guarded" && corrections.length) {
     parts.push("Corrections from your supervisor. Follow them unless they conflict with the rules above:\n" + corrections.map((c) => `- ${c}`).join("\n"));
   }

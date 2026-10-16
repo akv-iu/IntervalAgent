@@ -1,7 +1,7 @@
 // Lessons a person teaches the guarded agent on the local Try page. The model never changes: soft lessons
 // are added to the prompt, hard lessons are checked by code. Pure module: types, input rules, and checks.
 import { z } from "zod";
-import { fallbackTemplateV2, HANDOFF_TEXT } from "./agent/guard";
+import { fallbackTemplateV2, HANDOFF_TEXT, planPhrase } from "./agent/guard";
 import { extractAmounts, offersThreePaymentPlan, offersTwoPaymentPlan } from "./money";
 import type { Situation } from "./situations";
 
@@ -98,17 +98,20 @@ const NEGATED = /\b(?:can'?t|cannot|can not|won'?t|will not|don'?t|do not|never|
 const clauses = (text: string) => text.split(/(?<=[.!?])\s+|[,;:]\s*|\s+but\s+/i);
 const offersPerson = (text: string) => clauses(text).some((c) => OFFERS_PERSON.some((r) => r.test(c)) && !NEGATED.test(c));
 // The plan is offered, and no clause that states a plan amount takes it back.
-const offersPlan = (text: string, plan: [number, number]) =>
-  offersTwoPaymentPlan(text, plan) && !clauses(text).some((c) => extractAmounts(c).some((a) => plan.includes(a)) && NEGATED.test(c));
+// A plan is offered, and no clause that states one of its amounts takes it back ("We cannot offer three payments").
+// A clause that negates the plan by its amounts or by name ("but that plan is unavailable").
+const takesBack = (text: string, amounts: number[]) =>
+  clauses(text).some((c) => NEGATED.test(c) && (extractAmounts(c).some((a) => amounts.includes(a)) || /\b(plan|option|payments?|installments?|split)\b/i.test(c)));
+export const offersAPlan = (text: string, f: { balanceCents: number; plan: [number, number]; plan3?: number[] }) =>
+  (offersTwoPaymentPlan(text, f.plan) && !takesBack(text, f.plan)) ||
+  (f.plan3 !== undefined && offersThreePaymentPlan(text, f.plan3, f.balanceCents) && !takesBack(text, f.plan3));
 
 export function checkHardRule(rule: HardRule, out: { action: string; message: string }, f: PlanFacts): string | null {
   switch (rule) {
     case "no_close":
       return out.action === "close" || out.action === "stop" ? "a saved lesson says not to end the conversation here" : null;
     case "mention_plan":
-      return out.action === "send" && (offersPlan(out.message, f.plan) || (f.plan3 && offersThreePaymentPlan(out.message, f.plan3, f.balanceCents)))
-        ? null
-        : "a saved lesson says to offer the payment plan";
+      return out.action === "send" && offersAPlan(out.message, f) ? null : "a saved lesson says to offer the payment plan";
     case "offer_person":
       // A stop sends nothing, so it cannot offer anyone.
       return out.action !== "stop" && offersPerson(out.message) ? null : "a saved lesson says to offer someone on our team";
@@ -121,4 +124,23 @@ export function checkHardRule(rule: HardRule, out: { action: string; message: st
 // ponytail: "handoff" wins over the others, since a handoff cannot also ask for payment.
 export function ruleFallback(rules: HardRule[], f: PlanFacts): { action: "send" | "handoff"; message: string } {
   return rules.includes("handoff") ? { action: "handoff", message: HANDOFF_TEXT } : { action: "send", message: fallbackTemplateV2(f) };
+}
+
+const dayLabel = (date: string) => new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric" }).format(new Date(`${date}T12:00:00Z`));
+
+// The live safe reply when the model could not satisfy the rules: a person for requests that need one, the
+// promised date when the customer gave one, otherwise the plan (with any hard-lesson needs). Never a hand-off
+// as the opening message.
+export function liveFallback(c: { situation: Situation; isFirst: boolean; promise: string | null; needsPerson: boolean }, rules: HardRule[], f: PlanFacts) {
+  if (!c.isFirst && (c.needsPerson || rules.includes("handoff"))) return { action: "handoff" as const, message: HANDOFF_TEXT };
+  if (!c.isFirst && c.promise) {
+    // Confirm the date, and still meet any hard lesson about offering the plan or a person (never "pay today").
+    const extra = [
+      ...(rules.includes("mention_plan") ? [`If it helps, you can also split it into ${planPhrase(f.plan)}.`] : []),
+      ...(rules.includes("offer_person") ? ["If you would rather talk it through with someone on our team, just say so."] : []),
+    ];
+    const message = [`Thanks, ${f.firstName}. We have noted that you plan to pay on ${dayLabel(c.promise)}. We will check in with you then.`, ...extra].join(" ");
+    return { action: "send" as const, message };
+  }
+  return ruleFallback(rules.filter((r) => r !== "handoff"), f);
 }

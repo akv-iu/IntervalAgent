@@ -351,3 +351,27 @@ Four commands go with it:
 **Recorded evals:** untouched; the replay still matches every recording, including the order of guard messages that feed the rewrite step.
 
 **After your browser check:** the flow was working (the follow-up fix replaced the old reply; the hard rule caught a draft and the rewrite passed). Fixed: the lesson panel showed "sent with 0 replies" because the page never refreshed the count the server kept (it now counts replies, retries and rechecks as they happen); the live thread said "Customer (scripted), written by you" (now "You (the customer)"); "1 replies". Shortened the wording in the Fix panel, the lessons panel, and the page intro to short sentences that name the agent. Note for demos: a soft lesson set to "every reply" is read on every reply, which is why the plan answer asked for a reason; set such lessons to "only when the customer refuses to pay".
+
+
+---
+
+## Fix pass: the outside review of the live rules
+
+**What happened:** you shared an outside review of the Try page. It found 10 places where what the agent is **told**, what the code **enforces**, and what the page **scores** did not match. I confirmed all 10 with fake model replies before changing anything.
+
+**What was wrong, in short:** each earlier fix patched one wording at a time. For example, the page could say a reply "passed all checks" when it offered a discount, because the page scored the old rules while the guard used the new ones; a promise to pay Friday was shown on the panel but did not stop "pay today"; and "we cannot offer three payments" counted as offering them.
+
+**What changed:**
+- **One list of live rules.** The guard and the displayed checks now use the same list (`live_rules` on the page), for both agents, so a reply cannot pass the guard and fail the score, or the other way round. Hard lessons show as `lesson_rules` on the guarded side.
+- **A stated balance must be the real balance**, even next to plan wording ("Your balance is $42.00, payable in two payments of $42.00" on $84 is rejected), and "42 dollars" must be written as "$42.00". This also applies to the recorded evals: the replay still matches all 35 recordings with identical scores, so none of the recorded replies used that wording.
+- **A "not" only counts for what it denies.** "We cannot accept cards and can offer a 50% discount", "I'm not joking and I'm a real person", and "We cannot offer a discount and can waive the balance" are all caught; "We can't offer a discount, but someone on our team can help" still passes.
+- **Refusing a plan is not offering it**, for two or three payments, for hard lessons and for the panel ("but that plan is unavailable" included).
+- **Promises are enforced.** Before the promised date the agent may not ask for payment now; the safe reply confirms the date (and still offers the plan or a person if a lesson requires it). "I cannot pay Friday after all" cancels the promise; "I have not paid yet" or "I can't pay by card" do not.
+- **Proof, discount and part-payment requests hand off to a person**, even inside another question ("Are you a bot? Send me proof first"). Offering the full balance is not a part payment.
+- **The prompt no longer contradicts itself** when three payments are allowed: they are listed as an account fact and the wording rule names both options.
+- **The opening message cannot be an empty "close".**
+- **Fix this** now targets a silent turn itself, "Looks good" no longer hides it, and a silent turn's checks are shown.
+
+**What Codex said:** check 1 found 9 more edge cases in my fixes, all fixed with tests; check 2 confirmed them (and that the 35 recorded problem lists are identical) and found 4 more, all fixed with tests.
+
+**Honest limit:** these rules read words with patterns. They are now consistent and tested on every case we found, but unusual phrasing can still slip through or be rejected by mistake; a rejected reply falls back to a safe message.

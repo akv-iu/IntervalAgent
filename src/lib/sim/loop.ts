@@ -1,7 +1,7 @@
 // One conversation: agent opens, scripted customer replies, until an ending or the turn cap.
-import { fallbackTemplate, preGenerate, preGenerateV2, validateOutbound, validateV2 } from "../agent/guard";
-import { checkHardRule, pickLessons, ruleFallback, type HardRule, type Lesson } from "../lessons";
-import type { Situation } from "../situations";
+import { fallbackTemplate, liveViolations, preGenerate, preGenerateV2, validateOutbound } from "../agent/guard";
+import { checkHardRule, liveFallback, pickLessons, type HardRule, type Lesson } from "../lessons";
+import { needsPerson, type Situation } from "../situations";
 import { parseAgentOutput, type AgentOutput } from "../agent/output";
 import { buildSystemPrompt, type AgentFacts } from "../agent/prompts";
 import type { Conversation, Message, Outcome } from "../artifact";
@@ -40,8 +40,8 @@ export interface TurnInput {
   rules?: "v1" | "v2"; // v2 (live Try page only) adds situation handling; the evals use v1
   lessons?: Lesson[]; // v2 only: saved lessons; the ones for this situation are applied
   draft?: { instruction: string; hardRule: HardRule | null }; // v2 only: a lesson being tried, not yet saved
-  notes?: string[]; // live only: conversation notes for the prompt (follow-up, promised date, three-payment option)
-  plan3?: number[]; // live guarded only: three-payment amounts the guard accepts after the customer asked
+  notes?: string[]; // live only: conversation notes for the prompt (follow-up, promised date)
+  promise?: string | null; // live only: local date the customer promised to pay, if still ahead
 }
 export interface TurnResult {
   action: "send" | "handoff" | "close" | "stop"; // stop: nothing is sent
@@ -116,18 +116,18 @@ export async function agentTurn(t: TurnInput): Promise<TurnResult> {
   }
 
   // v1 exactly as before: the first draft is checked only when it has text, a rewrite always (an empty rewrite falls back).
-  // v2 also checks the action itself, and lets an empty close through unless the customer refused.
-  // v2: a stop the model chose (the customer did not ask; that case returned above) ends contact, so it is
-  // checked like a close against refusals and hard lessons.
+  // v2 runs the shared live rules (the same list the page scores with) and the hard lessons on every draft,
+  // including a stop the model chose (the customer did not ask; that case returned above).
+  const live = { situation, refused, needsPerson: t.lastCustomer ? needsPerson(t.lastCustomer, facts.balanceCents) : false, isFirst: t.isFirst, promise: t.promise ?? null, sendAt, tz: t.tz };
   const check = (o: AgentOutput) =>
-    o.action === "stop"
-      ? v2
-        ? [...validateV2(o.message, "close", situation, refused), ...hardRules.flatMap((r) => checkHardRule(r, o, { ...facts, plan3: t.plan3 }) ?? [])]
-        : []
+    !v2
+      ? o.action === "stop"
+        ? []
+        : validateOutbound(o.message, { ...facts, isFirst: t.isFirst })
       : [
-          ...(o.message.trim() || !v2 ? validateOutbound(o.message, { ...facts, isFirst: t.isFirst, plan3: t.plan3 }) : []),
-          ...(v2 ? validateV2(o.message, o.action, situation, refused) : []),
-          ...hardRules.flatMap((r) => checkHardRule(r, o, { ...facts, plan3: t.plan3 }) ?? []),
+          ...(o.action !== "stop" && o.message.trim() ? validateOutbound(o.message, { ...facts, isFirst: t.isFirst }) : []),
+          ...liveViolations(o, live),
+          ...hardRules.flatMap((r) => checkHardRule(r, o, facts) ?? []),
         ];
   let out = await generate();
   if (version === "guarded" && (v2 || (out.action !== "stop" && out.message.trim()))) {
@@ -140,7 +140,7 @@ export async function agentTurn(t: TurnInput): Promise<TurnResult> {
       if (problems.length) {
         flags.push("fallback");
         trace.push(`rewrite rejected too: ${problems.join("; ")}`, "safe template sent");
-        out = v2 ? ruleFallback(hardRules, facts) : { message: fallbackTemplate(facts), action: "send" };
+        out = v2 ? liveFallback(live, hardRules, facts) : { message: fallbackTemplate(facts), action: "send" };
       } else trace.push("rewrite passed");
     }
   }

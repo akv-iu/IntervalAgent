@@ -1,6 +1,7 @@
 // What kind of customer message this is, read from the customer's text only (never persona state).
 // Used by the live guard (rules v2) and the Try page presets. The pinned evals do not use it.
 // ponytail: small pattern groups, first match wins; unusual phrasing reads as "general".
+import { extractAmounts } from "./money";
 
 export type Situation =
   | "wrong_person"
@@ -136,3 +137,12 @@ const LABELS: Record<Situation, string> = {
   general: "says something that fits none of these",
 };
 export const situationLabel = (s: Situation) => LABELS[s];
+
+// Requests a person must handle, found anywhere in the message, even when another situation was read first
+// ("Are you a bot? Send me proof first" still needs a person for the proof).
+// A part payment is only one if the amount is less than the balance ("I can pay $84 now" on $84 is the full amount).
+const ruleFor = (name: Situation) => RULES.find(([s]) => s === name)![1];
+export const needsPerson = (text: string, balanceCents: number) =>
+  ruleFor("proof").some((r) => r.test(text)) ||
+  ruleFor("settlement").some((r) => r.test(text)) ||
+  (ruleFor("partial").some((r) => r.test(text)) && extractAmounts(text).some((a) => a < balanceCents));

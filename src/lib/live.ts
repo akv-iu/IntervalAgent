@@ -2,19 +2,19 @@
 // checks as the evals, plus the live-only extras (rules v2, lessons, follow-ups, promise dates, three
 // payments). Nothing is stored here. Only used by the local-only API route.
 import { z } from "zod";
-import { formatHour } from "./agent/guard";
+import { formatHour, liveViolations } from "./agent/guard";
 import { notBeforeHour, scheduleInWindow } from "./time";
 import type { CheckItem } from "./artifact";
 import { messageChecks } from "./checks";
-import type { HardRule, Lesson } from "./lessons";
+import { checkHardRule, type HardRule, type Lesson, offersAPlan } from "./lessons";
 import type { LiveState } from "./live-state";
 import type { LlmProvider } from "./llm/types";
-import { formatCents, installments, installmentsN, offersThreePaymentPlan, offersTwoPaymentPlan } from "./money";
+import { formatCents, installments, installmentsN } from "./money";
 import { isDispute, isStop } from "./patterns";
-import { parsePromise } from "./promise";
+import { cancelsPromise, parsePromise } from "./promise";
 import { agentTurn } from "./sim/loop";
 import { SCENARIOS } from "./sim/scenarios";
-import { FIRM_REFUSAL, requestedHour, situationOf, type Situation } from "./situations";
+import { FIRM_REFUSAL, isRefusal, needsPerson, requestedHour, situationOf, type Situation } from "./situations";
 import { localDate, localToInstant, SIM_DATE, type Tz } from "./time";
 
 export const MAX_TEXT = 500; // what a visitor can type
@@ -98,9 +98,13 @@ export async function liveTurn(
   const customers = messages.filter((m) => m.role === "customer");
   const last = messages[messages.length - 1];
 
-  // The latest date the customer promised, if it is still ahead. A later firm refusal withdraws it.
+  // The latest date the customer promised, if it is still ahead. A new date replaces it; a firm refusal or a
+  // withdrawn payment ("I cannot pay Friday after all") clears it; anything else leaves it as it was.
   let promise: string | null = null;
-  for (const m of customers) promise = FIRM_REFUSAL.test(m.text) ? null : (parsePromise(m.text, new Date(m.sentAt), tz) ?? promise);
+  for (const m of customers) {
+    const date = parsePromise(m.text, new Date(m.sentAt), tz);
+    promise = date ?? (FIRM_REFUSAL.test(m.text) || cancelsPromise(m.text) ? null : promise);
+  }
   const lastAt = last ? new Date(last.sentAt) : null;
   if (promise && lastAt && localToInstant(promise, FOLLOW_UP_HOUR, 0, tz) <= lastAt) promise = null;
 
@@ -113,18 +117,20 @@ export async function liveTurn(
   // The split is known to code once the customer asks; only the guarded agent is told about it and held to it.
   const split3 = customers.some((m) => asksForThree(m.text)) ? installmentsN(a.balanceCents, 3) : undefined;
   const plan3 = guarded ? split3 : undefined;
+  // The three-payment option, when allowed, is an account fact (see buildSystemPrompt), not a note.
   const notes = [
     ...(followUp ? ["The customer has not replied to your last message. Write one short, friendly follow-up."] : []),
     ...(guarded && promise ? [`The customer promised to pay on ${dayLabel(promise)}. Confirm that date politely and do not ask for payment before it.`] : []),
-    ...(plan3 ? [`The customer asked for three payments. You may offer exactly three payments of ${plan3.map(formatCents).join(", ")}, in that order.`] : []),
   ];
+  const facts = { business: a.business, firstName: a.firstName, balanceCents: a.balanceCents, plan, tone: "friendly" as const, channel: "sms" as const, plan3 };
+  const lastCustomer = customers[customers.length - 1]?.text ?? null;
 
   const t = await agentTurn({
     version,
-    facts: { business: a.business, firstName: a.firstName, balanceCents: a.balanceCents, plan, tone: "friendly", channel: "sms" },
+    facts,
     tz,
     history: messages.map((m) => ({ role: m.role, text: m.text })),
-    lastCustomer: customers[customers.length - 1]?.text ?? null,
+    lastCustomer,
     proposedAt,
     isFirst: agentCount === 0,
     provider,
@@ -135,13 +141,35 @@ export async function liveTurn(
     lessons, // applied to the guarded agent only (agentTurn ignores them otherwise)
     draft,
     notes,
-    plan3,
+    promise,
   });
 
   const sentAt = t.sendAt.toISOString();
-  const checks = t.text.trim()
-    ? messageChecks({ seq: messages.length + 1, role: "agent", text: t.text, sentAt, guardFlags: t.flags, checks: [] }, a, agentCount === 0, split3)
+  // Displayed checks: the v1 wording and quiet-hours checks, plus the same live rules the guard enforces, for
+  // both agents, so the page never scores a reply the guard would reject. A customer's STOP is code's doing.
+  const customerStopped = lastCustomer !== null && isStop(lastCustomer);
+  const byCode = t.flags.includes("fixed_reply") || t.flags.includes("fixed_ack");
+  const situation = lastCustomer ? situationOf(lastCustomer, a.firstName) : "general";
+  const ctx = {
+    situation,
+    refused: lastCustomer ? isRefusal(lastCustomer) : false,
+    needsPerson: lastCustomer ? needsPerson(lastCustomer, a.balanceCents) : false,
+    isFirst: agentCount === 0,
+    promise,
+    sendAt: t.sendAt,
+    tz,
+  };
+  const ruled = liveViolations({ action: t.action, message: t.text }, ctx);
+  const hardRules = guarded
+    ? [...new Set([...lessons.filter((l) => t.lessonsUsed.includes(l.id) && l.hardRule).map((l) => l.hardRule!), ...(draft?.hardRule && agentCount > 0 ? [draft.hardRule] : [])])]
     : [];
+  const lessonMisses = hardRules.flatMap((r) => checkHardRule(r, { action: t.action, message: t.text }, { ...facts, plan3: split3 }) ?? []);
+  const checks: CheckItem[] = [
+    ...(t.text.trim() ? messageChecks({ seq: messages.length + 1, role: "agent", text: t.text, sentAt, guardFlags: t.flags, checks: [] }, a, agentCount === 0, split3) : []),
+    // Code's own replies (a customer STOP, fixed hand-offs, the wrong-person reply) are not the model's to score.
+    ...(customerStopped || byCode ? [] : [{ name: "live_rules", passed: ruled.length === 0, detail: ruled.join("; ") }]),
+    ...(hardRules.length ? [{ name: "lesson_rules", passed: lessonMisses.length === 0, detail: lessonMisses.join("; ") }] : []),
+  ];
   const when = new Intl.DateTimeFormat("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(t.sendAt);
 
   const agentTexts = [...messages.filter((m) => m.role === "agent").map((m) => m.text), t.text];
@@ -154,7 +182,7 @@ export async function liveTurn(
     new Intl.DateTimeFormat("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(d);
   const state: LiveState = {
     balance: formatCents(a.balanceCents),
-    planOffered: agentTexts.some((x) => offersTwoPaymentPlan(x, plan) || (split3 !== undefined && offersThreePaymentPlan(x, split3, a.balanceCents))),
+    planOffered: agentTexts.some((x) => offersAPlan(x, { balanceCents: a.balanceCents, plan, plan3: split3 })),
     promisedOn: promise ? dayLabel(promise) : null,
     contactAfter: hour === null ? null : formatHour(hour),
     stopped: customers.some((m) => isStop(m.text)) || t.action === "stop",

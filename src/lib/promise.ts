@@ -49,3 +49,9 @@ export function parsePromise(text: string, sentAt: Date, tz: Tz): string | null 
   }
   return null;
 }
+
+// "I cannot pay Friday after all" withdraws an earlier promise; "I have not paid yet" does not.
+const CANCELS = /\b(?:can'?t|cannot|can not|won'?t|will not|unable to|not able to|not going to)\s+(?:\w+\s+)?(?:pay|make (?:it|the payment))\b/i;
+// It must be about when ("Friday", "after all", "anymore"); "I can't pay by card" is about how, not a withdrawal.
+const WHEN = /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|next week|next month|the \d{1,2}(?:st|nd|rd|th)?|after all|anymore|any more|then|that day|on time)\b/i;
+export const cancelsPromise = (text: string) => CANCELS.test(text) && WHEN.test(text);

@@ -5,6 +5,8 @@ import type { DraftLesson, Lesson } from "@/lib/lessons";
 import { type Preset, type Situation, situationLabel } from "@/lib/situations";
 import type { LiveState } from "@/lib/live-state";
 import FixPanel, { type RetryResult } from "./FixPanel";
+import { fixTarget } from "./fix-target";
+import { checkText } from "./verdict";
 import LessonsPanel from "./LessonsPanel";
 import type { DetailMessage } from "./ConversationDetail";
 import Thread from "./Thread";
@@ -28,6 +30,7 @@ interface Side {
   ended: string | null;
   state?: LiveState; // what the agent knows after its latest reply
   silent?: Situation; // the model ended without a message (not a customer STOP); how the customer was read
+  silentChecks?: DetailMessage["checks"]; // the checks for that silent turn, which has no bubble to show them under
 }
 
 const NAME: Record<Version, string> = {
@@ -126,7 +129,7 @@ function withReply(version: Version, msgs: Sent[], body: TurnBody): Side {
   const silent = !body.text && (body.action === "stop" || body.action === "close") && !body.trace?.some((t) => t.startsWith("stop request"));
   return {
     msgs: next,
-    ...(silent ? { silent: body.situation } : {}),
+    ...(silent ? { silent: body.situation, silentChecks: body.checks } : {}),
     state: body.state,
     ended:
       endText(version, body.action) ??
@@ -192,16 +195,15 @@ export default function LiveChat({
   // If the model ended the conversation without a message, the "reply" to fix is that silence.
   const g = sides.guarded.msgs;
   const lastGuarded = g[g.length - 1];
-  const silent = sides.guarded.silent !== undefined && lastGuarded?.role === "customer";
-  const moment = silent ? g : g.slice(0, -1);
-  const before = silent ? "" : (lastGuarded?.text ?? "");
-  const situation = silent ? sides.guarded.silent! : (lastGuarded?.situation ?? "general");
+  const target = fixTarget(sides.guarded);
+  const silent = target?.silent ?? false;
+  const moment = target?.moment ?? [];
+  const before = target?.before ?? "";
+  const situation = target?.situation ?? "general";
   const opening = !moment.some((m) => m.role === "customer"); // lessons start with the first customer reply
-  const fixable =
-    !busy &&
-    !lessonsOff &&
-    (silent || (lastGuarded?.role === "agent" && !byCode(lastGuarded))) &&
-    !opening;
+  // "Looks good" marks one turn; a later silent turn after the same reply is a different turn.
+  const reviewKey = silent ? -g.length - 1 : (lastGuarded?.view.seq ?? 0);
+  const fixable = !busy && !lessonsOff && target !== null && (silent || !byCode(lastGuarded)) && !opening;
   async function retry(d: DraftLesson): Promise<RetryResult> {
     const body = (await post({
       op: "retry",
@@ -417,11 +419,23 @@ export default function LiveChat({
                       {sides[v].ended}
                     </p>
                   )}
+                  {sides[v].silent !== undefined && sides[v].silentChecks && sides[v].silentChecks!.length > 0 && (
+                    <p
+                      className={`mt-1 text-center text-xs font-medium ${sides[v].silentChecks!.some((c) => c.passed === false) ? "text-fail" : "text-pass"}`}
+                    >
+                      {sides[v].silentChecks!.some((c) => c.passed === false)
+                        ? `Ending without a message failed: ${sides[v]
+                            .silentChecks!.filter((c) => c.passed === false)
+                            .map((c) => `${checkText(c.name)} (${c.detail})`)
+                            .join("; ")}`
+                        : "Ending without a message: checks passed"}
+                    </p>
+                  )}
                   {v === "guarded" &&
-                    (lastGuarded?.role === "agent" || silent) &&
+                    target !== null &&
                     !fixing && (
                       <div className="mt-3 flex flex-wrap items-center justify-end gap-2 text-sm">
-                        {byCode(lastGuarded) ? (
+                        {!silent && byCode(lastGuarded) ? (
                           <span className="text-xs text-muted">
                             Written by code before the model; lessons do not
                             change it.
@@ -431,7 +445,7 @@ export default function LiveChat({
                             The opening message follows fixed rules. Reply as
                             the customer to start teaching.
                           </span>
-                        ) : reviewed.includes(lastGuarded.view.seq) ? (
+                        ) : reviewed.includes(reviewKey) ? (
                           <span className="text-xs font-medium text-pass">
                             Marked as good
                           </span>
@@ -444,7 +458,7 @@ export default function LiveChat({
                               type="button"
                               disabled={!fixable}
                               onClick={() =>
-                                setReviewed((r) => [...r, lastGuarded.view.seq])
+                                setReviewed((r) => [...r, reviewKey])
                               }
                               className="rounded-md border border-line bg-white px-2 py-1 text-xs disabled:opacity-50"
                             >
