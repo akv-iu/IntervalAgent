@@ -82,7 +82,9 @@ export async function POST(req: Request) {
     const op = parsed.data;
 
     if (op.op === "toggle" || op.op === "delete") {
-      if (isPublic) return json({ error: "Lessons can be turned off or deleted only on a local copy." }, 403);
+      // Anyone may turn a lesson off or on (reversible); deleting is permanent, so it stays on a local copy.
+      if (isPublic && op.op === "delete") return json({ error: "Lessons can be deleted only on a local copy. You can turn them off." }, 403);
+      if (isPublic && !takeFor(visitorOf(req), 1)) return json({ error: "Too many requests this minute. Wait a moment and try again." }, 429);
       await (op.op === "toggle" ? setActive(op.id, op.active) : deleteLesson(op.id));
       return json({ lessons: await lessonsLog() });
     }

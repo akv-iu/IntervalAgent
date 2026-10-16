@@ -134,13 +134,22 @@ test("a failed request keeps its whole reservation: a lost reply may still have 
   expect(s.adjusted).toEqual([]); // nothing given back
 });
 
-test.each([
-  [{ op: "toggle", id: 1, active: false }],
-  [{ op: "delete", id: 1 }],
-])("visitors cannot turn off or delete lessons: %j", async (body) => {
-  const r = await post(body);
+test("visitors can turn a lesson off and on (Akshay: reviewers should see it)", async () => {
+  const r = await post({ op: "toggle", id: 1, active: false });
+  expect(r.status).toBe(200);
+  expect(s.managed).toBe(1);
+});
+
+test("visitors cannot delete lessons: deleting is permanent", async () => {
+  const r = await post({ op: "delete", id: 1 });
   expect(r.status).toBe(403);
   expect(s.managed).toBe(0);
+});
+
+test("turning lessons on and off counts toward the visitor's limit", async () => {
+  const codes: number[] = [];
+  for (let i = 0; i < 13; i++) codes.push((await post({ op: "toggle", id: 1, active: i % 2 === 0 }, "10.7.7.7")).status);
+  expect(codes[12]).toBe(429);
 });
 
 test("once the lesson log is full, no more lessons are saved", async () => {

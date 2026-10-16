@@ -56,7 +56,10 @@ describe("LessonsPanel", () => {
     id: 1, createdAt: "2026-10-16T12:00:00.000Z", situation: "refusal", reason: "gave_up", instruction: "Offer the plan.", hardRule: null,
     appliesTo: "situation", scenarioId: "S01", moment: [], beforeText: "b", afterText: "a", active: true, timesUsed: 0,
   };
-  const html = (canManage: boolean) => renderToStaticMarkup(<LessonsPanel lessons={[lesson]} setLessons={() => {}} off={null} canManage={canManage} />);
+  const html = (canDelete: boolean) => renderToStaticMarkup(<LessonsPanel lessons={[lesson]} setLessons={() => {}} off={null} canDelete={canDelete} />);
   test("locally a lesson can be turned off or deleted", () => expect(html(true)).toMatch(/Turn off[\s\S]*Delete/));
-  test("on the public site those buttons are not shown", () => expect(html(false)).not.toMatch(/Turn off|Delete/));
+  test("on the public site a lesson can be turned off but not deleted", () => {
+    expect(html(false)).toContain("Turn off");
+    expect(html(false)).not.toContain("Delete");
+  });
 });

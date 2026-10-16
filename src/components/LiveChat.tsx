@@ -145,14 +145,14 @@ export default function LiveChat({
   model,
   initialLessons,
   lessonsOff: initialOff,
-  canManage,
+  canDelete,
 }: {
   customers: LiveCustomer[];
   presets: PresetView[];
   model: string | null;
   initialLessons: Lesson[];
   lessonsOff: string | null;
-  canManage: boolean;
+  canDelete: boolean;
 }) {
   // "p:<preset id>" for a situation, "s:<scenario id>" for any eval customer.
   const [choice, setChoice] = useState(`p:${presets[0].id}`);
@@ -578,7 +578,7 @@ export default function LiveChat({
         lessons={lessons}
         setLessons={setLessons}
         off={lessonsOff}
-        canManage={canManage}
+        canDelete={canDelete}
       />
     </div>
   );

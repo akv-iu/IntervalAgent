@@ -77,7 +77,7 @@ recordings (pinned set) --> replay CI                       importer (one transa
 - **One agent, two setups.** Baseline and guarded are the same model. Guarded adds rules to the prompt and a code guard that checks every draft: exact amounts in integer cents, plan amounts that add up to the balance, no threats, quiet hours in the customer's timezone, stop and dispute handling. A failing draft is regenerated once, then replaced by a safe template.
 - **Guards read only what the customer wrote**, never the hidden persona. Scorers may use ground truth.
 - **Runners write JSON, an importer writes the database.** Runs are imported once in a transaction; duplicates are rejected.
-- **Every page but one reads only**, through a read-only database role. The exception is the Try page's live endpoint: it uses its own spend-limited model key, a database login that can only add lessons and count usage, a per-visitor rate limit and a daily token cap shared across servers. Visitors cannot turn lessons off or delete them.
+- **Every page but one reads only**, through a read-only database role. The exception is the Try page's live endpoint: it uses its own spend-limited model key, a database login that can only add lessons, turn them on or off and count usage, a per-visitor rate limit and a daily token cap shared across servers. Visitors can turn lessons off and on, but not delete them.
 - **The Try page learns from corrections.** When a reply is wrong you can fix it, retry it and accept it as a lesson. Soft lessons are added to the prompt for the same situation; four hard rules are checked by code. Lessons are stored in PostgreSQL and shown publicly as a read-only log.
 
 ## Run it yourself

@@ -89,7 +89,8 @@ test("the public lessons login can add lessons and count use, nothing else", asy
     expect(await reserveTryTokens("2026-10-20", 10, 1000, c)).toBe(true);
     await adjustTryTokens("2026-10-20", -5, c);
     expect(await lessonCount(c)).toBeGreaterThan(0);
-    for (const sql of [`delete from lessons where id = ${id}`, `update lessons set active = false where id = ${id}`, "select * from runs", "delete from try_usage"]) {
+    await setActive(id, false, c); // visitors may turn lessons off and on
+    for (const sql of [`delete from lessons where id = ${id}`, `update lessons set instruction = 'x' where id = ${id}`, "select * from runs", "delete from try_usage"]) {
       await expect(c.query(sql)).rejects.toThrow(/permission denied/);
     }
   } finally {

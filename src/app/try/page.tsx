@@ -144,7 +144,7 @@ async function Try() {
         model={model}
         initialLessons={lessons}
         lessonsOff={off}
-        canManage={!isPublic}
+        canDelete={!isPublic}
       />
     </div>
   );

@@ -20,17 +20,17 @@ async function post(body: unknown) {
 }
 
 // The lessons this copy has learned: turn them on or off, delete them, or replay each saved moment.
-// canManage: false on the public site, where visitors can add lessons but not turn them off or delete them.
+// canDelete: false on the public site, where visitors can turn lessons off and on but not delete them.
 export default function LessonsPanel({
   lessons,
   setLessons,
   off,
-  canManage,
+  canDelete,
 }: {
   lessons: Lesson[];
   setLessons: (l: Lesson[]) => void;
   off: string | null;
-  canManage: boolean;
+  canDelete: boolean;
 }) {
   const [checks, setChecks] = useState<Record<number, Recheck>>({});
   const [page, setPage] = useState(0);
@@ -95,16 +95,16 @@ export default function LessonsPanel({
                   <span className="font-semibold text-ink">Recheck, {checks[l.id].verdict}:</span> {checks[l.id].text || `(nothing sent; ${checks[l.id].action})`}
                 </p>
               )}
-              {canManage && (
-                <div className="mt-2 flex gap-2">
-                  <button type="button" disabled={busy} onClick={() => act(async () => setLessons((await post({ op: "toggle", id: l.id, active: !l.active })).lessons))} className="rounded-md border border-line px-2 py-1 text-xs">
-                    {l.active ? "Turn off" : "Turn on"}
-                  </button>
+              <div className="mt-2 flex gap-2">
+                <button type="button" disabled={busy} onClick={() => act(async () => setLessons((await post({ op: "toggle", id: l.id, active: !l.active })).lessons))} className="rounded-md border border-line px-2 py-1 text-xs">
+                  {l.active ? "Turn off" : "Turn on"}
+                </button>
+                {canDelete && (
                   <button type="button" disabled={busy} onClick={() => act(async () => setLessons((await post({ op: "delete", id: l.id })).lessons))} className="rounded-md border border-line px-2 py-1 text-xs text-fail">
                     Delete
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </LessonCard>
           ))}
         </ol>
