@@ -2,7 +2,7 @@ import type { BulkArtifact, Conversation } from "../../src/lib/artifact";
 import { allAccounts, importArtifact, seed } from "../../src/lib/db-admin";
 import { mockProvider } from "../../src/lib/llm/mock";
 import { runPicker, summarize } from "../../src/lib/picker";
-import { aging, conversations, evalGrid, latestRun, messages, overview, pickerSummary } from "../../src/lib/reports";
+import { aging, conversations, evalGrid, latestRun, messages, messagesForRun, overview, pickerSummary } from "../../src/lib/reports";
 import { runEval } from "../../src/lib/sim/eval";
 import { testSchema } from "./helpers";
 
@@ -140,4 +140,17 @@ test("eval selection uses the pinned live recording set, never a newer mock run"
   // eval-r (mock, created later at 12:00) must not win.
   expect((await latestRun("eval", { recordingSetId: setId }, db.pool))?.id).toBe("eval-pinned");
   await expect(latestRun("eval", {}, db.pool)).rejects.toThrow(/recording set/);
+});
+
+test("conversation list counts a payment only if it landed by the reporting cutoff", async () => {
+  const list = await conversations("bulk-a", db.pool);
+  expect(list.find((c) => c.accountKey === "demo-001")!.recoveredByCutoffCents).toBe(bal("demo-001"));
+  expect(list.find((c) => c.accountKey === "demo-002")!.recoveredByCutoffCents).toBe(0); // paid after the cutoff
+});
+
+test("all messages of a run come back in one query, grouped by conversation", async () => {
+  const list = await conversations("bulk-a", db.pool);
+  const byConv = await messagesForRun("bulk-a", db.pool);
+  expect(Object.keys(byConv).map(Number).sort()).toEqual(list.map((c) => c.id).sort());
+  expect(byConv[list[0].id][0]).toMatchObject({ seq: 1, role: "agent", body: "Hi" });
 });

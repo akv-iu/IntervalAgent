@@ -35,7 +35,9 @@ Production experience, startup history, and availability to work in Pleasant Gro
 
 ## Deferred depth
 
-No second provider, LLM customer simulator, model-based tone judge, fine-tuning, real delivery, payment integration, authentication, multiple customer tenants, live-run UI, walkthrough wizard, autoplay, historical run browser, or elaborate chart library.
+No second provider, LLM customer simulator, model-based tone judge, fine-tuning, real delivery, payment integration, authentication, multiple customer tenants, live-run UI, separate walkthrough wizard page, autoplay, historical run browser, or elaborate chart library.
+
+Scope change (2026-10-16, Akshay): the Evals page includes a short guided walkthrough of five recorded cases (setup, baseline, guarded, what the checks found), built only from recorded data. It is part of the Evals page, not a separate wizard.
 
 Use accessible tables and simple bars. These cuts preserve one working example of every job responsibility.
 

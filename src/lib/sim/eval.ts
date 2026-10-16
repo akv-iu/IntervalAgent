@@ -49,6 +49,7 @@ export async function runEval(o: {
     metadata: {
       provider: o.provider.name,
       ...(o.provider.originalSourceMode ? { originalSourceMode: o.provider.originalSourceMode } : {}),
+      ...(o.provider.recordingStats ? { recording: o.provider.recordingStats } : {}),
       ...(o.provider.name === "mock-bad" ? { testFixture: "deliberately bad agent, not live evidence" } : {}),
     },
     conversations,

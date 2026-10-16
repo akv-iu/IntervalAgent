@@ -1,26 +1,40 @@
 @import "tailwindcss";
 
+/* Palette: white page, warm ink text, one bright blue accent with pale blue tints. */
+@theme {
+  --color-ink: #2b2827;
+  --color-ink-2: #484443;
+  --color-muted: #6b6765; /* 5.6:1 on white */
+  --color-line: #e2e0df;
+  --color-accent: #0081ff;
+  --color-accent-ink: #0067cc; /* white text on this is 5.5:1 */
+  --color-tint: #f4f8ff;
+  --color-tint-2: #cfe7ff;
+  --color-pass: #1d7a46;
+  --color-pass-bg: #e9f6ee;
+  --color-fail: #b42318;
+  --color-fail-bg: #fdecea;
+  --font-sans: var(--font-barlow), "Helvetica Neue", Arial, sans-serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #ffffff;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }

@@ -214,3 +214,22 @@ Four commands go with it:
 **What Codex said:**
 - Check 1 (3 problems): an eval results file could include accounts the database knows as dashboard accounts; the "paid before agreeing" rule compared times as text, which can be wrong when one time has milliseconds; and guard notes were packed in a way that could garble unusual characters. All fixed with tests.
 - Check 2: confirmed those, and found that asking for "the latest eval run" could return a newer *fake* run instead of the real recorded one. The spec says the Evals page must show the pinned real recording, so eval selection now requires it.
+
+---
+
+## Step 13: The three web pages
+
+**What this step is:** the website. Customer (the 100-account dashboard with every conversation), Evals (baseline vs guarded on the real recording), and Picker (what the learner chose and how it did on new cases). Pages only read from the database; they never call the AI and cannot change data.
+
+**What went wrong:**
+- Pages felt slow. The main cause was your VPN: every database trip went through it (215 ms each, 1.8 s for a new connection). I also changed the code so each page needs only two database steps and switching conversations happens instantly in the browser.
+- A "2 Issues" badge appeared. It came from a browser extension editing the page, not from our code.
+- My own server check found that the Evals page called a browser-only helper from the server; fixed before you saw it.
+
+**Design:** the look borrows interval-ai.com's layout and colors (white, warm dark text, one bright blue, the Barlow font, big headline numbers) but keeps our own name. Conversations read like a text-message thread.
+
+**Your additions:** whole-row click, a plain-words headline ("baseline broke a hard rule in 3 of 12; guarded in 0 of 12"), side-by-side conversations, counts of what the guard did, links proving the recording is replayed by CI, and a five-case step-by-step walkthrough. The walkthrough was listed as deferred in the PRD, so the PRD now records your scope change.
+
+**What Codex said:**
+- Check 1: the conversation list counted payments after the reporting cutoff, and the safety test that keeps AI code out of the website missed one kind of import. Both fixed.
+- Check 2 (after the redesign): the most important catch was that the S10 walkthrough claimed the guard did nothing, when it was the guard that stopped the conversation. Also: some gray and blue text was too faint to read comfortably, a few walkthrough numbers came from a fixture file instead of the database, and the Picker page had a hard-coded "10%". All fixed.

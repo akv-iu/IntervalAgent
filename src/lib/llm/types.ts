@@ -23,4 +23,6 @@ export interface LlmProvider {
   // Set by the recording and replay wrappers so artifacts carry their provenance.
   recordingSetId?: string;
   originalSourceMode?: "live" | "mock";
+  // Set by replay: how many recorded calls and API-reported tokens the set holds.
+  recordingStats?: { calls: number; tokens: number; model: string };
 }

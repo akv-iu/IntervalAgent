@@ -151,3 +151,15 @@ describe("review round 1 regressions", () => {
     expect(() => replayProvider("set-dk", { dir })).toThrow(/duplicate/);
   });
 });
+
+test("replay reports what the recording holds, and eval runs carry it as provenance", async () => {
+  const dir = tmp();
+  const rec = recordingProvider(mockProvider(), "set-stats", dir);
+  await rec.complete(req());
+  await rec.complete(req("Other prompt"));
+  rec.finish(["S01"], ["guarded"]);
+  const rep = replayProvider("set-stats", { dir });
+  expect(rep.recordingStats).toEqual({ calls: 2, tokens: 0, model: "mock-agent-v1" });
+  const a = await runEval({ ...meta, provider: { ...rep, complete: async () => ({ text: '{"message":"x","action":"stop"}' }) }, versions: ["guarded"], limit: 1 });
+  expect(a.metadata.recording).toEqual({ calls: 2, tokens: 0, model: "mock-agent-v1" });
+});

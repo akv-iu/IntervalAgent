@@ -1,69 +1,162 @@
-import Image from "next/image";
+import { connection } from "next/server";
+import { Suspense } from "react";
+import ConversationBrowser from "@/components/ConversationBrowser";
+import EmptyState from "@/components/EmptyState";
+import PageHeader from "@/components/PageHeader";
+import SourceLabel from "@/components/SourceLabel";
+import { formatCents, formatDate, OUTCOME_LABEL, toDetailMessages } from "@/lib/format";
+import { aging, conversations, latestRun, messagesForRun, overview } from "@/lib/reports";
 
-export default function Home() {
+export default function CustomerPage() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <>
+      <PageHeader title="Customer dashboard" lede="What a business owner sees after an outreach run: money recovered, how old the debt was, and every conversation." />
+      <Suspense fallback={<Loading />}>
+        <Customer />
+      </Suspense>
+    </>
+  );
+}
+
+function Loading() {
+  return <p className="mt-6 text-sm text-muted">Loading the latest run...</p>;
+}
+
+function Stat({ value, label, note }: { value: string; label: string; note?: string }) {
+  return (
+    <div className="py-1">
+      <dd className="text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{value}</dd>
+      <dt className="mt-1 text-sm font-medium text-ink-2">{label}</dt>
+      {note && <dd className="text-xs text-muted">{note}</dd>}
+    </div>
+  );
+}
+
+async function Customer() {
+  await connection(); // database reads happen per request, never at build time
+  const run = await latestRun("bulk");
+  if (!run) {
+    return (
+      <div className="mt-6">
+        <EmptyState what="bulk simulation" />
+      </div>
+    );
+  }
+
+  const [o, buckets, convs, byConv] = await Promise.all([overview(run.id), aging(run.id), conversations(run.id), messagesForRun(run.id)]);
+  const tz = Object.fromEntries(convs.map((c) => [c.id, c.timezone]));
+  const detail = Object.fromEntries(Object.entries(byConv).map(([id, msgs]) => [id, toDetailMessages(msgs, tz[Number(id)])]));
+  const maxBalance = Math.max(...buckets.map((b) => b.startingBalanceCents), 1);
+  const days = o.daysFromOutreachToPayment;
+
+  return (
+    <div className="mt-6 space-y-12">
+      <SourceLabel
+        label="Synthetic accounts; mock outreach; simulated payments."
+        items={[
+          ["Run", run.id],
+          ["Source", run.sourceMode],
+          ["Reporting cutoff", run.reportAsOf ? formatDate(run.reportAsOf) : "n/a"],
+          ["Created", formatDate(run.createdAt)],
+        ]}
+      />
+
+      <section aria-labelledby="metrics">
+        <h2 id="metrics" className="text-xl font-semibold tracking-tight">
+          Recovery, simulated
+        </h2>
+        <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-6 border-y border-line py-6 sm:grid-cols-4">
+          <Stat value={formatCents(o.recoveredCents)} label="Recovered by cutoff" />
+          <Stat value={formatCents(o.contactedBalanceCents)} label="Contacted balance" note="original balance of accounts contacted" />
+          <Stat value={o.recoveryRatePct === null ? "n/a" : `${o.recoveryRatePct.toFixed(1)}%`} label="Recovery rate" note="recovered / contacted balance" />
+          <Stat value={days === null ? "n/a" : `${days.toFixed(1)} days`} label="First message to payment" note="average over payments by cutoff" />
+        </dl>
+        <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-2 text-sm">
+          {[
+            ["Payment plans", o.plans, "agreed, not yet paid"],
+            ["Promises to pay", o.promises, "not counted as recovered"],
+            ["Handed to a person", o.handoffs, "disputes"],
+          ].map(([label, n, note]) => (
+            <div key={label} className="flex items-baseline gap-2">
+              <dd className="text-lg font-semibold tabular-nums">{n}</dd>
+              <dt className="text-ink-2">
+                {label} <span className="text-muted">({note})</span>
+              </dt>
+            </div>
+          ))}
+        </dl>
+        <p className="mt-4 max-w-3xl text-sm text-muted">
+          Assumption: every full-payment agreement produces a simulated payment 1 to 3 days later. Plans and promises recover nothing here. This shows
+          reporting, not real collection performance.
+        </p>
+      </section>
+
+      <section aria-labelledby="aging">
+        <h2 id="aging" className="text-xl font-semibold tracking-tight">
+          Starting backlog by days past due
+        </h2>
+        <p className="mt-1 text-sm text-muted">Original balances of the accounts contacted in this run, at the start of the simulation.</p>
+        <div className="mt-4 overflow-x-auto rounded-xl border border-line">
+          <table className="w-full min-w-[34rem] text-sm">
+            <thead>
+              <tr className="border-b border-line text-left text-muted">
+                <th scope="col" className="px-3 py-2 font-medium">
+                  Days past due
+                </th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">
+                  Accounts
+                </th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">
+                  Starting balance
+                </th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">
+                  Recovered, simulated
+                </th>
+                <th scope="col" className="w-1/3 px-3 py-2 font-medium">
+                  Starting balance, relative
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {buckets.map((b) => (
+                <tr key={b.bucket} className="border-b border-line last:border-0">
+                  <th scope="row" className="px-3 py-2 text-left font-medium">
+                    {b.bucket}
+                  </th>
+                  <td className="px-3 py-2 text-right tabular-nums">{b.accounts}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatCents(b.startingBalanceCents)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatCents(b.recoveredCents)}</td>
+                  <td className="px-3 py-2">
+                    <div className="h-2.5 rounded-full bg-tint-2">
+                      <div className="h-2.5 rounded-full bg-accent" style={{ width: `${(100 * b.startingBalanceCents) / maxBalance}%` }} aria-hidden="true" />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      <section aria-labelledby="convs">
+        <h2 id="convs" className="text-xl font-semibold tracking-tight">
+          Conversations ({convs.length})
+        </h2>
+        <p className="mt-1 text-sm text-muted">Choose a customer to step through the conversation one message at a time.</p>
+        <div className="mt-4">
+          <ConversationBrowser
+            rows={convs.map((c) => ({
+              id: c.id,
+              name: c.firstName,
+              meta: `${c.accountKey}, ${c.agingBucket} days past due`,
+              outcome: OUTCOME_LABEL[c.outcome] ?? c.outcome,
+              handedToHuman: c.handedToHuman,
+              amount: formatCents(c.recoveredByCutoffCents),
+            }))}
+            messages={detail}
+          />
         </div>
-      </main>
+      </section>
     </div>
   );
 }

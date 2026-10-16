@@ -159,6 +159,11 @@ export function replayProvider(setId: string, opts: { requireLive?: boolean; dir
     manifest,
     recordingSetId: setId,
     originalSourceMode: manifest.sourceMode,
+    recordingStats: {
+      calls: entries.length,
+      tokens: entries.reduce((n, e) => n + (e.usage ? e.usage.input + e.usage.output : 0), 0),
+      model: manifest.model,
+    },
     async complete(req: LlmRequest) {
       const key = requestKey({ model: manifest.model, params: manifest.params, contractVersion: manifest.contractVersion, req });
       const e = byKey.get(key);

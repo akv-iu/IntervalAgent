@@ -10,7 +10,7 @@ export function getPool(): Pool {
     const key = env.APP_MODE === "public" ? "DATABASE_URL_READONLY" : "DATABASE_URL";
     const url = env[key];
     if (!url) throw new Error(`Missing required env vars: ${key}`);
-    pool = new Pool({ connectionString: url, max: 3 });
+    pool = new Pool({ connectionString: url, max: 5 }); // pages run up to 4 queries in parallel
   }
   return pool;
 }

@@ -113,12 +113,14 @@ export interface ConversationRow {
   firstName: string;
   agingBucket: string;
   balanceCents: number;
+  timezone: string;
   scenarioId: string | null;
   version: string;
   channel: string;
   tone: string;
   outcome: string;
   recoveredCents: number;
+  recoveredByCutoffCents: number; // 0 when the run has no cutoff or the payment landed after it
   handedToHuman: boolean;
   startedAt: Date;
   paidAt: Date | null;
@@ -126,9 +128,10 @@ export interface ConversationRow {
 
 export async function conversations(runId: string, db: Db = getPool()): Promise<ConversationRow[]> {
   const r = await db.query(
-    `select c.id, c.account_key, a.first_name, a.aging_bucket, a.balance_cents, c.scenario_id, c.version, c.channel, c.tone,
-            c.outcome, c.recovered_cents, c.handed_to_human, c.started_at, c.paid_at
-     from conversations c join accounts a on a.account_key = c.account_key
+    `select c.id, c.account_key, a.first_name, a.aging_bucket, a.balance_cents, a.timezone, c.scenario_id, c.version, c.channel, c.tone,
+            c.outcome, c.recovered_cents, c.handed_to_human, c.started_at, c.paid_at,
+            case when c.paid_at <= r.report_as_of then c.recovered_cents else 0 end as recovered_by_cutoff_cents
+     from conversations c join accounts a on a.account_key = c.account_key join runs r on r.id = c.run_id
      where c.run_id = $1
      order by c.scenario_id nulls first, c.account_key, c.version`,
     [runId],
@@ -139,12 +142,14 @@ export async function conversations(runId: string, db: Db = getPool()): Promise<
     firstName: x.first_name,
     agingBucket: x.aging_bucket,
     balanceCents: x.balance_cents,
+    timezone: x.timezone,
     scenarioId: x.scenario_id,
     version: x.version,
     channel: x.channel,
     tone: x.tone,
     outcome: x.outcome,
     recoveredCents: x.recovered_cents,
+    recoveredByCutoffCents: x.recovered_by_cutoff_cents,
     handedToHuman: x.handed_to_human,
     startedAt: x.started_at,
     paidAt: x.paid_at,
@@ -166,6 +171,22 @@ export async function messages(conversationId: number, db: Db = getPool()): Prom
     [conversationId],
   );
   return r.rows.map((x) => ({ seq: x.seq, role: x.role, body: x.body, sentAt: x.sent_at, guardFlags: x.guard_flags, checks: x.checks }));
+}
+
+// Every message of a run in one round trip, so pages can switch conversations without reloading.
+export async function messagesForRun(runId: string, db: Db = getPool()): Promise<Record<number, MessageRow[]>> {
+  const r = await db.query(
+    `select m.conversation_id, m.seq, m.role, m.body, m.sent_at, m.guard_flags, m.checks
+     from messages m join conversations c on c.id = m.conversation_id
+     where c.run_id = $1
+     order by m.conversation_id, m.seq`,
+    [runId],
+  );
+  const out: Record<number, MessageRow[]> = {};
+  for (const x of r.rows) {
+    (out[Number(x.conversation_id)] ??= []).push({ seq: x.seq, role: x.role, body: x.body, sentAt: x.sent_at, guardFlags: x.guard_flags, checks: x.checks });
+  }
+  return out;
 }
 
 export interface EvalResultRow {
