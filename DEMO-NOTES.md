@@ -29,13 +29,14 @@ Prefer "I deliberately scoped this to demonstrate the full loop" over "I could h
 | Reporting | Integer money, denominators, promises versus receipts | Full-payment agreements always settle in simulation | Real payment events, partial payments, reconciliation, reporting cutoffs |
 | PostgreSQL | Constraints, transactions, isolation, aggregation | Small read-only dataset | Query plans at realistic scale; tenant authorization before private data |
 | Operations | Offline run/import, read-only public view | No real delivery or concurrent workers | Idempotent jobs, retries, consent checks, audit trail, monitoring before real sending |
+| Try page and lessons | Human correction loop: fix, retry, accept; soft lessons in the prompt, four hard rules in code; one shared rule list for guard and scores | Live only on a local clone; lessons match by pattern-read situation; rules read wording, not meaning | Promote reviewed situations into recorded evals; measure whether accepted lessons reduce repeat mistakes |
 | AI-assisted work | Generated work reviewed with tests and judgment | Tests are not proof every line is correct | Explain an actual bug, its cause, and the check that caught it |
 
 Do not imply deferred systems are already built or mastered. Learn unfamiliar concepts through a small example before using them in the pitch.
 
 ## Retrospective on this correction
 
-This is a review of the plan, not a completed implementation.
+Written as a review of the plan before implementation; what shipped is in [README.md](README.md) and [DEVLOG.md](DEVLOG.md).
 
 - Preserved breadth: picker is required alongside live evals, customer UI, SQL reporting, and deployment.
 - Removed low-value work: second provider, LLM personas, tone judge, custom walkthrough, autoplay, separate aging page, historical run browser.
