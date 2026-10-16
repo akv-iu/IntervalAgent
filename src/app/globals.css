@@ -38,3 +38,20 @@ table {
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+/* Home hero: the conversation's events rise in once, in order. Reduced motion shows them still. */
+@media (prefers-reduced-motion: no-preference) {
+  .hero-event {
+    animation: hero-rise 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+}
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

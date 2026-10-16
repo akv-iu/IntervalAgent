@@ -427,3 +427,15 @@ Four commands go with it:
 **What Codex said:** check 1 found 7 problems. The most important: a role created with Neon's "Add role" button is automatically an admin member (`neon_superuser`), so it would not have been read-only at all. Both role scripts now create roles with SQL instead. The others were spending holes (simultaneous requests slipping under the cap, rechecks leaving calls uncounted, empty rechecks not rate-limited, unlimited lessons). All fixed with tests, including one against the real database where 10 simultaneous reservations only let 3 through. Check 2 confirmed them and found 4 more: two fixed (refunds crossing midnight; refunds after failures), two kept as stated limits (token estimates can undershoot for unusual text; the lesson cap can overshoot by a few under simultaneous accepts).
 
 **A test scare, and what it was:** after the first change, the local route tests suddenly took 3 seconds each. The new code read the real `.env` (with live on) instead of the test's fake settings. No call went out: the tests block all network, and the OpenAI client failed with "Connection error". The tests now pass the fake settings explicitly.
+
+---
+
+## Home page hero
+
+**What you asked:** a hero like Interval's homepage. We agreed not to copy it: no globe, no "Licensed & Bonded" claim (a legal claim we cannot make), no customer logos (those are Interval's customers), no fake "Log in" or "Book a demo", and no invented numbers.
+
+**What it is:** a short headline ("An AI collections agent, tested like production software"), two links (Try the agent, See the evals), and a small timeline of one real conversation from the latest run: Maya, Mountain Time; text sent Mar 10, 10:00 AM; her reply; $151.04 received Mar 12. The events rise in once with CSS and stay still for people who turn off motion. The dashboard is unchanged below it, and the hero adds no database queries (both share one load).
+
+**What Codex said:** check 1 found 5 small things. Fixed: the account has a timezone, not a city, so "Denver" became "Mountain Time"; the link said "Read the full conversation" but did not open it, now "Find Maya in the conversations below"; long replies could overflow at 360px; the button's hover color had too little contrast. Kept: when no conversation was paid, the timeline is left out rather than invented. Check 2 confirmed all five and found nothing new. (Codex also opened a browser on its own to check 360px and the conversation list; your browser check is still the one that counts.)
+
+**Honest note:** bulk-run messages do not store guard check results, so the timeline shows three events, not a "guard checks passed" step.

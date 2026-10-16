@@ -1,21 +1,45 @@
 import { connection } from "next/server";
-import { Suspense } from "react";
+import { cache, Suspense } from "react";
 import ConversationBrowser from "@/components/ConversationBrowser";
 import EmptyState from "@/components/EmptyState";
-import PageHeader from "@/components/PageHeader";
+import Hero from "@/components/Hero";
 import SourceLabel from "@/components/SourceLabel";
 import { formatCents, formatDate, OUTCOME_LABEL, toDetailMessages } from "@/lib/format";
+import { heroStory } from "@/lib/hero";
 import { aging, conversations, latestRun, messagesForRun, overview } from "@/lib/reports";
 
 export default function CustomerPage() {
   return (
     <>
-      <PageHeader title="Customer dashboard" lede="What a business owner sees after an outreach run: money recovered, how old the debt was, and every conversation." />
+      {/* The headline shows at once; the conversation timeline arrives with the data. */}
+      <Suspense fallback={<Hero story={null} />}>
+        <HeroWithStory />
+      </Suspense>
+      <header className="mt-10">
+        <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Customer dashboard</h2>
+        <p className="mt-2 max-w-2xl text-base text-ink-2">
+          What a business owner sees after an outreach run: money recovered, how old the debt was, and every conversation.
+        </p>
+      </header>
       <Suspense fallback={<Loading />}>
         <Customer />
       </Suspense>
     </>
   );
+}
+
+// One load per request, shared by the hero and the dashboard (React cache), so the hero adds no queries.
+const loadRun = cache(async () => {
+  await connection(); // database reads happen per request, never at build time
+  const run = await latestRun("bulk");
+  if (!run) return null;
+  const [o, buckets, convs, byConv] = await Promise.all([overview(run.id), aging(run.id), conversations(run.id), messagesForRun(run.id)]);
+  return { run, o, buckets, convs, byConv };
+});
+
+async function HeroWithStory() {
+  const data = await loadRun();
+  return <Hero story={data ? heroStory(data.convs, data.byConv) : null} />;
 }
 
 function Loading() {
@@ -33,9 +57,8 @@ function Stat({ value, label, note }: { value: string; label: string; note?: str
 }
 
 async function Customer() {
-  await connection(); // database reads happen per request, never at build time
-  const run = await latestRun("bulk");
-  if (!run) {
+  const data = await loadRun();
+  if (!data) {
     return (
       <div className="mt-6">
         <EmptyState what="bulk simulation" />
@@ -43,7 +66,7 @@ async function Customer() {
     );
   }
 
-  const [o, buckets, convs, byConv] = await Promise.all([overview(run.id), aging(run.id), conversations(run.id), messagesForRun(run.id)]);
+  const { run, o, buckets, convs, byConv } = data;
   const tz = Object.fromEntries(convs.map((c) => [c.id, c.timezone]));
   const detail = Object.fromEntries(Object.entries(byConv).map(([id, msgs]) => [id, toDetailMessages(msgs, tz[Number(id)])]));
   const maxBalance = Math.max(...buckets.map((b) => b.startingBalanceCents), 1);
