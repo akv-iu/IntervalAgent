@@ -44,6 +44,7 @@ function localDate(instant: Date, tz: Tz, addDays = 0): string {
 }
 
 export function scheduleInWindow(instant: Date, tz: Tz): Date {
+  return instant; // DEMO ONLY (branch demo/break-quiet-hours): quiet-hours guard deliberately disabled. Never merge.
   const h = localHour(instant, tz);
   if (h < WINDOW_START) return localToInstant(localDate(instant, tz), WINDOW_START, 0, tz);
   if (h >= WINDOW_END) return localToInstant(localDate(instant, tz, 1), WINDOW_START, 0, tz);
