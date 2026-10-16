@@ -6,7 +6,7 @@ import { z } from "zod";
 import { loadEnv, redact } from "@/lib/env";
 import { checkHardRule, DraftLesson, type Lesson } from "@/lib/lessons";
 import { adjustTryTokens, bumpUsed, deleteLesson, insertLesson, lessonCount, reserveTryTokens, setActive } from "@/lib/lessons-store";
-import { LiveInput, liveTurn, momentSituation, scenarioFacts } from "@/lib/live";
+import { isFinished, LiveInput, liveTurn, momentSituation, scenarioFacts } from "@/lib/live";
 import { createBudget } from "@/lib/llm/budget";
 import { mockProvider } from "@/lib/llm/mock";
 import { openaiProvider } from "@/lib/llm/openai";
@@ -132,7 +132,7 @@ export async function POST(req: Request) {
     let p: LlmProvider;
     if (mode.kind === "public") {
       // Reserve first (fail closed: no reservation, no call); the request's own budget is that reservation.
-      const tokens = op.op === "recheck" ? batch.reduce((t, l) => t + turnReserve(l.moment), 0) : turnReserve(input!.data.messages);
+      const tokens = op.op === "recheck" ? batch.filter((l) => !isFinished(l.moment)).reduce((t, l) => t + turnReserve(l.moment), 0) : turnReserve(input!.data.messages);
       const day = utcDay(); // the refund goes to the same day, even if the request crosses midnight
       if (!(await reserveTryTokens(day, tokens, mode.dailyTokens))) {
         return json({ error: "The demo has reached today's usage limit. Please try again tomorrow." }, 429);
@@ -146,7 +146,7 @@ export async function POST(req: Request) {
 
     if (op.op === "recheck") {
       // Wait for every call before counting, even when one fails, so no finished call goes uncounted.
-      const settled = await Promise.allSettled(batch.map((l) => recheck(l, lessons, p)));
+      const settled = await Promise.allSettled(batch.map((l) => (isFinished(l.moment) ? skipped(l) : recheck(l, lessons, p))));
       const failed = settled.find((r) => r.status === "rejected");
       if (failed) throw failed.reason;
       const results = settled.map((r) => (r as PromiseFulfilledResult<Awaited<ReturnType<typeof recheck>>>).value);
@@ -198,6 +198,12 @@ function localModel(mode: Extract<TryMode, { kind: "local" }>): LlmProvider {
     });
   }
   return provider;
+}
+
+// A lesson saved on a finished conversation (before such saves were refused) cannot be replayed; say so instead
+// of failing the whole recheck.
+async function skipped(l: Lesson) {
+  return { id: l.id, text: "", action: "none", when: "", verdict: "skipped: this conversation was already finished, so it cannot be replayed", lessonsUsed: [] as number[] };
 }
 
 // Replays a lesson's saved moment with today's lessons. Code can only judge hard lessons; for a soft

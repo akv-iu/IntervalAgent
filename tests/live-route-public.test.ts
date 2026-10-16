@@ -194,3 +194,32 @@ test("when lessons cannot be read, the chat still works and visitors see no data
   expect(body.lessonsOff).toBeTruthy();
   expect(body.lessonsOff).not.toMatch(/password|recovery_|postgres/i);
 });
+
+// Outside review: a conversation where the agent already sent 10 messages is finished and cannot be replayed.
+const finished = Array.from({ length: 19 }, (_, i) => ({
+  role: i % 2 === 0 ? "agent" : "customer",
+  text: i % 2 === 0 ? "Hi Maya, this is Northside Fitness. Your $84.00 balance is past due." : "I don't want to pay you",
+  sentAt: new Date(Date.UTC(2026, 2, 10, 16, i * 10)).toISOString(),
+}));
+
+describe("finished conversations are refused before anything is saved or reserved", () => {
+  test("accepting a lesson on one", async () => {
+    const r = await post({ op: "accept", draftLesson: draft, beforeText: "b", afterText: "a", scenarioId: "S01", messages: finished });
+    expect(r.status).toBe(400);
+    expect(s.inserted).toBe(0);
+  });
+  test.each(["turn", "retry"])("%s on one", async (op) => {
+    const r = await post({ op, draftLesson: draft, scenarioId: "S01", version: "guarded", messages: finished });
+    expect(r.status).toBe(400);
+    expect(s.reserved).toEqual([]);
+    expect(s.calls).toBe(0);
+  });
+  test("a stored lesson on a finished conversation is skipped by recheck, the others still run", async () => {
+    s.lessons = [{ ...lesson(1), moment: finished as Lesson["moment"] }, lesson(2)];
+    const r = await post({ op: "recheck", page: 0 });
+    expect(r.status).toBe(200);
+    const { results } = await r.json();
+    expect(results.find((x: { id: number }) => x.id === 1).verdict).toMatch(/finished/);
+    expect(results.find((x: { id: number }) => x.id === 2).text).toBeTruthy();
+  });
+});

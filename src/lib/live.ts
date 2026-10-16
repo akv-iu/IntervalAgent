@@ -35,6 +35,10 @@ function followUpAt(after: Date, promise: string | null, tz: Tz): Date {
   return promised && promised > after ? promised : localToInstant(localDate(after, tz, 1), FOLLOW_UP_HOUR, 0, tz);
 }
 
+// After ten agent messages the conversation is over; it can be read, but not continued or replayed.
+export const isFinished = (messages: { role: string }[]) => messages.filter((m) => m.role === "agent").length >= LIVE_MAX_AGENT_TURNS;
+const FINISHED = "the agent has already sent ten messages; start a new conversation";
+
 export const LiveInput = z.object({
   scenarioId: z.string().refine((id) => SCENARIOS.some((s) => s.id === id), "unknown scenario"),
   version: z.enum(["baseline", "guarded"], { message: "version must be baseline or guarded" }),
@@ -45,7 +49,9 @@ export const LiveInput = z.object({
         .refine((m) => m.role !== "customer" || m.text.length <= MAX_TEXT, `messages are limited to ${MAX_TEXT} characters`),
     )
     .max(2 * LIVE_MAX_AGENT_TURNS)
-    .refine((ms) => ms.every((m, i) => i === 0 || Date.parse(m.sentAt) >= Date.parse(ms[i - 1].sentAt)), "messages must be in time order"),
+    .refine((ms) => ms.every((m, i) => i === 0 || Date.parse(m.sentAt) >= Date.parse(ms[i - 1].sentAt)), "messages must be in time order")
+    // Refused at the door, so a finished conversation is never saved as a lesson or reserves tokens.
+    .refine((ms) => !isFinished(ms), FINISHED),
 });
 export type LiveInput = z.infer<typeof LiveInput>;
 
@@ -89,7 +95,7 @@ export async function liveTurn(
   if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join("; "));
   const { scenarioId, version, messages } = parsed.data;
   const agentCount = messages.filter((m) => m.role === "agent").length;
-  if (agentCount >= LIVE_MAX_AGENT_TURNS) throw new Error("the agent has already sent ten messages; start a new conversation");
+  if (agentCount >= LIVE_MAX_AGENT_TURNS) throw new Error(FINISHED);
 
   const s = SCENARIOS.find((x) => x.id === scenarioId)!;
   const a = s.account;

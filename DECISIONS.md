@@ -439,3 +439,15 @@ Four commands go with it:
 **What Codex said:** check 1 found 5 small things. Fixed: the account has a timezone, not a city, so "Denver" became "Mountain Time"; the link said "Read the full conversation" but did not open it, now "Find Maya in the conversations below"; long replies could overflow at 360px; the button's hover color had too little contrast. Kept: when no conversation was paid, the timeline is left out rather than invented. Check 2 confirmed all five and found nothing new. (Codex also opened a browser on its own to check 360px and the conversation list; your browser check is still the one that counts.)
 
 **Honest note:** bulk-run messages do not store guard check results, so the timeline shows three events, not a "guard checks passed" step.
+
+---
+
+## Third outside review: two narrow fixes before sharing
+
+**What was wrong:**
+1. Someone could save a lesson on a conversation that had already ended (the agent had sent its ten messages). That lesson could never be replayed, so "Recheck lessons" failed for everyone and kept its token reservation. The page itself never creates such a lesson; it took a hand-made request.
+2. The code reads `.env` from disk, so Next.js listed `.env` among the files to package with a local build. The live site was not affected (Vercel builds from GitHub, where `.env` does not exist), but uploading a local build by hand could have carried your keys.
+
+**What changed:** a finished conversation is now refused at the door, before anything is saved or any tokens are reserved; rechecks skip any such lesson with a note instead of failing (none exist in the database: both saved lessons are short). `.env` files are excluded from build packaging; the build output was checked and lists none.
+
+**What Codex said:** check 1 and check 2 found no bugs and no way around the fix.
