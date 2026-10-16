@@ -159,7 +159,13 @@ export async function POST(req: Request) {
     const budgetText = isPublic
       ? "This request reached its usage limit. Try a shorter conversation."
       : "The token budget for this server session is used up. Restart the dev server to reset it.";
-    return json({ error: /budget/i.test(message) ? budgetText : message }, 400);
+    if (/budget/i.test(message)) return json({ error: budgetText }, 400);
+    // Public visitors get a plain message; the details (database, provider) stay in the server log.
+    if (isPublic) {
+      console.error(`live route: ${message}`);
+      return json({ error: "The demo hit a problem on our side. Please try again in a moment." }, 503);
+    }
+    return json({ error: message }, 400);
   } finally {
     // Add any overrun. Give back the unused part only after a success: a failed request may have lost a reply
     // OpenAI still charged for. If this write fails the reservation stays counted, which errs on the safe side.

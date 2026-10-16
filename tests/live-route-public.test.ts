@@ -33,7 +33,10 @@ vi.mock("../src/lib/lessons-store", () => ({
     s.managed++;
   },
   bumpUsed: async () => {},
-  lessonCount: async () => s.count,
+  lessonCount: async () => {
+    if (s.count < 0) throw new Error("password authentication failed for user 'recovery_reader'");
+    return s.count;
+  },
   reserveTryTokens: async (_day: string, n: number) => {
     s.reserved.push(n);
     return s.room;
@@ -115,7 +118,7 @@ test("a failed request keeps its whole reservation: a lost reply may still have 
   s.lessons = [1, 2, 3].map(lesson);
   s.failFirst = true;
   const r = await post({ op: "recheck", page: 0 });
-  expect(r.status).toBe(400);
+  expect(r.status).toBe(503);
   expect(s.done).toBeGreaterThan(0); // the siblings finished before counting
   expect(s.adjusted).toEqual([]); // nothing given back
 });
@@ -153,4 +156,12 @@ test("an empty recheck still counts toward the visitor's limit", async () => {
 test("off when the host has not opted in, even with APP_MODE=public", async () => {
   delete process.env.PUBLIC_TRY;
   expect((await post(opening)).status).toBe(404);
+});
+
+test("server errors reach visitors as a plain message, never database details", async () => {
+  s.count = -1; // makes the fake lessonCount fail below
+  const r = await post({ op: "accept", draftLesson: draft, beforeText: "b", afterText: "a", scenarioId: "S01", messages: reply });
+  const body = await r.json();
+  expect(r.status).toBe(503);
+  expect(body.error).not.toMatch(/password|recovery_|postgres/i);
 });
