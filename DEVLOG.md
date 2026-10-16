@@ -223,3 +223,9 @@ Honest record of what was built, how it was checked, and what changed after revi
 - Checked: tests first (`tests/live-rules.test.ts` three new blocks, `tests/promise.test.ts`), seen failing. `npm test` 534 passed; `npm run test:db` 30 passed; `npm run eval:replay` PASS, results JSON identical to the previous replay apart from run id and times; `npm run build` OK.
 - Changed after review (Codex gpt-6.1-sol): check 1, 10 fixed. Check 2 confirmed all 10, found 9: 4 wordings fixed; 5 caused by month names in `parsePromise` fixed by making month names guard-only.
 - Remaining limit: pattern-based; "as of today" balance wording and dates with a year are not read.
+
+## Task 14: CSV export  (2026-10-17)
+- Built: `src/lib/csv.ts` (`csvField` quotes `",\n\r`, doubles quotes, prefixes `'` on text starting with = + - @ tab CR; numbers untouched; `toCsv` labeled sections, CRLF); `GET /api/export.csv?runId=` (slug check matching the runs table, `isCompletedBulkRun` in `reports.ts`, then `overview()` and `aging()`; 400/404/503 plain text; attachment filename); link on the Customer page.
+- Checked: tests first (`tests/csv.test.ts` 21, `tests/db/reports.test.ts` +1), seen failing. `npm test` 555 passed; `npm run test:db` 31 passed; lint, typecheck, `npm run build` OK (route is dynamic). curl against the dev DB: 400 for empty and `../x`, 404 for unknown, 200 CSV for the latest bulk run; aging sums equal the overview totals.
+- Changed after review: Codex check 1 and check 2 found nothing. Own check: rate and days printed as `14` vs the page's `14.0`; fixed with a test.
+- Pending: Akshay's browser download check.

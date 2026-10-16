@@ -62,9 +62,14 @@ async function Customer() {
       />
 
       <section aria-labelledby="metrics">
-        <h2 id="metrics" className="text-xl font-semibold tracking-tight">
-          Recovery, simulated
-        </h2>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+          <h2 id="metrics" className="text-xl font-semibold tracking-tight">
+            Recovery, simulated
+          </h2>
+          <a href={`/api/export.csv?runId=${encodeURIComponent(run.id)}`} download className="text-sm font-medium text-accent-ink underline underline-offset-2">
+            Download CSV (overview and aging)
+          </a>
+        </div>
         <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-6 border-y border-line py-6 sm:grid-cols-4">
           <Stat value={formatCents(o.recoveredCents)} label="Recovered by cutoff" />
           <Stat value={formatCents(o.contactedBalanceCents)} label="Contacted balance" note="original balance of accounts contacted" />

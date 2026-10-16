@@ -397,3 +397,15 @@ Four commands go with it:
 **The recorded evals:** the replay still produces exactly the same results for all 35 recordings.
 
 **Honest limit:** this is still pattern reading. Each round finds rarer wordings; a rejected reply falls back to a safe message.
+
+---
+
+## Task 14: CSV export
+
+**What it does:** the Customer dashboard has a "Download CSV (overview and aging)" link. It downloads the same numbers the page shows for that run: the overview (recovered, contacted balance, recovery rate, days to payment, plans, promises, handoffs) and the aging table, with money in dollars.
+
+**Safety rules it follows:** it only reads the database. It only serves finished bulk runs (eval and picker runs get "not found"). A bad run ID gets a plain "400" message, an unknown one a plain "404", and a database failure a plain "503", never an error dump or a connection string. Text that a spreadsheet would run as a formula (starting with =, +, -, @) is made harmless with a leading apostrophe.
+
+**What Codex said:** check 1 and check 2 found no bugs. My own check against the real development data found one mismatch: the CSV said "14" where the page says "14.0%". Fixed with a test so both show one decimal.
+
+**Hand check:** the four aging rows add up to the overview totals ($16,178.61 contacted, $2,262.94 recovered), and 2,262.94 / 16,178.61 = 14.0%.

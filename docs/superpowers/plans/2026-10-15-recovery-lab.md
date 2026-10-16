@@ -652,8 +652,8 @@ Covers: FR-54, Review Focus 4.
 export function csvField(v: string | number | null): string; // null -> "", quote if [",\n\r], double quotes, prefix ' if starts with = + - @ \t \r
 export function toCsv(sections: { title: string; header: string[]; rows: (string | number | null)[][] }[]): string;
 ```
-- [ ] **Step 1: failing tests.** `csvField('a,b')` is `"a,b"`; `csvField('say "hi"')` is `"say ""hi"""`; `csvField('=SUM(A1)')` is `'=SUM(A1)` (prefixed, no quotes needed); `-5` as a number stays `-5` (only text gets neutralized). Route handler with `runId` missing gives 400; `../x` gives 400; unknown gives 404; an eval run ID gives 404; body never contains `postgres`.
-- [ ] **Step 2:** Implement with `overview()` and `aging()` from `reports.ts`. Manual check: downloaded CSV numbers equal the page. Commit `feat: CSV export`.
+- [x] **Step 1: failing tests.** `csvField('a,b')` is `"a,b"`; `csvField('say "hi"')` is `"say ""hi"""`; `csvField('=SUM(A1)')` is `'=SUM(A1)` (prefixed, no quotes needed); `-5` as a number stays `-5` (only text gets neutralized). Route handler with `runId` missing gives 400; `../x` gives 400; unknown gives 404; an eval run ID gives 404; body never contains `postgres`.
+- [x] **Step 2:** Implement with `overview()` and `aging()` from `reports.ts`. Manual check: downloaded CSV numbers equal the page. Commit `feat: CSV export`.
 
 ---
 

@@ -2,7 +2,7 @@ import type { BulkArtifact, Conversation } from "../../src/lib/artifact";
 import { allAccounts, importArtifact, seed } from "../../src/lib/db-admin";
 import { mockProvider } from "../../src/lib/llm/mock";
 import { runPicker, summarize } from "../../src/lib/picker";
-import { aging, conversations, evalGrid, latestRun, messages, messagesForRun, overview, pickerSummary } from "../../src/lib/reports";
+import { aging, conversations, evalGrid, isCompletedBulkRun, latestRun, messages, messagesForRun, overview, pickerSummary } from "../../src/lib/reports";
 import { runEval } from "../../src/lib/sim/eval";
 import { testSchema } from "./helpers";
 
@@ -153,4 +153,10 @@ test("all messages of a run come back in one query, grouped by conversation", as
   const byConv = await messagesForRun("bulk-a", db.pool);
   expect(Object.keys(byConv).map(Number).sort()).toEqual(list.map((c) => c.id).sort());
   expect(byConv[list[0].id][0]).toMatchObject({ seq: 1, role: "agent", body: "Hi" });
+});
+
+test("CSV export accepts only completed bulk runs", async () => {
+  expect(await isCompletedBulkRun("bulk-a", db.pool)).toBe(true);
+  expect(await isCompletedBulkRun("eval-r", db.pool)).toBe(false);
+  expect(await isCompletedBulkRun("bulk-missing", db.pool)).toBe(false);
 });

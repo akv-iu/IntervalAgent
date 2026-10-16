@@ -36,6 +36,12 @@ export async function latestRun(kind: RunRow["kind"], opts: { recordingSetId?: s
     : null;
 }
 
+// The CSV export serves completed bulk runs only; eval and picker runs are not customer data.
+export async function isCompletedBulkRun(runId: string, db: Db = getPool()): Promise<boolean> {
+  const r = await db.query(`select 1 from runs where id = $1 and kind = 'bulk' and status = 'complete'`, [runId]);
+  return r.rowCount === 1;
+}
+
 // Shared cohort for a completed bulk run: guarded demo conversations only.
 const BULK_COHORT = `
   from conversations c
