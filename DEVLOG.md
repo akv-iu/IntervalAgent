@@ -2,6 +2,15 @@
 
 Honest record of what was built, how it was checked, and what changed after review. Automated checks are marked separately from Akshay's own review. V1 entries record separate Codex CLI reviews; V2 entries explicitly distinguish self-review from independent review.
 
+## V2 Phase 9: durable four-role mock exchanges (2026-10-20)
+
+- Akshay reported the existing application working, then said "move ahead". Secret-scanned/staged only completed Phase 8 files and the branch-policy correction, committed/pushed `7914b5c` to `v2`, and verified the remote hash. `main` remains `61b7ece`. User skill/setup files and the autoskills dependency remain untouched/uncommitted. Phase 9 stays local.
+- Added four deterministic role functions, a bounded controller, append-only scoped/parent-linked checkpoints in migration 010, pinned mock instruction manifests/source text/empty lesson version, exact final-review linkage and an offline CLI. The DB worker uses the same controller; legacy runs retain their prior recipe. Unavailable tools get one counted retry. Mock role execution consumes no model requests/tokens.
+- Tests first: missing workflow modules and five missing DB behaviors failed. Initial integration passed eight targeted offline and 43 DB tests. A negative test initially over-specified its error message; the operation was already rejected and only that expectation changed.
+- Self-review 1 reproduced/fixed dropped draft evidence and incomplete investigation being approved. Self-review 2 reproduced/fixed nested unobserved evidence, late insertion, nonexistent final-review links and SQL null identity comparisons. Verification of that pass also caught ignored instruction pins and envelopes repeating run creation time; both failed before fixing. No separate reviewer model was invoked.
+- Verified 718 offline tests/50 files and all 129 DB tests/nine files (435.15 seconds), typecheck, lint, pinned V1 replay gate, 36 frozen input hashes and production build. CLI assertions cover deterministic output, both businesses, correction, missing-policy escalation and invalid options. All 16 server manifests exclude private environment/evaluation assets. Final text/link/credential/whitespace checks passed; cleanup confirmed zero temporary schemas/V2 test roles remain.
+- No UI/routes/dependency addition, application migration, hosted worker, public activation, real OAuth check or model call. Existing tracing/Vitest/PG warnings remain. Reviewer checks a fixed acknowledgement, not substantive billing resolution. Provider dispatch/output checkpoints, active learning, proposals/actions and UI remain later work. Contract: `docs/v2/WORKFLOW.md`; gate: `docs/v2/PHASE9-REVIEW.md`.
+
 ## V2 Phase 8: run resources and mock tool checkpoints (2026-10-20)
 
 - On "move ahead", pushed verified Phase 7 as `61b7ece`, excluding/preserving the user's new skill/setup files and autoskills dependency. An initial auth-import timeout passed isolated/full reruns before push. The user selected antislop during for this session; no global preference changed. Phase 8 remains local.

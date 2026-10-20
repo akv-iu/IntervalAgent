@@ -1,5 +1,13 @@
 # Decisions and fixes
 
+## V2 Phase 9: the four mock roles exchange durable messages (October 20, 2026)
+
+Phase 8 was pushed to `v2` as `7914b5c`; future V2 work stays on that branch. The new worker connects Customer, Coordinator, Investigator and Reviewer through stored, addressed messages. Restarted workers reuse completed outputs. Unsupported wording triggers a policy recheck and correction; missing evidence or two unsuccessful corrections escalate to a human. [Offline demo and limits](docs/v2/WORKFLOW.md).
+
+Both self-review passes reproduced and fixed grounding, deadline, trace and instruction-version issues. All 718 offline tests, 129 database tests, typecheck, lint, build, V1 replay, fixture integrity and offline demo checks pass. Temporary test schemas/roles were cleaned up. [Detailed evidence](docs/v2/DECISIONS.md), [delivery gate](docs/v2/PHASE9-REVIEW.md).
+
+No required manual UI test now. Optional: `npm run workflow:v2:mock -- --reject-once` prints the rejected and corrected exchange. This is deterministic mock behavior, with no OpenAI cost, customer publication, application migration or financial change. Phase 9 remains local; model-backed billing investigation and the V2 interface remain pending.
+
 ## V2 Phase 8: retain progress and account for retries (October 20, 2026)
 
 Phase 7 was pushed as `61b7ece`. The mock worker now saves its recipe and completed tool results, so a replacement worker can resume without repeating successful reads. A shared ledger counts attempts and token reservations across restarts. Unknown outcomes keep their allowance, known usage settles once, and resource exhaustion pauses for human review. No live model is connected yet. [Run contract](docs/v2/RUNS.md).

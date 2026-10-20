@@ -5,7 +5,7 @@ import { z } from "zod";
 import { slug } from "../artifact";
 import { isStop } from "../patterns";
 import { Records, sameAccount } from "./records";
-import { EvidenceRef } from "./contracts";
+import { AgentMessage, EvidenceRef } from "./contracts";
 import { CaseEvent, CaseRecord, Principal, assertCaseAccess, transitionCase } from "./state";
 import { transaction } from "./transaction";
 
@@ -157,7 +157,7 @@ export function caseStore(pool: Pool) {
 export const JobLease = CaseKey.extend({ caseRevision: revision, workerId: slug, token: z.uuid() });
 const Lease = JobLease;
 export type ClaimedJob = { lease: z.infer<typeof Lease>; accountId: string; records: unknown };
-const MockResult = z.strictObject({ mode: z.literal("mock"), summary: z.string().trim().min(1).max(1000), evidenceRefs: z.array(EvidenceRef).min(1).max(200) });
+const MockResult = z.strictObject({ mode: z.literal("mock"), summary: z.string().trim().min(1).max(1000), evidenceRefs: z.array(EvidenceRef).max(200), workflow: z.strictObject({ decision: z.enum(["approve", "escalate"]), revisionCycles: z.number().int().min(0).max(2), finalMessageId: slug }).optional() }).refine((r) => r.evidenceRefs.length>0 || r.workflow?.decision==="escalate", "missing evidence can only escalate");
 export type MockResult = z.infer<typeof MockResult>;
 interface JobRow { case_revision: string; attempts: number }
 
@@ -220,6 +220,19 @@ export function jobStore(pool: Pool) {
         for (const ref of result.evidenceRefs) {
           if (!sameAccount(ref, current) || ref.recordType === "tool_result"
             || !tables[ref.recordType].some((r) => r.id === ref.recordId && r.version === ref.version)) throw new Error("unverifiable job evidence");
+        }
+        if (result.workflow) {
+          const checkpoint = (await c.query(`select m.message,
+            (select count(*)::int from v2_agent_messages where ${where} and case_revision=$4 and message->>'kind'='review_result') reviews
+            from v2_agent_messages m join v2_case_runs r using(business_id,workspace_id,case_id,case_revision,run_id)
+            where m.business_id=$1 and m.workspace_id=$2 and m.case_id=$3 and m.case_revision=$4 and m.message_id=$5
+              and r.deadline_at>clock_timestamp() and r.blocked_reason is null
+              and m.ordinal=(select max(ordinal) from v2_agent_messages where ${where} and case_revision=$4)`, [...args(lease),lease.caseRevision,result.workflow.finalMessageId])).rows[0];
+          if (!checkpoint) throw new Error("final workflow checkpoint missing or expired");
+          const message = AgentMessage.parse(checkpoint.message);
+          const approved = message.kind==="review_result" && message.payload.decision==="approve";
+          if ((result.workflow.decision==="approve" ? !approved : message.kind!=="escalation") || checkpoint.reviews-1!==result.workflow.revisionCycles
+            || JSON.stringify(message.evidenceRefs)!==JSON.stringify(result.evidenceRefs)) throw new Error("final workflow checkpoint mismatch");
         }
         await finishCase(c, current, lease.workerId, "Mock investigation complete; operator review required.");
         await c.query(`update v2_case_jobs set state='succeeded',result=$5,lease_token=null,lease_until=null,finished_at=now(),updated_at=now() where ${where} and case_revision=$4`, [...args(lease), lease.caseRevision, JSON.stringify(result)]);

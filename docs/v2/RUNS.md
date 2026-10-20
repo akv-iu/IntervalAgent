@@ -1,12 +1,12 @@
 # V2 run resources and tool checkpoints
 
-The default mock worker now uses a persisted run for each accepted source-message job. It pins a mock investigation recipe, record hash, policy version and limits, reserves each tool dispatch and reuses successfully checkpointed results after a lease is reclaimed. It still performs one investigation and pauses for human review. Four-role orchestration, model prompts, review cycles, customer publication and financial effects remain later work.
+The default mock worker uses a persisted run for each accepted source-message job. It pins its mock instruction manifests, record hash, policy version and limits, reserves each tool dispatch and reuses successful tool/role checkpoints after lease recovery. Its [four-role mock workflow](WORKFLOW.md) performs bounded review and pauses for a human. Provider dispatch/model prompts, customer publication, active lessons and financial effects remain later work.
 
 ## Storage and deployment
 
 Migration 009 adds private `v2_case_runs`, `v2_run_attempts` and `v2_run_daily_usage` tables. All run/attempt foreign keys retain business, workspace, case and source revision. The immutable case snapshot remains the source of truth; changed records invalidate the run rather than silently changing its pinned recipe. A different accepted message revision gets a separate run.
 
-Prepare the isolated development database through migration 009 as owner, then provision the [worker role](../../db/ops/v2_worker_role.sql). For an existing worker login, apply the new run/attempt/daily-usage grant statements as owner without repeating `CREATE ROLE`. The role may insert accounting/checkpoints and update narrow usage/result columns; it cannot rewrite pinned snapshots, reservation amounts, operation identities or deadlines, delete accounting, alter facts, or gain V1/session access. Visitors/operators receive no new grants or HTTP endpoints in this phase.
+Prepare the isolated development database through migration 010 as owner, then provision the [worker role](../../db/ops/v2_worker_role.sql). For an existing worker login, apply the new grant statements as owner without repeating `CREATE ROLE`, including append-only agent messages and selected customer-message read columns. The role may insert accounting/checkpoints and update narrow usage/result columns; it cannot rewrite pinned snapshots, reservation amounts, operation identities, agent messages or deadlines, delete accounting, alter facts, or gain V1/session access. Visitors/operators receive no new grants or HTTP endpoints in this phase.
 
 The worker CLI and environment variables are unchanged. No deployed database migration, role setup, public activation or hosted worker is performed by this implementation.
 
@@ -23,7 +23,7 @@ The deadline starts when the worker first opens the run, excluding initial queue
 - `reserveTool` validates the account before dispatch and increments the run's tool count. A successful checkpoint, including a valid empty result, is returned without redispatch or another charge. An unavailable result can be tried once more. Every operation has at most two attempts, including reservations abandoned across leases. Parallel duplicate reservations on the same lease are denied.
 - `settleTool` validates the result and its scoped record/version evidence before checkpointing it. A retry can reuse completed results; pending unknown work needs a fresh, separately counted reservation under a replacement lease. STOP, newer evidence, closed cases, expired/replaced leases and wrong scope fence stale reservations/results. The mock uses only the trusted read-tool implementation; model text cannot author tool checkpoints.
 
-Rows retain unknown reservations and history for audit. There is no cleanup/refund job, run-reset endpoint, owner budget editor or automated escalation recovery. Those do not need to exist for this bounded mock slice. Do not delete funding records while their attempts may still require reconciliation. Model-output checkpoints, per-role prompt/lesson pins and the two-review-cycle limit must arrive with the actual four-role workflow before live dispatch.
+Rows retain unknown reservations and history for audit. There is no cleanup/refund job, run-reset endpoint, owner budget editor or automated escalation recovery. Do not delete funding records while their attempts may still require reconciliation. [Phase 9's mock workflow](WORKFLOW.md) now pins four mock instruction manifests/source text and an empty lesson version, checkpoints role envelopes and enforces two review revision cycles. This is not a provider-output checkpoint or active lesson implementation; both remain required with live dispatch.
 
 ## Verification
 

@@ -1,10 +1,10 @@
 # V2 mock worker
 
-This is a deterministic background-work demonstration. It reads account history and policy through the scoped tools, stores a result labeled `mock`, and moves the case to `awaiting_human`. It does not run the four model-backed agents, send a customer reply, approve a proposal or change a balance.
+This is a deterministic background-work demonstration. Four mock roles exchange persisted internal messages, read account history and policy through scoped tools, review a pending acknowledgement and move the case to `awaiting_human`. These are not model-backed agents; the worker does not publish a customer reply, approve a financial proposal or change a balance. See the [workflow and offline demo](WORKFLOW.md).
 
 ## Running
 
-Use a separately prepared V2 development database with migrations 001-009 applied by its migration owner. Migration 006 queues the latest eligible customer message in existing investigating cases; migration 009 adds private run accounting/checkpoints. Closed and contact-suppressed cases are excluded. The worker never runs migrations itself. Existing worker logins need the new run-table grants before running this version.
+Use a separately prepared V2 development database with migrations 001-010 applied by its migration owner. Migration 006 queues the latest eligible customer message in existing investigating cases; migration 009 adds private run accounting/checkpoints and migration 010 adds internal agent messages. Closed and contact-suppressed cases are excluded. The worker never runs migrations itself. Existing worker logins need the new grants before running this version, including append-only agent messages and selected customer-message read columns.
 
 Create the dedicated login with [v2_worker_role.sql](../../db/ops/v2_worker_role.sql), supplying its password outside source control. The script grants only the V2 reads/updates/audit inserts needed by this mock worker. It cannot access V1 tables, edit case facts, enqueue jobs, insert customer messages, delete cases or change the schema. Worker credentials are trusted server credentials across the configured businesses, not a visitor or operator session.
 
@@ -27,6 +27,6 @@ The first command polls until SIGINT/SIGTERM. The second makes one claim attempt
 
 ## Limits
 
-This is one persisted mock investigation per message with [run accounting and tool checkpoints](RUNS.md). Its recipe, policy, record hash and limits are pinned; successful tools are reused after recovery. Model reservation/settlement primitives exist but no model dispatcher calls them yet. There is no heartbeat, four-role workflow, model-output checkpoint, actual prompt/lesson pinning, customer publication or financial action. The timeout fences late results but cannot cancel arbitrary handler I/O; cooperative cancellation and full usage integration are required before external model calls. Fixed limits have not been load tested. Injected custom handlers are a trusted testing hook; the CLI always uses the checkpointed default.
+This is one persisted mock workflow per message with [run accounting and checkpoints](RUNS.md). Its mock instructions, source text, empty lesson set, policy, record hash and limits are pinned; successful tools and role outputs are reused after recovery. There is no heartbeat, provider dispatcher/model-output checkpoint, active learning, customer publication or financial action. The timeout fences late results but cannot cancel arbitrary handler I/O; cooperative cancellation and full usage integration are required before external model calls. Fixed limits have not been load tested. Injected custom handlers are a trusted testing hook; the CLI always uses the checkpointed default.
 
 Automated checks use isolated schemas in `TEST_DATABASE_URL`, including an abruptly exited child process, a restarted CLI, rollback/concurrency tests and temporary restricted database roles. No application-database migration or production login provisioning is part of those checks.

@@ -7,21 +7,24 @@ import { JobLease } from "./case-store";
 import { Records, activePolicy, sameAccount } from "./records";
 import { ToolResult } from "./tools";
 import { transaction } from "./transaction";
+import { AgentMessage } from "./contracts";
+import { MessageStep, MockWorkflow, makeAgentMessage, mockInstructions } from "./mock-agents";
 
 const limits = { modelRequests: 12, toolCalls: 16, tokens: 24000, outputTokens: 600, seconds: 180 } as const;
 const DAILY_TOKENS = 24000;
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const Snapshot = z.strictObject({
-  mode: z.literal("mock"), version: z.literal("mock-investigation-2"), recordsHash: digest, policyVersion: z.number().int().positive(),
+  mode: z.literal("mock"), version: z.enum(["mock-investigation-2", "mock-workflow-1"]), recordsHash: digest, policyVersion: z.number().int().positive(),
   instruction: z.string().min(1).max(2000), summary: z.string().min(1).max(1000),
   limits: z.strictObject({ modelRequests: z.literal(12), toolCalls: z.literal(16), tokens: z.literal(24000), outputTokens: z.literal(600), seconds: z.literal(180) }),
   steps: z.array(z.strictObject({ operationKey: slug, request: ToolRequest })).length(2),
-});
+  workflow: MockWorkflow.optional(),
+}).refine((s) => (s.version === "mock-workflow-1") === (s.workflow !== undefined), "workflow version mismatch");
 const Model = z.strictObject({ operationKey: slug, role: AgentRole, inputTokens: z.number().int().min(1).max(limits.tokens-limits.outputTokens), requestHash: digest });
 const Tool = z.strictObject({ operationKey: slug, request: ToolRequest });
 const Usage = z.strictObject({ input: z.number().int().min(0).max(1000000), output: z.number().int().min(0).max(1000000) }).nullable();
 type Lease = z.infer<typeof JobLease>;
-type Reason = "model_requests" | "tool_calls" | "tokens" | "daily_tokens" | "deadline" | "operation_attempts" | "reservation_overrun";
+type Reason = "model_requests" | "tool_calls" | "tokens" | "daily_tokens" | "deadline" | "operation_attempts" | "reservation_overrun" | "agent_messages";
 export class RunLimit extends Error { constructor(public reason: Reason) { super(`Run limit: ${reason}`); } }
 const where = "business_id=$1 and workspace_id=$2 and case_id=$3 and case_revision=$4";
 const args = (l: Lease) => [l.businessId, l.workspaceId, l.caseId, l.caseRevision];
@@ -29,7 +32,7 @@ const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(valu
   if (part && typeof part==="object" && !Array.isArray(part)) return Object.fromEntries(Object.entries(part).sort(([a],[b]) => a<b ? -1 : a>b ? 1 : 0));
   return part;
 })).digest("hex");
-interface RunRow { run_id: string; snapshot: unknown; model_calls: number; tool_calls: number; charged_tokens: number; blocked_reason: Reason | null; within_deadline: boolean }
+interface RunRow { run_id: string; snapshot: unknown; started_at: Date; model_calls: number; tool_calls: number; charged_tokens: number; blocked_reason: Reason | null; within_deadline: boolean }
 interface AttemptRow { attempt_id: string; kind: "model" | "tool"; role: string; request: unknown; lease_token: string; status: string; capacity: number; day: string | Date; actual_input: number | null; actual_output: number | null; result: unknown }
 type Context = { lease: Lease; run: RunRow; snapshot: z.infer<typeof Snapshot>; records: Records; accountId: string };
 type Reservation = { blocked: Reason } | { attemptId: string; result: z.infer<typeof ToolResult> | null };
@@ -47,7 +50,10 @@ export function runStore(pool: Pool) {
       if (!run) {
         const policy = activePolicy(records, { ...lease, accountId });
         if (!policy) throw new Error("run policy missing");
-        const snapshot = Snapshot.parse({ mode: "mock", version: "mock-investigation-2", recordsHash: hash(records), policyVersion: policy.version, limits,
+        const source = (await c.query(`select body from v2_case_messages where business_id=$1 and workspace_id=$2 and case_id=$3 and revision=$4`, args(lease))).rows[0];
+        if (!source) throw new Error("run source message missing");
+        const snapshot = Snapshot.parse({ mode: "mock", version: "mock-workflow-1", recordsHash: hash(records), policyVersion: policy.version, limits,
+          workflow: { sourceText: source.body, lessonVersion: "none", instructions: mockInstructions },
           instruction: "Read scoped account history and effective policy. Pause for human review without publishing or applying changes.",
           summary: "Mock account and policy lookup complete; human review required.",
           steps: [{ operationKey: "account-history", request: { name: "account_history", accountId } }, { operationKey: "policy-lookup", request: { name: "policy_lookup", accountId } }],
@@ -104,6 +110,47 @@ export function runStore(pool: Pool) {
   }
   return {
     async open(lease: unknown) { return withRun(lease, async (_c, context) => ({ runId: context.run.run_id, snapshot: context.snapshot })); },
+    async agentMessage(rawLease: unknown, rawStep: unknown, generate: () => unknown): Promise<AgentMessage> {
+      const step = MessageStep.parse(rawStep);
+      const outcome = await withRun(rawLease, async (c, context) => {
+        const { lease, run, snapshot } = context;
+        if (!snapshot.workflow) throw new Error("run has no role workflow");
+        if (run.blocked_reason) return { blocked: run.blocked_reason };
+        if (!run.within_deadline) return block(c, context, "deadline");
+        const messageContext = { businessId: lease.businessId, workspaceId: lease.workspaceId, caseId: lease.caseId, accountId: context.accountId, runId: run.run_id, createdAt: new Date().toISOString() };
+        const prior = (await c.query(`select message from v2_agent_messages where ${where} and operation_key=$5`, [...args(lease), step.operationKey])).rows[0];
+        if (prior) {
+          const saved = AgentMessage.parse(prior.message);
+          const expected = makeAgentMessage({ ...messageContext, createdAt: saved.createdAt }, step, { kind: saved.kind, payload: saved.payload, evidenceRefs: saved.evidenceRefs });
+          if (hash(saved)!==hash(expected)) throw new Error("agent message context conflict");
+          return { message: saved };
+        }
+        const count = (await c.query(`select count(*)::int n from v2_agent_messages where ${where}`, args(lease))).rows[0].n as number;
+        if (count>=18) return block(c, context, "agent_messages");
+        if (step.parentMessageId) {
+          const parent = (await c.query(`select message from v2_agent_messages where ${where} and message_id=$5`, [...args(lease), step.parentMessageId])).rows[0];
+          if (!parent) throw new Error("agent message parent missing");
+          if (AgentMessage.parse(parent.message).recipient!==step.sender) throw new Error("agent message parent recipient mismatch");
+        }
+        const message = makeAgentMessage(messageContext, step, generate());
+        const observed = (await c.query(`select result from v2_run_attempts where ${where} and kind='tool' and status='succeeded'`, args(lease))).rows.flatMap((r) => ToolResult.parse(r.result).evidenceRefs);
+        const observedKeys = new Set(observed.map(hash));
+        const refs = [...message.evidenceRefs, ...(message.kind === "proposal" && message.payload.resolution ? message.payload.resolution.evidenceRefs : [])];
+        if (refs.some((ref) => !observedKeys.has(hash(ref)))) throw new Error("agent message evidence was not observed");
+        const inserted = await c.query(`insert into v2_agent_messages(business_id,workspace_id,case_id,case_revision,run_id,operation_key,message_id,parent_message_id,ordinal,message)
+          select $1,$2,$3,$4,$5,$6,$7,$8,$9,$10 from v2_case_runs where ${where} and deadline_at>clock_timestamp()
+          and exists(select 1 from v2_case_jobs where ${where} and lease_token=$11 and lease_until>clock_timestamp()) returning message_id`,
+        [...args(lease), run.run_id, step.operationKey, message.messageId, message.parentMessageId, count+1, JSON.stringify(message), lease.token]);
+        if (!inserted.rowCount) {
+          const valid = (await c.query(`select lease_until>clock_timestamp() valid from v2_case_jobs where ${where} and lease_token=$5`, [...args(lease),lease.token])).rows[0]?.valid;
+          if (!valid) throw new Error("worker lease invalid");
+          return block(c, context, "deadline");
+        }
+        return { message };
+      });
+      if ("blocked" in outcome) throw new RunLimit(outcome.blocked);
+      return outcome.message;
+    },
     async reserveModel(lease: unknown, raw: unknown) {
       const input = Model.parse(raw), slot = await reserve(lease, input.operationKey, "model", input.role, input, input.inputTokens+limits.outputTokens);
       if ("blocked" in slot) throw new RunLimit(slot.blocked);

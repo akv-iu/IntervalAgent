@@ -1,6 +1,6 @@
 # Recovery Lab Version 2: implementation plan
 
-Status: Phases 1-7 implemented; Phase 8 adds a run-resource ledger, pinned mock recipes and tool checkpoints (Task 3E), with verification in [DECISIONS.md](DECISIONS.md). Model reservation/settlement primitives exist but no live dispatcher uses them yet. Task 3 still needs actual prompt/lesson pins and per-role output checkpoints with the four-role runtime before live dispatch. Model-backed agents and UI are not started. See [API.md](API.md), [OPERATORS.md](OPERATORS.md), [WORKER.md](WORKER.md) and [RUNS.md](RUNS.md).
+Status: Phase 8's run accounting is pushed to `v2` as `7914b5c`. Phase 9 adds a durable four-role mock workflow, pinned mock instruction manifests and bounded review revisions; verification is recorded in [DECISIONS.md](DECISIONS.md). Provider dispatch/model-output checkpoints, active lesson pins, substantive billing proposals and UI remain planned. Task 3/4 release gates remain open. See [workflow demo](WORKFLOW.md), [API.md](API.md), [OPERATORS.md](OPERATORS.md), [WORKER.md](WORKER.md) and [RUNS.md](RUNS.md).
 Date: October 20, 2026.
 Build contract: [SPEC.md](SPEC.md). V2 requirement IDs in this plan refer to that document.
 
@@ -102,6 +102,8 @@ Phase 8 / Task 3E: Phase 7 pushed as `61b7ece`. The default mock worker pins its
 Done when: refresh preserves a case; duplicate submissions create one task; two workers cannot both commit a step; restart resumes work; cross-business reads/writes fail; case changes invalidate stale work. No dependence on a serverless request staying alive.
 
 ### Task 4: Run the four-agent workflow end to end
+
+Phase 9 / Task 3F and mock foundation for Task 4: six normal role envelopes are persisted with scoped parent links and observed tool evidence. Unsupported mock wording triggers targeted policy reinvestigation; two unsuccessful revision cycles or missing evidence escalate. Instructions/source text and an explicit empty lesson version are pinned. Legacy runs keep their prior recipe. `npm run workflow:v2:mock` demonstrates both fictional businesses offline; the existing DB worker uses the same controller with durable checkpoints. This phase stays local until the next "move ahead". It does not complete Task 4: the Reviewer checks a fixed acknowledgement, no substantive resolution is proposed, no reply is published and no provider runs.
 
 Requirements: V2-FR-01, 05, 07-15, 17-18, 21, 24; V2-NFR-04-08, 10.
 

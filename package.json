@@ -16,6 +16,7 @@
     "eval:replay": "tsx scripts/eval.ts --provider replay --gate",
     "fixtures:v2:check": "tsx scripts/check-v2-fixtures.ts",
     "worker:v2:mock": "tsx scripts/v2-mock-worker.ts",
+    "workflow:v2:mock": "tsx scripts/v2-mock-workflow.ts",
     "test:db": "vitest run --config vitest.db.config.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
