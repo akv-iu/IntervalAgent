@@ -219,6 +219,8 @@ export function jobStore(pool: Pool) {
         const ownedJob = await owned(c, lease);
         if (!ownedJob) return false;
         const { current, row } = ownedJob, data = scopedFacts(row.facts, current);
+        const run=(await c.query(`select snapshot from v2_case_runs where ${where} and case_revision=$4`,[...args(lease),lease.caseRevision])).rows[0];
+        if (run?.snapshot.mode==="model_test") throw new Error("model-test runs cannot complete mock jobs");
         const tables = { account: data.accounts, invoice: data.invoices, payment: data.payments, allocation: data.allocations, cancellation: data.cancellations, credit: data.credits, policy: data.policies };
         for (const ref of result.evidenceRefs) {
           if (!sameAccount(ref, current) || ref.recordType === "tool_result"

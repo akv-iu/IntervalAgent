@@ -1,5 +1,15 @@
 # Decisions and fixes
 
+## V2 Phase 13: four roles share the durable model path (October 20, 2026)
+
+Phase 12 is already pushed as `913b0f9`; work resumed after the usage pause. The new local slice runs six role tasks through the SDK/checkpoints with fake HTTP. Coordinator responses choose allowed scoped reads, Investigator sees their actual results, and a code guard checks the proposal independently of Reviewer. Both business policies are covered. [Workflow and boundaries](docs/v2/MODEL-WORKFLOW.md), [product status](docs/v2/STATUS.md).
+
+A separate `model_test` mode pins the model and full prompts, prevents mixing with ordinary mock runs, and blocks mock job completion. These are internal reviewed results; model revision routing and case/job completion remain unfinished. No customer reply, financial effect or live activation is introduced.
+
+Both self-review passes reproduced and fixed nested scope/data leaks and missing parent context before model dispatch. Offline checks pass all 776 tests, plus typecheck, lint, build, replay and fixture integrity. All 155 DB tests/11 files also pass, including the legacy worker and restricted permissions; temporary resources were cleaned up. [Evidence](docs/v2/DECISIONS.md).
+
+No manual browser test is needed now. Phase 13 stays local for review; no paid call, application migration, deployment or production branch change was made.
+
 ## V2 Phase 12: controlled OpenAI calls, still disabled in the worker (October 20, 2026)
 
 Phase 11 is pushed to `v2` as `73e86ac`; `main` is unchanged. This local slice adds the SDK adapter that future live agents will use. One reserved attempt makes at most one SDK request; timeout/cancellation and usage mapping feed the existing durable checkpoint controls. The default worker still uses mocks. [Start with the product status page](docs/v2/STATUS.md), then [adapter details](docs/v2/MODEL-STEPS.md).

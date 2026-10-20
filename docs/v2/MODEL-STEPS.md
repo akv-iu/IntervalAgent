@@ -40,3 +40,9 @@ Successful usage maps prompt/completion counts into the existing accounting cont
 The key must be explicitly supplied and contain no whitespace; there is no environment-key fallback. The endpoint is fixed to `https://api.openai.com/v1`, ambient organization/project/admin credentials are disabled, and SDK logging is off. The installed SDK also reads `OPENAI_CUSTOM_HEADERS`, so construction rejects that ambient setting rather than allowing hidden header overrides. These are adapter boundaries, not an activation or spend-control setup.
 
 Verification uses the real installed SDK with injected fake HTTP responses, not a mocked SDK method. Tests cover request fields, no retries for HTTP/network errors, timeout/cancellation, credential/endpoint/logging behavior, refusal/incomplete output and usage mapping. Database cases confirm dispatch follows reservation, output is reused and a server failure retains one full reservation. No real OpenAI request was made; model compatibility, output quality and live latency remain unverified.
+
+## Phase 13: scoped role tasks
+
+`ModelStepSpec.task` optionally selects one of six versioned role tasks. It is required for the new `model_test` run mode and forbidden in ordinary mock runs; legacy generic checkpoint tests retain their old behavior. `openModelTest` pins the model and all six actual prompt strings before dispatch. `prepareModelStep` uses those saved prompts, checks task routing/source/scope/allowed tools, and pins the task discriminator in both requests. `finishModelStep` checks the assigned output kind and selected-tool allowlist inside the usage/output transaction. Invalid task output retains known usage and can use the existing single corrective attempt. Scope, nested body schemas and parent-kind checks run before dispatch.
+
+This test provenance is distinct from live generation and cannot be converted to/from an existing mock run. [Workflow and lifecycle limits](MODEL-WORKFLOW.md).

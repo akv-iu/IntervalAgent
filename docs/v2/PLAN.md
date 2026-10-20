@@ -1,6 +1,6 @@
 # Recovery Lab Version 2: implementation plan
 
-Status: Phase 12 is complete and verified for the user-requested push to `v2`. It adds the single-attempt OpenAI SDK adapter with fake-HTTP verification; the default worker remains mock. Work is paused at the user's request until usage resets and they resume. Live four-role integration, active lessons, operator approval/actions and UI remain planned; Task 3/4 release gates stay open. Start with [product status](STATUS.md); see [model-step contract](MODEL-STEPS.md) and [verification](DECISIONS.md).
+Status: Phase 12 is pushed to `v2` as `913b0f9`. Work resumed on Phase 13: six role tasks use durable model checkpoints, pinned test provenance and response-selected scoped tools in an internal fake-HTTP workflow. The default worker remains mock; final validation is recorded in [DECISIONS.md](DECISIONS.md). Start with [product status](STATUS.md) and the [model workflow contract](MODEL-WORKFLOW.md). Model lifecycle/revision integration, UI, actions and learning remain open; Task 3/4 release gates are not complete.
 Date: October 20, 2026.
 Build contract: [SPEC.md](SPEC.md). V2 requirement IDs in this plan refer to that document.
 
@@ -108,6 +108,8 @@ Phase 9 / Task 3F and mock foundation for Task 4: six normal role envelopes are 
 Requirements: V2-FR-01, 05, 07-15, 17-18, 21, 24; V2-NFR-04-08, 10.
 
 Phase 10 / substantive mock billing: new runs pin `mock-billing-1` and four billing instruction manifests. Five scoped tools provide invoice/payment/cancellation/policy facts. Customer proposes only a unique verified candidate and eligible credit; Reviewer independently recomputes the existing proposal preview and checks finding, evidence, amounts and pending wording. Completion rechecks the reviewed draft and source records. The reference proposal leaves $14 pending; the second business's stricter policy permits payment-only allocation leaving $34. Ambiguous/missing/contradictory evidence escalates. Prior run recipes remain supported. This phase stays local until the next "move ahead"; provider integration and actual financial approval/actions remain later work.
+
+Phase 13 / internal transport integration: `model-billing-test-1` pins `model_test` provenance, a model and six role-task prompts. Coordinator responses select allowlisted tools; all four roles pass through model reservations/checkpoints and an independent code guard. Tests inject scripted HTTP below the SDK. A return is an internal reviewed result; it does not finish the job/case or activate live calls. Model revision routing, lifecycle completion, public presentation and live evidence remain required. [Contract](MODEL-WORKFLOW.md).
 
 - Implement Customer, Coordinator, Investigator, and Reviewer prompts and output validation using the provider abstraction.
 - Route structured requests/findings/reviews through persisted tasks. Investigator reads independent evidence concurrently where appropriate.

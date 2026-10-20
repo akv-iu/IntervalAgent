@@ -5,23 +5,26 @@ import { slug } from "../artifact";
 import { AgentRole, ToolRequest } from "./contracts";
 import { JobLease } from "./case-store";
 import { Records, activePolicy, sameAccount } from "./records";
-import { ToolResult } from "./tools";
+import { ToolResult, toolResultInScope } from "./tools";
 import { transaction } from "./transaction";
 import { AgentMessage } from "./contracts";
 import { MessageStep, MockWorkflow, makeAgentMessage } from "./mock-agents";
 import { billingRecipe, billingInstructions } from "./billing";
 import { ModelStepSpec, ModelRequests, ModelUsage, modelInputCapacity } from "./model-contracts";
+import { parseRoleInput, roleInstruction, rolePrompts, RolePrompts, validateRoleOutput } from "./role-tasks";
 
 const limits = { modelRequests: 12, toolCalls: 16, tokens: 24000, outputTokens: 600, seconds: 180 } as const;
 const DAILY_TOKENS = 24000;
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const Snapshot = z.strictObject({
-  mode: z.literal("mock"), version: z.enum(["mock-investigation-2", "mock-workflow-1", "mock-billing-1"]), recordsHash: digest, policyVersion: z.number().int().positive(),
+  mode: z.enum(["mock","model_test"]), version: z.enum(["mock-investigation-2", "mock-workflow-1", "mock-billing-1", "model-billing-test-1"]), recordsHash: digest, policyVersion: z.number().int().positive(),
+  model: ModelStepSpec.shape.model.optional(), rolePrompts: RolePrompts.optional(),
   instruction: z.string().min(1).max(2000), summary: z.string().min(1).max(1000),
   limits: z.strictObject({ modelRequests: z.literal(12), toolCalls: z.literal(16), tokens: z.literal(24000), outputTokens: z.literal(600), seconds: z.literal(180) }),
   steps: z.array(z.strictObject({ operationKey: slug, request: ToolRequest })).min(2).max(5),
   workflow: MockWorkflow.optional(),
-}).refine((s) => s.version==="mock-investigation-2" ? !s.workflow && s.steps.length===2 : s.version==="mock-workflow-1" ? !!s.workflow && !s.workflow.billing && s.steps.length===2 : !!s.workflow?.billing && s.steps.length>=4, "workflow version mismatch");
+}).refine((s) => s.version==="mock-investigation-2" ? !s.workflow && s.steps.length===2 : s.version==="mock-workflow-1" ? !!s.workflow && !s.workflow.billing && s.steps.length===2 : !!s.workflow?.billing && s.steps.length>=4, "workflow version mismatch")
+  .refine(s=>s.mode==="model_test" ? s.version==="model-billing-test-1" && !!s.model && !!s.rolePrompts : s.version!=="model-billing-test-1" && !s.model && !s.rolePrompts,"run execution profile mismatch");
 const Model = z.strictObject({ operationKey: slug, role: AgentRole, inputTokens: z.number().int().min(1).max(limits.tokens-limits.outputTokens), requestHash: digest });
 const Tool = z.strictObject({ operationKey: slug, request: ToolRequest });
 const Usage = z.strictObject({ input: z.number().int().min(0).max(1000000), output: z.number().int().min(0).max(1000000) }).nullable();
@@ -41,7 +44,7 @@ type Reservation = { blocked: Reason } | { attemptId: string; attemptNumber: num
 
 // Trusted worker storage only; HTTP clients and model outputs never supply this pool or lease.
 export function runStore(pool: Pool) {
-  async function withRun<T>(rawLease: unknown, fn: (c: PoolClient, context: Context) => Promise<T>): Promise<T> {
+  async function withRun<T>(rawLease: unknown, fn: (c: PoolClient, context: Context) => Promise<T>, model?: string): Promise<T> {
     const lease = JobLease.parse(rawLease);
     return transaction(pool, async (c) => {
       const current = (await c.query(`select account_id,facts,state,revision,contact_suppressed from v2_cases where business_id=$1 and workspace_id=$2 and case_id=$3 for update`, args(lease).slice(0,3))).rows[0];
@@ -55,7 +58,7 @@ export function runStore(pool: Pool) {
         const source = (await c.query(`select body from v2_case_messages where business_id=$1 and workspace_id=$2 and case_id=$3 and revision=$4`, args(lease))).rows[0];
         if (!source) throw new Error("run source message missing");
         const recipe = billingRecipe(records,{ businessId: lease.businessId, workspaceId: lease.workspaceId, accountId });
-        const snapshot = Snapshot.parse({ mode: "mock", version: "mock-billing-1", recordsHash: hash(records), policyVersion: policy.version, limits,
+        const snapshot = Snapshot.parse({ mode: model ? "model_test" : "mock", version: model ? "model-billing-test-1" : "mock-billing-1", ...(model ? { model,rolePrompts: rolePrompts() } : {}), recordsHash: hash(records), policyVersion: policy.version, limits,
           workflow: { sourceText: source.body, lessonVersion: "none", instructions: billingInstructions, billing: recipe.context },
           instruction: "Read scoped account history and effective policy. Pause for human review without publishing or applying changes.",
           summary: "Mock account and policy lookup complete; human review required.",
@@ -64,6 +67,7 @@ export function runStore(pool: Pool) {
         run = (await c.query<RunRow>(`insert into v2_case_runs(business_id,workspace_id,case_id,case_revision,snapshot) values($1,$2,$3,$4,$5) returning *,true within_deadline`, [...args(lease), JSON.stringify(snapshot)])).rows[0];
       }
       const snapshot = Snapshot.parse(run.snapshot);
+      if (model && (snapshot.mode!=="model_test" || snapshot.model!==model)) throw new Error("run execution profile conflict");
       if (snapshot.recordsHash!==hash(records)) throw new Error("run records changed");
       return fn(c, { lease, run, snapshot, records, accountId });
     });
@@ -174,9 +178,14 @@ export function runStore(pool: Pool) {
   }
   return {
     async open(lease: unknown) { return withRun(lease, async (_c, context) => ({ runId: context.run.run_id, snapshot: context.snapshot })); },
+    async openModelTest(lease: unknown, rawModel: unknown) {
+      const model=ModelStepSpec.shape.model.parse(rawModel);
+      return withRun(lease,async(_c,context)=>({ runId: context.run.run_id,snapshot: context.snapshot }),model);
+    },
     async agentMessage(rawLease: unknown, rawStep: unknown, generate: () => unknown): Promise<AgentMessage> {
       const step = MessageStep.parse(rawStep);
       const outcome = await withRun(rawLease, async (c, context) => {
+        if (context.snapshot.mode!=="mock") throw new Error("model-test run cannot use mock messages");
         const model=(await c.query(`select 1 from v2_model_steps where ${where} and operation_key=$5`,[...args(context.lease),step.operationKey])).rows[0];
         if (model) throw new Error("model operation requires model checkpoint");
         return writeMessage(c,context,step,generate);
@@ -189,9 +198,18 @@ export function runStore(pool: Pool) {
       return withRun(rawLease, async (c,context) => {
         const { lease,run,snapshot }=context;
         if (!snapshot.workflow) throw new Error("run has no role workflow");
+        if (spec.task ? snapshot.mode!=="model_test" || snapshot.model!==spec.model : snapshot.mode!=="mock") throw new Error("model task execution profile mismatch");
         const instruction=snapshot.workflow.instructions[spec.step.sender];
-        const system=`${instruction.version}: ${instruction.text}\nLesson: ${snapshot.workflow.lessonVersion}. Return only a JSON object with kind, payload, evidenceRefs. Routing and identity are assigned by the worker.`;
-        const request={ model: spec.model,system,input: spec.input,maxOutputTokens: 600 as const };
+        if (spec.task) {
+          const input=parseRoleInput(spec.task,spec.input);
+          if (!sameAccount(input.scope,{ ...lease,accountId: context.accountId }) || input.sourceText!==snapshot.workflow.sourceText) throw new Error("role input context mismatch");
+          const allowed=new Set(snapshot.steps.map((s)=>JSON.stringify(s.request)));
+          if (input.allowedTools?.some((r)=>!allowed.has(JSON.stringify(r)))) throw new Error("role input tool allowlist mismatch");
+        }
+        if (spec.task) roleInstruction(spec.task,spec.step);
+        const system=spec.task ? snapshot.rolePrompts![spec.task]
+          : `${instruction.version}: ${instruction.text}\nLesson: ${snapshot.workflow.lessonVersion}. Return only a JSON object with kind, payload, evidenceRefs. Routing and identity are assigned by the worker.`;
+        const request={ model: spec.model,system,input: spec.input,maxOutputTokens: 600 as const,...(spec.task ? { task: spec.task } : {}) };
         const requests=ModelRequests.parse([request,{ ...request,system: `${system}\nThe previous output was invalid. Correct its schema and use only observed evidence. Do not add identity or routing fields.` }]);
         modelInputCapacity(requests);
         const requestHash=hash({ step: spec.step,requests });
@@ -236,7 +254,7 @@ export function runStore(pool: Pool) {
         if (body===null) return { invalid: true as const };
         await c.query("savepoint model_output");
         let output;
-        try { output=await writeMessage(c,context,pin.step,()=>body); }
+        try { validateRoleOutput(pin.requests[0],body); output=await writeMessage(c,context,pin.step,()=>body); }
         catch (error) {
           // Only validation errors permit correction; database failures roll back the whole settlement.
           if (!(error instanceof z.ZodError) && !(error instanceof Error && /agent message (evidence was not observed|parent missing|parent recipient mismatch)/.test(error.message))) throw error;
@@ -270,13 +288,7 @@ export function runStore(pool: Pool) {
       const outcome = await withRun(lease, async (c, context) => {
         const a = await attempt(c, context, id, "tool"), request = ToolRequest.parse(a.request);
         if (request.accountId!==context.accountId || result.name!==request.name) throw new Error("tool checkpoint identity mismatch");
-        const scoped = result.status!=="found" ? []
-          : result.name==="account_history" ? [result.data.account]
-          : result.name==="policy_lookup" ? [result.data]
-          : result.name==="invoice_details" ? [result.data.invoice, ...result.data.allocations, ...result.data.credits]
-          : result.name==="payment_search" ? [...result.data.payments, ...result.data.allocations]
-          : [...result.data.cancellations, ...result.data.credits];
-        if (scoped.some((r) => r.businessId!==context.lease.businessId || r.workspaceId!==context.lease.workspaceId || ("accountId" in r && r.accountId!==context.accountId))) throw new Error("checkpoint data scope mismatch");
+        if (!toolResultInScope(result,{ ...context.lease,accountId: context.accountId })) throw new Error("checkpoint data scope mismatch");
         const tables = { account: context.records.accounts, invoice: context.records.invoices, payment: context.records.payments, allocation: context.records.allocations, cancellation: context.records.cancellations, credit: context.records.credits, policy: context.records.policies };
         for (const ref of result.evidenceRefs) {
           if (!sameAccount(ref, { ...context.lease, accountId: context.accountId }) || ref.recordType==="tool_result" || !tables[ref.recordType].some((r) => r.businessId===ref.businessId && r.workspaceId===ref.workspaceId && r.id===ref.recordId && r.version===ref.version)) throw new Error("unverifiable checkpoint evidence");

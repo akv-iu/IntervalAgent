@@ -16,6 +16,16 @@ export const ToolResult = z.union([
 ]);
 export type ToolResult = z.infer<typeof ToolResult>;
 
+export function toolResultInScope(result: ToolResult, scope: AccountScope) {
+  const rows = result.status!=="found" ? []
+    : result.name==="account_history" ? [result.data.account]
+    : result.name==="policy_lookup" ? [result.data]
+    : result.name==="invoice_details" ? [result.data.invoice,...result.data.allocations,...result.data.credits]
+    : result.name==="payment_search" ? [...result.data.payments,...result.data.allocations]
+    : [...result.data.cancellations,...result.data.credits];
+  return rows.every(r=>r.businessId===scope.businessId && r.workspaceId===scope.workspaceId && (!("accountId" in r) || r.accountId===scope.accountId));
+}
+
 export function createReadTools(loadRecords: () => Promise<unknown>) {
   return {
     async execute(rawContext: unknown, rawRequest: unknown): Promise<ToolResult> {

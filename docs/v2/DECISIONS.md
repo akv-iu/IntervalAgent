@@ -352,3 +352,24 @@ Passed: all 765 offline tests/53 files; typecheck; lint; production build; V1 pi
 ### Phase 12 push and pause checkpoint
 
 Akshay requested pushing all completed work, then waiting for the hourly usage allowance to reset. Phase 12 is verified for this push; no next implementation phase starts in this turn. The assistant cannot observe the allowance reset, so continuation waits for Akshay to resume. Existing validation evidence above remains applicable; only status documentation changed after verification. User setup/dependency edits remain excluded.
+
+
+## Phase 13: four-role model transport integration (October 20, 2026)
+
+Akshay resumed after the usage pause. Phase 12 was already pushed as `913b0f9`; no new push was needed. Phase 13 stays local. [Product status](STATUS.md) and [workflow contract](MODEL-WORKFLOW.md) distinguish this internal test integration from a live application.
+
+Six role tasks exercise Customer, Coordinator, Investigator and Reviewer through the existing SDK/checkpoint path. Coordinator output chooses a nonduplicate subset of pinned scoped requests; actual read results feed Investigator and the draft/review. A deterministic billing guard can override model approval. Both fictional business policies are exercised. `model_test` / `model-billing-test-1` pins the model and all six complete prompt strings. Existing runs cannot switch mode/model; mock messages, the mock worker and mock completion API reject these runs. A returned result remains internal; it does not finish the job/case, publish text or apply any action.
+
+### Tests and two self-review passes
+
+Initial role/workflow tests failed for absent modules, then seven pure tests and typecheck passed. Initial SDK/database integration passed six/seven cases in 124.45 seconds. The remaining provenance test supplied a mock result that failed the existing missing-evidence rule before reaching the new guard. Corrected the fixture to a valid escalation-shaped mock result; the targeted rerun passed three matching cases in 66.78 seconds, including both ordinary business cases.
+
+Self-review 1 reproduced three input-boundary failures before fixing them: nested tool arguments could name another account; nested proposal references could name another business; and tool record data could be foreign despite an empty evidence list. Inputs now reuse the actual body schemas, validate nested scope, and share `toolResultInScope` with durable tool settlement. Ten then-existing pure tests passed after fixes.
+
+Self-review 2 reproduced missing/wrong parent context being accepted for dependent role requests. Parent kinds now match the task before any dispatch; all eleven targeted role/workflow tests passed afterward. The finding prompt now uses the same canonical summary constant as the conservative code guard and asks for preserved evidence order. No live quality claim is inferred. Both passes were self-reviews, not independent reviewer-model invocations.
+
+### Actual verification and limits
+
+Passed: all 155 DB tests/11 files in 756.15 seconds, including all seven new model-workflow cases, legacy mock runs, process restart and restricted worker permissions. Final read-only cleanup confirmed zero temporary schemas or V2 test roles remain. Source/link/credential/whitespace checks and all sixteen environment/private-evaluation manifest exclusions passed. [Backend delivery gate](PHASE13-REVIEW.md). Typecheck, lint, build, pinned V1 guarded replay/full coverage and all 36 frozen input hashes passed. The first full offline run passed 775/776 while other checks/build ran concurrently; one existing operator-import test hit its five-second timeout. An unmodified standalone full rerun passed all 776 tests/55 files. No timeout or test behavior was changed to hide that failure. The complete DB run passed after the provenance/completion changes.
+
+No paid OpenAI call, live activation, new dependency/migration/grant, application-database change, hosting/deployment, OAuth/browser acceptance or UI work was performed. Existing V1 routes and default mock CLI behavior stay separate. The returned model-test guard result is recomputed, not a persisted job-completion record. Model revision routing, lifecycle completion, customer publication, financial approvals/actions, evaluated learning and UI remain open; Task 4 is incomplete. Existing Next tracing, Vitest and PG compatibility warnings remain.

@@ -19,6 +19,7 @@ export async function mockInvestigation(job: ClaimedJob): Promise<MockResult> {
 type Handler = (job: ClaimedJob) => Promise<MockResult>;
 export async function runCheckpointedMock(pool: Pool, job: ClaimedJob, customer?: Parameters<typeof runFourRoleMock>[3]): Promise<MockResult> {
   const runs = runStore(pool), run = await runs.open(job.lease);
+  if (run.snapshot.mode!=="mock") throw new Error("mock worker cannot execute a model-test run");
   const context = { businessId: job.lease.businessId, workspaceId: job.lease.workspaceId, accountId: job.accountId, role: "investigator" };
   const tools = createReadTools(async () => job.records);
   const attemptTool = async (step: (typeof run.snapshot.steps)[number]) => {

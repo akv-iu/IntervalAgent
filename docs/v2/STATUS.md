@@ -5,14 +5,14 @@ Updated October 20, 2026. This page tracks product progress; numbered implementa
 | Milestone | Current state |
 | --- | --- |
 | Records and reliable case processing | Built and tested in code: two synthetic businesses, scoped tools, saved cases, sessions, jobs, recovery, cancellation and budget accounting. Hosted setup and real OAuth browser acceptance remain open. |
-| Four agents collaborating | The deterministic mock workflow investigates and reviews a pending billing proposal. The OpenAI adapter and durable output checkpoints are tested with fake HTTP responses; the four roles are not connected to live models yet. |
+| Four agents collaborating | The deterministic mock workflow investigates and reviews a pending proposal. A separate six-task model-test workflow now connects all four roles to the SDK/checkpoints with fake HTTP. Coordinator output selects scoped tools and a code guard checks the result. Live models, model revision routing and job/case completion for that path remain open. |
 | Complete application walkthrough | Customer workspace, visible agent activity, operator approval/rejection, simulated financial changes and confirmed customer replies remain to build. |
 | Measured improvement | Evaluation fixtures exist. Comparable V2 evaluation/replay, candidate lessons, validation, promotion and rollback remain to build. |
 | V2 release | Live evidence, performance measurements, browser acceptance and deployment remain open. |
 
 ## Current step
 
-Phase 11 is pushed to `v2` as `73e86ac`. Phase 12 adds the single-attempt OpenAI adapter and is complete and verified for the user-requested push. Work is paused until usage resets and Akshay resumes. It does not enable live calls, change the default mock worker or deploy anything. [Contract and boundaries](MODEL-STEPS.md), [verification](DECISIONS.md).
+Phase 12 is pushed to `v2` as `913b0f9`. Work resumed on Phase 13: the internal four-role model-test workflow, left local for review after verification. It does not enable paid calls, change the default mock worker or deploy anything. [Workflow contract](MODEL-WORKFLOW.md), [verification](DECISIONS.md).
 
 ## Decisions already agreed
 
