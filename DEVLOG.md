@@ -1,6 +1,14 @@
 # DEVLOG
 
-Honest record of what was built, how it was checked, and what changed after review. Automated checks are marked separately from Akshay's own review. Code review is done by Codex (OpenAI Codex CLI, read-only), not by the model writing the code.
+Honest record of what was built, how it was checked, and what changed after review. Automated checks are marked separately from Akshay's own review. V1 entries record separate Codex CLI reviews; V2 entries explicitly distinguish self-review from independent review.
+
+## V2 Phase 1: contracts and boundaries (2026-10-19)
+
+- Scope: exactly four role IDs, strict message/tool/proposal contracts, scoped evidence, case/task transitions, and pure access checks. Documented auth/worker decisions in `docs/v2/DECISIONS.md`; preserved V1 imports and behavior. No new dependencies, endpoints, migrations, UI, or model calls.
+- Test-first: new suites failed on missing modules, then 34 tests passed after implementation. Self-review 1 produced five failing regression cases, all fixed. Self-review 2 produced one failing mixed-evidence-version case, fixed; positive collaboration examples added. No independent reviewer model used.
+- Final automated checks: `npm test` 645 tests/38 files; `npm run eval:replay` guarded gate/full coverage PASS; typecheck, lint, production build PASS. The unchanged V1 filesystem reader still produces two build tracing warnings.
+- Not checked: database integration and browser behavior (no DB/UI changes). No live API tokens spent. Superpowers identified but not installed at phase start; followed the user's test/review/fix/verify loop directly.
+- Stop: Phase 1 complete. Task 2 remains unstarted pending the user's next instruction. Full details and remaining trust boundaries are recorded in the V2 decisions document.
 
 ## Phase 0: scaffold  (2026-10-15)
 - Asked for: Next.js app with strict TypeScript, Tailwind, Vitest, lint rules, env validation, seeded RNG, CI. No stub scripts.

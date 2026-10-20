@@ -1,5 +1,15 @@
 # Working rules
 
+## Version 2 scope and execution
+
+The user's V2 scope is defined in [docs/v2/SPEC.md](docs/v2/SPEC.md) and [docs/v2/PLAN.md](docs/v2/PLAN.md); the original PRD/SPEC below remain the V1 contract. [V2 decisions](docs/v2/DECISIONS.md) record new boundaries and implementation evidence.
+
+User direction (October 19, 2026): implement one phase, test, review/fix, verify again, then report and wait before starting the next phase. OpenAI remains the only live provider; use mock/replay for routine checks and conserve tokens. Self-review must be labeled accurately. Do not infer permission to push/deploy from a phase completion.
+
+User direction (October 19, 2026): when the user says "move ahead", commit and push the completed, verified phase to GitHub first, then start the next bounded phase. Report any push failure and continue independent work where possible. This does not authorize force-pushes, unrelated changes, or publishing a V2 application release.
+
+V2 may add authenticated case APIs and a separately hosted, scoped worker in its planned phases. V1 read-only pages and its existing live-route exception stay protected. No broad database grants or new unguarded write endpoints are authorized. Phase 1 introduces pure contracts and transition/access checks only; sessions, endpoints and worker execution are not yet implemented.
+
 Read [Collections Simulator PRD.md](<Collections Simulator PRD.md>) for scope and [SPEC.md](SPEC.md) for implementation. PRD wins on scope; keep the documents consistent. [DEMO-NOTES.md](DEMO-NOTES.md) holds the pitch and design review.
 
 Complete one narrow example of each job responsibility before adding depth. Documents describe planned behavior until verified in code.

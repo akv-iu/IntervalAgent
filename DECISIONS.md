@@ -1,5 +1,11 @@
 # Decisions and fixes
 
+## V2 Phase 1: agree on how the agents can work together (October 19, 2026)
+
+Added the four agents' message formats, allowed communication paths, evidence/proposal checks, case/task state changes, and business/workspace access rules. These are foundations; the agents do not run yet. Auth and worker choices are recorded in [V2 decisions](docs/v2/DECISIONS.md).
+
+Two self-review passes found and fixed gaps around tool routing, missing or conflicting evidence, duplicate financial actions, and closing resolved cases. Each finding was reproduced in a failing test before its fix. The final suite passes 645 tests; V1 replay, typecheck, lint and build also pass. No independent reviewer model or live API calls were used. Database and browser checks wait until their respective implementation phases.
+
 A plain-language log, one entry per build step: what went wrong, what the reviewer (Codex) pointed out, and what was changed. DEVLOG.md has the technical detail; this file is the readable version.
 
 How review works: after each step, Codex reads the new code and reports problems (check 1). Fixes go in with a test that proves the problem existed and is now gone. Then Codex looks again to confirm the fixes (check 2). Steps 1 to 6 below were reviewed with one check under the earlier process. From step 11 on, every step gets both checks.

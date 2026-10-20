@@ -1,5 +1,7 @@
 # Recovery Lab
 
+Version 2 is in development: a four-agent case-resolution system with persistent cases, evidence-based investigation, human review, and evaluated lessons. Phase 1 establishes contracts and transition/access checks; runtime agents and the V2 UI are not implemented yet. See the [V2 implementation plan](docs/v2/PLAN.md) and [V2 functional and non-functional specification](docs/v2/SPEC.md). The behavior and results below describe Version 1.
+
 An AI collections agent tested like production software: a live model writes past-due payment messages, code guards what it is allowed to send, scripted customers try to break it, and every result is stored and reported from PostgreSQL.
 
 **Live site:** https://interval-agent.vercel.app

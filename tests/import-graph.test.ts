@@ -77,3 +77,9 @@ test("the live route is the single exception and guards itself", () => {
   const reachingWrites = allApi.filter((f) => [...reachable([f])].some((x) => norm(x).includes("src/lib/lessons-store"))).map(norm);
   expect(reachingWrites).toEqual([norm(LIVE_ROUTE)]);
 });
+
+test("V1 pages and its live exception do not reach the new V2 modules", () => {
+  const entries = [...files("src/app"), ...files("src/components")];
+  const seen = [...reachable(entries)].map((f) => f.replace(/\\/g, "/"));
+  expect(seen.filter((f) => f.includes("/src/lib/v2/"))).toEqual([]);
+});
