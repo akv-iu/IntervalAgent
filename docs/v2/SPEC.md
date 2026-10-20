@@ -1,6 +1,6 @@
 # Recovery Lab Version 2: functional and non-functional specification
 
-Status: V2 build contract. Contracts, scoped development tools, proposal previews, frozen evaluation fixtures, transactional cases/history, leased mock work and database-backed visitor sessions/protected case APIs are implemented. Operator OAuth/memberships, model-backed execution, shared model budgets, multi-step checkpoints, UI and remaining features are planned. Model performance and NFR targets are unmeasured; fixture authorship limits are documented in [implementation evidence](DECISIONS.md).
+Status: V2 build contract. Contracts, scoped development tools, proposal previews, frozen evaluation fixtures, transactional cases/history, leased mock work, private visitor APIs and operator OAuth/membership-scoped case reads are implemented. Operator mutations, model-backed execution, shared model budgets, multi-step checkpoints, UI and remaining features are planned. Real GitHub browser acceptance is pending credentials; model performance and NFR targets are unmeasured. See [implementation evidence](DECISIONS.md).
 Date: October 19, 2026.
 Implementation sequence: [PLAN.md](PLAN.md).
 

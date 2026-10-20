@@ -1,6 +1,6 @@
 # V2 visitor API
 
-These endpoints connect a private anonymous demo workspace to the persistent mock worker. They do not provide operator login, model-backed agents, financial actions or a V2 browser interface.
+These endpoints connect a private anonymous demo workspace to the persistent mock worker. [Operator login and scoped reads](OPERATORS.md) have their own opt-in and credential. Model-backed agents, financial actions and a V2 browser interface are later phases.
 
 ## Configuration
 

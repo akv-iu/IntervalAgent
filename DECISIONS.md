@@ -1,5 +1,13 @@
 # Decisions and fixes
 
+## V2 Phase 7: identify operators and limit their business access (October 19, 2026)
+
+Phase 6 was pushed as `ccbf37e`. GitHub login now establishes identity, while an owner-controlled database membership decides which businesses an operator can inspect. Login alone grants no access. Operators can read case evidence/history; this phase provides no financial approval or case-changing endpoint. Separate credentials and a default-off switch protect the boundary. [Setup and limits](docs/v2/OPERATORS.md).
+
+Two self-review passes found and fixed access surviving a mid-request session revocation and raw provider errors being forwarded into callback redirects. Tests reproduced each before the fix. Final checks pass 710 offline tests, all 98 database tests, typecheck, lint, fixture integrity, V1 replay, production build and an HTTP smoke under restricted database grants. [Detailed evidence](docs/v2/DECISIONS.md).
+
+No OpenAI API calls or application-database migration. No manual UI test needed now; real GitHub consent/logout in a browser still needs OAuth credentials and isolated local setup later. Phase 7 stays local until the next "move ahead". Budgeted/checkpointed mock agent execution is next; V2 remains disabled publicly.
+
 ## V2 Phase 6: give each visitor a private workspace (October 19, 2026)
 
 Phase 5 was pushed as `55e28bc`. Visitors now get an opaque, hashed, expiring session cookie and a private workspace. Protected APIs create cases, accept messages once and read customer history through that session. Scope and roles cannot be forged in the request; internal notes, tokens and raw records stay out of responses. V2 remains off by default.

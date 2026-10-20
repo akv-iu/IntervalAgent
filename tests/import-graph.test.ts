@@ -84,14 +84,17 @@ test("V1 pages and its live exception do not reach the new V2 modules", () => {
   expect(seen.filter((f) => f.includes("/src/lib/v2/"))).toEqual([]);
 });
 
-test("V2 exposes only the explicit visitor routes, all through its session boundary", () => {
+test("V2 exposes only enumerated visitor/operator routes through their own session boundaries", () => {
   const entries = files("src/app/api/v2");
   expect(entries.map((f) => f.replace(/\\/g, "/")).sort()).toEqual([
+    "src/app/api/v2/auth/[...all]/route.ts",
     "src/app/api/v2/cases/[caseId]/messages/route.ts", "src/app/api/v2/cases/[caseId]/route.ts", "src/app/api/v2/cases/route.ts", "src/app/api/v2/session/route.ts",
-  ]);
+    "src/app/api/v2/operator/cases/[businessId]/[workspaceId]/[caseId]/route.ts", "src/app/api/v2/operator/session/route.ts",
+  ].sort());
   for (const entry of entries) {
     const seen = [...reachable([entry])].map((f) => f.replace(/\\/g, "/"));
-    expect(seen.some((f) => f.endsWith("/src/lib/v2/visitor-runtime.ts"))).toBe(true);
+    const operator = /\/api\/v2\/(auth|operator)\//.test(entry.replace(/\\/g, "/"));
+    expect(seen.some((f) => f.endsWith(`/src/lib/v2/${operator ? "operator" : "visitor"}-runtime.ts`))).toBe(true);
     expect(seen.filter((f) => ["/src/lib/llm/", "/src/lib/db-admin", "/src/lib/db.ts", "/scripts/db-pool", "/scripts/v2-eval/"].some((p) => f.includes(p)))).toEqual([]);
   }
 });
