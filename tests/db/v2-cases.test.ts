@@ -4,7 +4,10 @@ import { demoRecords } from "../../src/lib/v2/demo-records";
 import { testSchema } from "./helpers";
 
 let db: Awaited<ReturnType<typeof testSchema>>;
-beforeAll(async () => { db = await testSchema(); });
+beforeAll(async () => {
+  db = await testSchema();
+  await db.pool.query("insert into v2_visitor_sessions (session_id,token_hash,business_id,workspace_id) values ('session-1',$1,'northside','demo')", ["a".repeat(64)]);
+});
 afterAll(async () => db?.drop());
 const visitor = { kind: "visitor", sessionId: "session-1", businessId: "northside", workspaceId: "demo" };
 const operator = { kind: "operator", operatorId: "operator-1", businessIds: ["northside"] };
@@ -163,6 +166,7 @@ test("the V1 public reader does not gain access to V2 case facts or messages", a
     await expect(c.query("select * from v2_cases")).rejects.toThrow(/permission denied/);
     await expect(c.query("select * from v2_case_messages")).rejects.toThrow(/permission denied/);
     await expect(c.query("select * from v2_case_jobs")).rejects.toThrow(/permission denied/);
+    await expect(c.query("select * from v2_visitor_sessions")).rejects.toThrow(/permission denied/);
   } finally {
     await c.query("reset role"); await c.query(`drop owned by ${role}`); await c.query(`drop role ${role}`); c.release();
   }

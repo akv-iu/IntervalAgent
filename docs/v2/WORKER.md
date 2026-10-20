@@ -15,7 +15,7 @@ npm run worker:v2:mock
 npm run worker:v2:mock -- --once
 ```
 
-The first command polls until SIGINT/SIGTERM. The second makes one claim attempt and reports `completed`, `idle`, `retry`, `failed` or `stale`; `idle` means no step was claimed, which can include cleaning up expired/exhausted work. Accepted messages are currently created through the server store; sessions, HTTP routes and the V2 workspace are still later phases. No new browser flow is available yet.
+The first command polls until SIGINT/SIGTERM. The second makes one claim attempt and reports `completed`, `idle`, `retry`, `failed` or `stale`; `idle` means no step was claimed, which can include cleaning up expired/exhausted work. Messages can be accepted through the [default-off visitor API](API.md); direct visitor store writes now require an active persisted session. Operator login and the V2 workspace are still later phases. No new browser flow is available yet.
 
 ## Persistence and recovery
 

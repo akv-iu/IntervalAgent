@@ -9,7 +9,10 @@ import { mockInvestigation, runMockWorkerOnce, runMockWorker } from "../../src/l
 import { testSchema } from "./helpers";
 
 let db: Awaited<ReturnType<typeof testSchema>>;
-beforeAll(async () => { db = await testSchema(); });
+beforeAll(async () => {
+  db = await testSchema();
+  await db.pool.query("insert into v2_visitor_sessions (session_id,token_hash,business_id,workspace_id) values ('visitor-1',$1,'northside','demo')", ["a".repeat(64)]);
+});
 afterAll(async () => db?.drop());
 beforeEach(async () => { await db.pool.query("truncate v2_cases cascade"); });
 const visitor = { kind: "visitor", sessionId: "visitor-1", businessId: "northside", workspaceId: "demo" };
@@ -243,7 +246,7 @@ test("the dedicated worker grants support processing without V1 access or facts/
     await c.query(`set role ${role}`);
     const restricted = { connect: async () => ({ query: c.query.bind(c), release() {} }) } as unknown as Pool;
     expect(await runMockWorkerOnce(restricted, "restricted-worker")).toBe("completed");
-    for (const forbidden of ["select * from accounts", "update v2_cases set facts='{}'", "insert into v2_case_jobs (business_id) values ('other')", "insert into v2_case_messages (business_id) values ('other')", "delete from v2_cases"]) {
+    for (const forbidden of ["select * from accounts", "select * from v2_visitor_sessions", "update v2_cases set facts='{}'", "insert into v2_case_jobs (business_id) values ('other')", "insert into v2_case_messages (business_id) values ('other')", "delete from v2_cases"]) {
       await expect(c.query(forbidden)).rejects.toMatchObject({ code: "42501" });
     }
   } finally {

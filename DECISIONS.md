@@ -1,5 +1,13 @@
 # Decisions and fixes
 
+## V2 Phase 6: give each visitor a private workspace (October 19, 2026)
+
+Phase 5 was pushed as `55e28bc`. Visitors now get an opaque, hashed, expiring session cookie and a private workspace. Protected APIs create cases, accept messages once and read customer history through that session. Scope and roles cannot be forged in the request; internal notes, tokens and raw records stay out of responses. V2 remains off by default.
+
+Two self-review passes plus build/HTTP verification fixed a revocation race, misclassified server errors, stalled uploads, Next.js runtime/host compatibility and STOP being blocked by the request counter. Findings were reproduced before fixes. Checks pass 700 offline tests, the 87-test full DB suite and the final 18-test visitor suite. The built server also passes the complete visitor-to-mock-worker flow, including STOP after rate exhaustion, using a restricted database role.
+
+No manual browser testing needed yet. No live model calls or application-database migration; Phase 6 stays local until the next "move ahead". Operator GitHub login and memberships are next. [API setup and limits](docs/v2/API.md), [detailed evidence](docs/v2/DECISIONS.md).
+
 ## V2 Phase 5: let background work survive a restart (October 19, 2026)
 
 Phase 4 was pushed as `f59b066`. Accepted messages now queue one durable mock investigation. A worker claims it with an expiring lease, reads scoped account/policy tools and saves its result with the case/audit update. Retries are bounded; STOP and newer case changes invalidate old work. The mock pauses for human review and sends no customer reply.

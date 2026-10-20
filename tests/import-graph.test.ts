@@ -79,9 +79,21 @@ test("the live route is the single exception and guards itself", () => {
 });
 
 test("V1 pages and its live exception do not reach the new V2 modules", () => {
-  const entries = [...files("src/app"), ...files("src/components")];
+  const entries = [...files("src/app"), ...files("src/components")].filter((f) => !f.replace(/\\/g, "/").startsWith("src/app/api/v2/"));
   const seen = [...reachable(entries)].map((f) => f.replace(/\\/g, "/"));
   expect(seen.filter((f) => f.includes("/src/lib/v2/"))).toEqual([]);
+});
+
+test("V2 exposes only the explicit visitor routes, all through its session boundary", () => {
+  const entries = files("src/app/api/v2");
+  expect(entries.map((f) => f.replace(/\\/g, "/")).sort()).toEqual([
+    "src/app/api/v2/cases/[caseId]/messages/route.ts", "src/app/api/v2/cases/[caseId]/route.ts", "src/app/api/v2/cases/route.ts", "src/app/api/v2/session/route.ts",
+  ]);
+  for (const entry of entries) {
+    const seen = [...reachable([entry])].map((f) => f.replace(/\\/g, "/"));
+    expect(seen.some((f) => f.endsWith("/src/lib/v2/visitor-runtime.ts"))).toBe(true);
+    expect(seen.filter((f) => ["/src/lib/llm/", "/src/lib/db-admin", "/src/lib/db.ts", "/scripts/db-pool", "/scripts/v2-eval/"].some((p) => f.includes(p)))).toEqual([]);
+  }
 });
 
 test("runtime source cannot import the evaluation harness or private fixture set", () => {

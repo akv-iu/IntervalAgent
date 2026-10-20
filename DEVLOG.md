@@ -2,6 +2,16 @@
 
 Honest record of what was built, how it was checked, and what changed after review. Automated checks are marked separately from Akshay's own review. V1 entries record separate Codex CLI reviews; V2 entries explicitly distinguish self-review from independent review.
 
+## V2 Phase 6: private visitor sessions and case APIs (2026-10-19)
+
+- On "move ahead", secret-checked, committed/pushed Phase 5 as `55e28bc` and verified the remote hash. Phase 6 remains local. Split authentication: visitor/customer API now (Task 3C), operator GitHub OAuth/memberships next (Task 3D); Task 3 is still incomplete.
+- Migration 007 adds hashed opaque visitor tokens, absolute 24h expiry/revocation, server-generated private workspaces and DB-backed request/creation counters. New default-off session/case/message handlers use a dedicated web credential, canonical Host/exact write Origin, bounded UTF-8 JSON, private transcript DTOs, no-store headers and server-derived scope. Each workspace gets development records; no evaluator data is used.
+- Test-first missing-module failures; initial six offline boundary tests and 13 DB tests passed. Self-review 1 reproduced two failures: revocation during upload still allowed a case write; invalid stored facts were blamed on the client. Fixed session recheck/share-lock within write transactions and explicit separation of input versus server-data validation. Existing case/job tests now seed real visitor sessions. Self-review 2 reproduced an indefinitely stalled upload; fixed a five-second read deadline/cancellation.
+- Integration verification caught an incompatible explicit Node runtime export under Cache Components (failed build), then normalized internal URLs rejecting real requests (failed HTTP smoke plus regression). Removed runtime exports per installed docs and validate incoming Host rather than forwarded/internal hosts; exact Origin checks remain. A final critical failing regression found STOP blocked by the ordinary rate counter; authenticated STOP/logout now bypass it while retaining session/scope checks. No separate reviewer model used.
+- Final checks: 700 offline tests/45 files; full DB suite 87/six files; final 18-test visitor suite rerun after the STOP change (88 distinct DB tests total); typecheck, lint, fixtures, V1 replay and production build PASS. Final built-server HTTP smoke under a restricted web role confirms session/case/message -> mock worker -> current state, bad-Origin rejection, STOP after quota exhaustion, logout and revocation.
+- All DB mutations/temporary roles are isolated in the verified distinct test database; smoke processes were hidden and stopped. No application migration, public enablement, hosted worker, OAuth login, UI or model call. No manual browser test needed yet. Existing build tracing/Vitest/PG SSL warnings remain. API limits, anonymous-session retention/access behavior and setup: `docs/v2/API.md`.
+
+
 ## V2 Phase 5: durable mock jobs and worker (2026-10-19)
 
 - On "move ahead", secret-checked, committed/pushed Phase 4 as `f59b066` and verified the remote hash. Phase 5 remains local. Task 3B delivers one persisted mock step; verified sessions/HTTP integration remain next, and Task 3 is not complete.

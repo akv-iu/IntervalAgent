@@ -7,12 +7,13 @@ import { isStop } from "../patterns";
 import { Records, sameAccount } from "./records";
 import { EvidenceRef } from "./contracts";
 import { CaseEvent, CaseRecord, Principal, assertCaseAccess, transitionCase } from "./state";
+import { transaction } from "./transaction";
 
 const CaseKey = CaseRecord.pick({ businessId: true, workspaceId: true, caseId: true });
 type CaseKey = z.infer<typeof CaseKey>;
 const Identity = CaseKey.extend({ accountId: slug });
 const revision = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
-const Submission = z.strictObject({ text: z.string().trim().min(1).max(500), idempotencyKey: slug, expectedRevision: revision });
+export const CaseSubmission = z.strictObject({ text: z.string().trim().min(1).max(500), idempotencyKey: slug, expectedRevision: revision });
 const Change = CaseEvent.omit({ actor: true }).extend({ expectedRevision: revision });
 const Page = z.strictObject({ afterRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0), limit: z.number().int().min(1).max(100).default(50) });
 const where = "business_id=$1 and workspace_id=$2 and case_id=$3";
@@ -27,19 +28,13 @@ function actorOf(raw: unknown) {
   return principal.kind === "visitor" ? { kind: "customer" as const, id: principal.sessionId } : { kind: "operator" as const, id: principal.operatorId };
 }
 
-async function transaction<T>(pool: Pool, fn: (c: PoolClient) => Promise<T>): Promise<T> {
-  const c = await pool.connect();
-  let broken = false;
-  try {
-    await c.query("begin");
-    await c.query("set local lock_timeout='5s'; set local statement_timeout='10s'");
-    const result = await fn(c);
-    await c.query("commit");
-    return result;
-  } catch (error) {
-    try { await c.query("rollback"); } catch { broken = true; }
-    throw error;
-  } finally { c.release(broken); }
+async function lockVisitor(c: PoolClient, rawPrincipal: unknown) {
+  const principal = Principal.parse(rawPrincipal);
+  if (principal.kind !== "visitor") return;
+  // Keep revocation and a verified write in one ordering; the request body may have arrived slowly.
+  const session = await c.query(`select session_id from v2_visitor_sessions where session_id=$1 and business_id=$2 and workspace_id=$3
+    and expires_at>clock_timestamp() and revoked_at is null for share`, [principal.sessionId, principal.businessId, principal.workspaceId]);
+  if (session.rowCount !== 1) throw new Error("visitor session invalid");
 }
 
 async function event(c: PoolClient, key: CaseKey, rev: number, kind: string, actor: { kind: "customer" | "operator" | "system"; id: string }, reason: string) {
@@ -88,6 +83,7 @@ export function caseStore(pool: Pool) {
       const facts = scopedFacts(serverRecords, identity);
       const actor = actorOf(principal);
       return transaction(pool, async (c) => {
+        await lockVisitor(c, principal);
         const inserted = await c.query<CaseRow>(`insert into v2_cases (business_id,workspace_id,case_id,account_id,state,revision,contact_suppressed,facts)
           values ($1,$2,$3,$4,'open',1,false,$5) on conflict (business_id,workspace_id,case_id) do nothing returning *`, [...args(identity), identity.accountId, JSON.stringify(facts)]);
         if (inserted.rows[0]) {
@@ -105,10 +101,11 @@ export function caseStore(pool: Pool) {
       return scopedFacts(row.facts, recordOf(row));
     },
     async append(principal: unknown, rawKey: unknown, rawSubmission: unknown) {
-      const key = CaseKey.parse(rawKey), input = Submission.parse(rawSubmission);
+      const key = CaseKey.parse(rawKey), input = CaseSubmission.parse(rawSubmission);
       assertCaseAccess(principal, key, "post_message");
       const actor = actorOf(principal);
       return transaction(pool, async (c) => {
+        await lockVisitor(c, principal);
         const current = await locked(c, key);
         const prior = await c.query<MessageRow>(`select * from v2_case_messages where ${where} and idempotency_key=$4`, [...args(key), input.idempotencyKey]);
         if (prior.rows[0]) {

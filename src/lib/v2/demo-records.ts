@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createRng, randInt } from "../rng";
 import { Records } from "./records";
+import { Scope } from "./contracts";
 
 // Development records only. Evaluation cases and hidden answer keys are separate work.
 export function demoRecords(seed = 42): Records {
@@ -30,4 +31,12 @@ export function demoRecords(seed = 42): Records {
     }
   }
   return Records.parse(data);
+}
+
+// Each anonymous workspace gets its own scoped copy of the development records.
+export function workspaceRecords(rawScope: unknown): Records {
+  const scope = Scope.parse(rawScope), data = demoRecords();
+  const tables = ["accounts", "invoices", "payments", "allocations", "cancellations", "credits", "policies"] as const;
+  const scoped = Object.fromEntries(tables.map((name) => [name, data[name].filter((r) => r.businessId === scope.businessId).map((r) => ({ ...r, workspaceId: scope.workspaceId }))]));
+  return Records.parse({ ...data, ...scoped, businesses: data.businesses.filter((b) => b.businessId === scope.businessId) });
 }

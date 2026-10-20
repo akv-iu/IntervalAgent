@@ -8,7 +8,7 @@ User direction (October 19, 2026): implement one phase, test, review/fix, verify
 
 User direction (October 19, 2026): when the user says "move ahead", commit and push the completed, verified phase to GitHub first, then start the next bounded phase. Report any push failure and continue independent work where possible. This does not authorize force-pushes, unrelated changes, or publishing a V2 application release.
 
-V2 may add authenticated case APIs and a separately hosted, scoped worker in its planned phases. V1 read-only pages and its existing live-route exception stay protected. No broad database grants or new unguarded write endpoints are authorized. Phase 1 introduces pure contracts and transition/access checks only; sessions, endpoints and worker execution are not yet implemented.
+V2 may add authenticated case APIs and a separately hosted, scoped worker in its planned phases. V1 read-only pages and its existing live-route exception stay protected. No broad database grants or new unguarded write endpoints are authorized. V2's mock worker is separate from web requests. Its explicit `/api/v2/session` and scoped case/message routes may write only when V2 is enabled with its own web credential, an origin-checked mutation and a verified database-backed visitor session (session creation is the bounded public bootstrap). Operator OAuth and operator mutations remain a later phase; client-provided principals never establish access. Keep the V1 dependency checks separate from these enumerated V2 routes.
 
 Read [Collections Simulator PRD.md](<Collections Simulator PRD.md>) for scope and [SPEC.md](SPEC.md) for implementation. PRD wins on scope; keep the documents consistent. [DEMO-NOTES.md](DEMO-NOTES.md) holds the pitch and design review.
 
