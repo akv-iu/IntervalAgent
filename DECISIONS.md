@@ -1,5 +1,13 @@
 # Decisions and fixes
 
+## V2 Phase 5: let background work survive a restart (October 19, 2026)
+
+Phase 4 was pushed as `f59b066`. Accepted messages now queue one durable mock investigation. A worker claims it with an expiring lease, reads scoped account/policy tools and saves its result with the case/audit update. Retries are bounded; STOP and newer case changes invalidate old work. The mock pauses for human review and sends no customer reply.
+
+Two self-review/validation passes are complete. The first found and reproduced a live-lease overwrite and old-job cleanup cancelling newer work; both were fixed and checked again. Verification passes 688 offline tests, the full 69-test database suite, a separately added worker-permissions test, typecheck, lint, build, fixture integrity and V1 replay. A child-process restart test confirms recovery after a committed claim is abandoned. The restricted worker can process jobs but cannot read V1 data or edit facts/customer messages.
+
+No browser test is needed and no live API tokens were spent. Migrations/grants ran only in isolated test schemas; no hosted worker or application-database change. Phase 5 stays local until the next "move ahead". Login and protected V2 routes are next; the four model-backed agents are still later. [Worker setup and limits](docs/v2/WORKER.md), [full evidence](docs/v2/DECISIONS.md).
+
 ## V2 Phase 4: save cases without losing or duplicating messages (October 19, 2026)
 
 Phase 3 was pushed as `3b1d948`. Added private database storage for cases, scoped business records, customer messages and audit history. Duplicate submissions save once, competing edits cannot silently overwrite a case, and a failed write rolls the whole change back. STOP closes the case even when the page's revision is old; reopening preserves contact suppression.

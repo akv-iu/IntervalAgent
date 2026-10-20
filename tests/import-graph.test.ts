@@ -90,3 +90,8 @@ test("runtime source cannot import the evaluation harness or private fixture set
   const check = [...reachable([resolve("scripts/check-v2-fixtures.ts")])].map((f) => f.replace(/\\/g, "/"));
   expect(check.some((f) => f.includes("/scripts/v2-eval/fixtures.ts"))).toBe(true);
 });
+
+test("mock worker entry point cannot reach model providers, owner credentials or evaluator assets", () => {
+  const seen = [...reachable([resolve("scripts/v2-mock-worker.ts")])].map((f) => f.replace(/\\/g, "/"));
+  expect(seen.filter((f) => ["/src/lib/llm/", "/src/lib/db-admin", "/scripts/db-pool", "/scripts/v2-eval/", "/fixtures/v2/evaluation/"].some((p) => f.includes(p)))).toEqual([]);
+});

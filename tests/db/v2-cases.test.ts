@@ -162,6 +162,7 @@ test("the V1 public reader does not gain access to V2 case facts or messages", a
     await c.query(`set role ${role}`);
     await expect(c.query("select * from v2_cases")).rejects.toThrow(/permission denied/);
     await expect(c.query("select * from v2_case_messages")).rejects.toThrow(/permission denied/);
+    await expect(c.query("select * from v2_case_jobs")).rejects.toThrow(/permission denied/);
   } finally {
     await c.query("reset role"); await c.query(`drop owned by ${role}`); await c.query(`drop role ${role}`); c.release();
   }

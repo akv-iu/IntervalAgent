@@ -1,9 +1,11 @@
 // Server-side storage only. Pool and verified principals are supplied by the caller; no credentials are read here.
 import type { Pool, PoolClient } from "pg";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { slug } from "../artifact";
 import { isStop } from "../patterns";
 import { Records, sameAccount } from "./records";
+import { EvidenceRef } from "./contracts";
 import { CaseEvent, CaseRecord, Principal, assertCaseAccess, transitionCase } from "./state";
 
 const CaseKey = CaseRecord.pick({ businessId: true, workspaceId: true, caseId: true });
@@ -40,7 +42,7 @@ async function transaction<T>(pool: Pool, fn: (c: PoolClient) => Promise<T>): Pr
   } finally { c.release(broken); }
 }
 
-async function event(c: PoolClient, key: CaseKey, rev: number, kind: string, actor: ReturnType<typeof actorOf>, reason: string) {
+async function event(c: PoolClient, key: CaseKey, rev: number, kind: string, actor: { kind: "customer" | "operator" | "system"; id: string }, reason: string) {
   await c.query(`insert into v2_case_events (business_id,workspace_id,case_id,revision,kind,actor,actor_id,reason) values ($1,$2,$3,$4,$5,$6,$7,$8)`, [...args(key), rev, kind, actor.kind, actor.id, reason]);
 }
 async function locked(c: PoolClient, key: CaseKey): Promise<CaseRecord> {
@@ -51,6 +53,9 @@ async function locked(c: PoolClient, key: CaseKey): Promise<CaseRecord> {
 async function save(c: PoolClient, previous: CaseRecord, next: CaseRecord) {
   const r = await c.query(`update v2_cases set state=$4,revision=$5,contact_suppressed=$6,updated_at=now() where ${where} and revision=$7`, [...args(previous), next.state, next.revision, next.contactSuppressed, previous.revision]);
   if (r.rowCount !== 1) throw new Error("case revision conflict");
+}
+async function cancelJobs(c: PoolClient, key: CaseKey, caseRevision: number | null = null) {
+  await c.query(`update v2_case_jobs set state='cancelled',lease_token=null,lease_until=null,finished_at=now(),updated_at=now() where ${where} and state in ('queued','running') and ($4::bigint is null or case_revision=$4)`, [...args(key), caseRevision]);
 }
 
 // shortcut: facts are immutable snapshots; use ledger-backed current records when implementing approved actions.
@@ -118,6 +123,8 @@ export function caseStore(pool: Pool) {
         await save(c, current, next);
         await event(c, key, next.revision, stop ? "stop_contact" : "customer_message", actor, reason);
         const inserted = await c.query<MessageRow>(`insert into v2_case_messages (business_id,workspace_id,case_id,idempotency_key,revision,role,body) values ($1,$2,$3,$4,$5,'customer',$6) returning *`, [...args(key), input.idempotencyKey, next.revision, input.text]);
+        await cancelJobs(c, key);
+        if (!next.contactSuppressed) await c.query(`insert into v2_case_jobs (business_id,workspace_id,case_id,case_revision) values ($1,$2,$3,$4)`, [...args(key), next.revision]);
         return { record: next, message: messageOf(inserted.rows[0]), duplicate: false };
       });
     },
@@ -131,6 +138,7 @@ export function caseStore(pool: Pool) {
         const next = transitionCase(current, { type: change.type, reason: change.reason, actor: "operator" });
         await save(c, current, next);
         await event(c, key, next.revision, change.type, actor, change.reason);
+        await cancelJobs(c, key);
         return next;
       });
     },
@@ -145,6 +153,93 @@ export function caseStore(pool: Pool) {
         events: visible.map((r) => ({ revision: Number(r.revision), kind: r.kind, actor: r.actor, actorId: r.actor_id, reason: r.reason, createdAt: r.created_at.toISOString() })),
         messages, nextRevision: rows.length > page.limit ? revisions[revisions.length - 1] : null,
       };
+    },
+  };
+}
+
+const Lease = CaseKey.extend({ caseRevision: revision, workerId: slug, token: z.uuid() });
+export type ClaimedJob = { lease: z.infer<typeof Lease>; accountId: string; records: unknown };
+const MockResult = z.strictObject({ mode: z.literal("mock"), summary: z.string().trim().min(1).max(1000), evidenceRefs: z.array(EvidenceRef).min(1).max(200) });
+export type MockResult = z.infer<typeof MockResult>;
+interface JobRow { case_revision: string; attempts: number }
+
+async function finishCase(c: PoolClient, current: CaseRecord, workerId: string, reason: string) {
+  const next = transitionCase(current, { type: "request_human", actor: "system", reason });
+  await save(c, current, next);
+  await event(c, current, next.revision, "request_human", { kind: "system", id: workerId }, reason);
+}
+
+// Trusted server worker API: never accept a lease or pool from an HTTP client/model.
+export function jobStore(pool: Pool) {
+  async function owned(c: PoolClient, lease: z.infer<typeof Lease>) {
+    // Every path locks the case before its jobs, matching submission/cancellation lock order.
+    const row = (await c.query<CaseRow>(`select * from v2_cases where ${where} for update`, args(lease))).rows[0];
+    if (!row) return null;
+    const job = (await c.query<JobRow>(`select * from v2_case_jobs where ${where} and case_revision=$4 and state='running'
+      and worker_id=$5 and lease_token=$6 and lease_until>clock_timestamp() for update`, [...args(lease), lease.caseRevision, lease.workerId, lease.token])).rows[0];
+    if (!job) return null;
+    const current = recordOf(row);
+    if (current.revision !== lease.caseRevision || current.state !== "investigating" || current.contactSuppressed) {
+      await cancelJobs(c, lease, lease.caseRevision);
+      return null;
+    }
+    return { current, job, row };
+  }
+  return {
+    async claim(rawWorkerId: unknown): Promise<ClaimedJob | null> {
+      const workerId = slug.parse(rawWorkerId);
+      return transaction(pool, async (c) => {
+        const row = (await c.query<CaseRow & JobRow>(`select c.*,j.case_revision,j.attempts from v2_case_jobs j
+          join v2_cases c using (business_id,workspace_id,case_id)
+          where (j.state='queued' and j.available_at<=clock_timestamp()) or (j.state='running' and j.lease_until<=clock_timestamp())
+          order by j.available_at,j.created_at limit 1 for update of c skip locked`)).rows[0];
+        if (!row) return null;
+        const current = recordOf(row);
+        const job = (await c.query<JobRow>(`select * from v2_case_jobs where ${where} and case_revision=$4
+          and ((state='queued' and available_at<=clock_timestamp()) or (state='running' and lease_until<=clock_timestamp())) for update`, [...args(current), row.case_revision])).rows[0];
+        if (!job) return null;
+        if (current.revision !== Number(job.case_revision) || current.state !== "investigating" || current.contactSuppressed) {
+          await cancelJobs(c, current, Number(job.case_revision));
+          return null;
+        }
+        if (job.attempts === 3) {
+          await c.query(`update v2_case_jobs set state='failed',last_error='lease_expired',lease_token=null,lease_until=null,finished_at=now(),updated_at=now() where ${where} and case_revision=$4`, [...args(current), row.case_revision]);
+          await finishCase(c, current, workerId, "Mock work exhausted its attempts; operator review required.");
+          return null;
+        }
+        const lease = Lease.parse({ businessId: current.businessId, workspaceId: current.workspaceId, caseId: current.caseId, caseRevision: current.revision, workerId, token: randomUUID() });
+        await c.query(`update v2_case_jobs set state='running',attempts=attempts+1,worker_id=$5,lease_token=$6,lease_until=clock_timestamp()+interval '60 seconds',updated_at=now() where ${where} and case_revision=$4`, [...args(lease), lease.caseRevision, workerId, lease.token]);
+        return { lease, accountId: current.accountId, records: row.facts };
+      });
+    },
+    async complete(rawLease: unknown, rawResult: unknown): Promise<boolean> {
+      const lease = Lease.parse(rawLease), result = MockResult.parse(rawResult);
+      return transaction(pool, async (c) => {
+        const ownedJob = await owned(c, lease);
+        if (!ownedJob) return false;
+        const { current, row } = ownedJob, data = scopedFacts(row.facts, current);
+        const tables = { account: data.accounts, invoice: data.invoices, payment: data.payments, allocation: data.allocations, cancellation: data.cancellations, credit: data.credits, policy: data.policies };
+        for (const ref of result.evidenceRefs) {
+          if (!sameAccount(ref, current) || ref.recordType === "tool_result"
+            || !tables[ref.recordType].some((r) => r.id === ref.recordId && r.version === ref.version)) throw new Error("unverifiable job evidence");
+        }
+        await finishCase(c, current, lease.workerId, "Mock investigation complete; operator review required.");
+        await c.query(`update v2_case_jobs set state='succeeded',result=$5,lease_token=null,lease_until=null,finished_at=now(),updated_at=now() where ${where} and case_revision=$4`, [...args(lease), lease.caseRevision, JSON.stringify(result)]);
+        return true;
+      });
+    },
+    async fail(rawLease: unknown): Promise<"retry" | "failed" | "stale"> {
+      const lease = Lease.parse(rawLease);
+      return transaction(pool, async (c) => {
+        const ownedJob = await owned(c, lease);
+        if (!ownedJob) return "stale";
+        const terminal = ownedJob.job.attempts === 3;
+        await c.query(`update v2_case_jobs set state=$5,last_error='handler_failed',lease_token=null,lease_until=null,
+          available_at=clock_timestamp()+interval '5 seconds',finished_at=case when $5='failed' then now() else null end,updated_at=now()
+          where ${where} and case_revision=$4`, [...args(lease), lease.caseRevision, terminal ? "failed" : "queued"]);
+        if (terminal) await finishCase(c, ownedJob.current, lease.workerId, "Mock work failed after three attempts; operator review required.");
+        return terminal ? "failed" : "retry";
+      });
     },
   };
 }

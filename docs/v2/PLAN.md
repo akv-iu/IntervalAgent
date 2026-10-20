@@ -1,6 +1,6 @@
 # Recovery Lab Version 2: implementation plan
 
-Status: Phases 1-4 complete (Tasks 1, 2 and the case-storage portion of Task 3). Cases, scoped record snapshots, customer messages and audit history persist transactionally. Task 3 still needs the queue/worker and verified sessions; running agents and UI are not started. See [DECISIONS.md](DECISIONS.md) for verification evidence and authorship limits.
+Status: Phases 1-5 implemented (Tasks 1, 2 and the storage/mock-worker portions of Task 3). Cases, messages, audit history and leased mock jobs persist transactionally. Task 3 still needs verified sessions/HTTP integration; model-backed agents and UI are not started. See [DECISIONS.md](DECISIONS.md) for verification evidence and authorship limits, and [WORKER.md](WORKER.md) for the actual mock-worker command and limits.
 Date: October 19, 2026.
 Build contract: [SPEC.md](SPEC.md). V2 requirement IDs in this plan refer to that document.
 
@@ -80,9 +80,11 @@ Done when: reference arithmetic is $14; malformed/foreign evidence and over-allo
 
 ### Task 3: Deliver persistent cases and a resumable worker
 
-Split into bounded phases: Phase 4 / Task 3A is case storage; the next phase adds durable jobs/worker execution. Authentication and HTTP integration follow within Task 3 before exposing V2 data. Task 3 remains incomplete until its end-to-end completion gate passes.
+Split into bounded phases: Phase 4 / Task 3A is case storage; Phase 5 / Task 3B adds durable mock jobs/worker execution. Authentication and HTTP integration follow within Task 3 before exposing V2 data. Shared model budgets, instruction pinning and per-agent checkpoints arrive with the runtime before any live dispatch. Task 3 remains incomplete until its end-to-end completion gate passes.
 
 Phase 4 completed October 19: Phase 3 pushed as `3b1d948`; additive private tables and a pool-injected server store persist scoped case facts, messages and revisioned audit events. Transactions cover the case change, event and accepted message together. Retries, concurrent writes, operator changes, STOP, pagination, rollback and V1 reader isolation have explicit database tests. These are storage primitives, not authenticated endpoints or a running worker. Migration 005 was exercised only in isolated test schemas; the application database was not migrated. Phase 4 stays local until the next "move ahead".
+
+Phase 5: Phase 4 pushed as `f59b066`; ordinary messages now queue one mock job atomically, with competing-worker claims, expiring leases, three-attempt retries, stale-result rejection, STOP cancellation and transactional result/audit completion. The mock worker reads scoped account/policy tools and pauses for human review. A dedicated worker grant script and process-only environment configuration support the functional CLI; no model calls or hosted worker are involved. Verification evidence is recorded in the decisions document. Phase 5 remains local until the next "move ahead"; verified sessions and HTTP boundaries are next.
 
 Requirements: V2-FR-02-05, 12-13, 23-24, 36-37; V2-NFR-01-02, 05-06, 08, 13, 15.
 

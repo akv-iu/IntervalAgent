@@ -1,6 +1,6 @@
 # Recovery Lab Version 2: functional and non-functional specification
 
-Status: V2 build contract. Contracts, transition/access checks, development records, read tools, proposal previews, frozen evaluation fixtures and transactional case/message/history storage are implemented. Sessions, HTTP integration, durable jobs, agent execution, UI and remaining features are planned. Model performance and NFR targets are unmeasured; fixture authorship limits are documented in [implementation evidence](DECISIONS.md).
+Status: V2 build contract. Contracts, transition/access checks, development records, read tools, proposal previews, frozen evaluation fixtures, transactional case/message/history storage and leased mock jobs/worker are implemented. Sessions, HTTP integration, model-backed execution, shared model budgets, multi-step checkpoints, UI and remaining features are planned. Model performance and NFR targets are unmeasured; fixture authorship limits are documented in [implementation evidence](DECISIONS.md).
 Date: October 19, 2026.
 Implementation sequence: [PLAN.md](PLAN.md).
 
