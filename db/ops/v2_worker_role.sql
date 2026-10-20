@@ -1,4 +1,4 @@
--- Run as database owner after migration 010, with a password supplied to psql as a variable.
+-- Run as database owner after migration 011, with a password supplied to psql as a variable.
 -- Create with SQL, not a console-created admin role. Use its URL only in V2_WORKER_DATABASE_URL.
 create role recovery_v2_worker login password :'password';
 
@@ -10,6 +10,8 @@ grant update (state,attempts,available_at,worker_id,lease_token,lease_until,resu
 grant insert (business_id,workspace_id,case_id,revision,kind,actor,actor_id,reason)
   on v2_case_events to recovery_v2_worker;
 grant select,insert on v2_case_runs,v2_run_attempts,v2_run_daily_usage to recovery_v2_worker;
+grant select,insert on v2_model_steps to recovery_v2_worker;
+grant update (completed_attempt_id,completed_message_id,completed_at) on v2_model_steps to recovery_v2_worker;
 grant select,insert on v2_agent_messages to recovery_v2_worker;
 grant select (business_id,workspace_id,case_id,revision,body) on v2_case_messages to recovery_v2_worker;
 grant update (model_calls,tool_calls,charged_tokens,blocked_reason) on v2_case_runs to recovery_v2_worker;

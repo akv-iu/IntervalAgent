@@ -1,6 +1,6 @@
 # Recovery Lab Version 2: implementation plan
 
-Status: Phase 9's durable mock workflow is pushed to `v2` as `1af1f04`. Phase 10 adds evidence-based pending billing proposals, policy/arithmetic review and completion guards; verification is recorded in [DECISIONS.md](DECISIONS.md). Provider dispatch/model-output checkpoints, active lesson pins, operator approval/actions and UI remain planned. Task 3/4 release gates remain open. See [workflow demo](WORKFLOW.md), [API.md](API.md), [OPERATORS.md](OPERATORS.md), [WORKER.md](WORKER.md) and [RUNS.md](RUNS.md).
+Status: Phase 10 is pushed to `v2` as `7ac9372`. Phase 11 adds durable request/usage/output checkpoints with an injected single-attempt fake transport, bounded correction and saved-output reuse. See [model-step contract](MODEL-STEPS.md) and [verification](DECISIONS.md). The default worker remains mock. OpenAI adaptation, four-role provider integration, active lessons, operator approvals/actions and UI remain planned; Task 3/4 release gates stay open.
 Date: October 20, 2026.
 Build contract: [SPEC.md](SPEC.md). V2 requirement IDs in this plan refer to that document.
 

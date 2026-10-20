@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 import { readFileSync } from "node:fs";
 import { migrate } from "../../src/lib/db-admin";
 import { caseStore, jobStore } from "../../src/lib/v2/case-store";
+import { executeModelStep } from "../../src/lib/v2/model-step";
 import { demoRecords } from "../../src/lib/v2/demo-records";
 import { mockInvestigation, runMockWorkerOnce, runMockWorker } from "../../src/lib/v2/mock-worker";
 import { testSchema } from "./helpers";
@@ -197,9 +198,9 @@ test("migration backfills only eligible Phase 4 messages and is repeatable", asy
   const closed = { ...key, caseId: "already-closed" };
   await cases.create(visitor, { ...closed, accountId: "account-1" }, demoRecords());
   await cases.append(visitor, closed, message("STOP"));
-  await db.pool.query("drop table v2_agent_messages,v2_run_attempts,v2_case_runs,v2_run_daily_usage,v2_case_jobs");
-  await db.pool.query("delete from schema_migrations where name in ('006_v2_jobs.sql','009_v2_run_resources.sql','010_v2_agent_messages.sql')");
-  expect(await migrate(db.pool)).toEqual(["006_v2_jobs.sql", "009_v2_run_resources.sql", "010_v2_agent_messages.sql"]);
+  await db.pool.query("drop table v2_model_steps,v2_agent_messages,v2_run_attempts,v2_case_runs,v2_run_daily_usage,v2_case_jobs");
+  await db.pool.query("delete from schema_migrations where name in ('006_v2_jobs.sql','009_v2_run_resources.sql','010_v2_agent_messages.sql','011_v2_model_steps.sql')");
+  expect(await migrate(db.pool)).toEqual(["006_v2_jobs.sql", "009_v2_run_resources.sql", "010_v2_agent_messages.sql", "011_v2_model_steps.sql"]);
   expect(await migrate(db.pool)).toEqual([]);
   expect(await rows()).toMatchObject([{ case_id: "jobs-case", case_revision: "2", state: "queued" }]);
   expect((await cases.history(visitor, closed)).messages[0].text).toBe("STOP");
@@ -249,7 +250,15 @@ test("the dedicated worker grants support processing without V1 access or facts/
     url.searchParams.set("options", `-c search_path=${db.schema} -c role=${role}`);
     restricted = new Pool({ connectionString: url.toString(), max: 3 });
     expect(await runMockWorkerOnce(restricted, "restricted-worker")).toBe("completed");
-    for (const forbidden of ["select * from accounts", "select * from v2_visitor_sessions", "select idempotency_key from v2_case_messages", "update v2_cases set facts='{}'", "insert into v2_case_jobs (business_id) values ('other')", "insert into v2_case_messages (business_id) values ('other')", "delete from v2_cases", "update v2_case_runs set snapshot='{}'", "update v2_run_attempts set capacity=0", "delete from v2_run_daily_usage", "update v2_agent_messages set message='{}'", "delete from v2_agent_messages"]) {
+    const modelKey={ ...key,caseId: "model-permissions" }, cases=caseStore(db.pool);
+    await cases.create(visitor,{ ...modelKey,accountId: "account-1" },demoRecords());
+    await cases.append(visitor,modelKey,message());
+    const modelJob=(await jobStore(restricted).claim("restricted-model"))!;
+    const output=await executeModelStep(restricted,modelJob.lease,{
+      step: { operationKey: "customer-request",sender: "customer",recipient: "coordinator",parentMessageId: null },model: "test-model",input: "Untrusted customer data",
+    },async()=>({ text: JSON.stringify({ kind: "task_request",payload: { instruction: "Investigate this dispute." },evidenceRefs: [] }),usage: { input: 20,output: 10 } }));
+    expect(output.kind).toBe("task_request");
+    for (const forbidden of ["select * from accounts", "select * from v2_visitor_sessions", "select idempotency_key from v2_case_messages", "update v2_cases set facts='{}'", "insert into v2_case_jobs (business_id) values ('other')", "insert into v2_case_messages (business_id) values ('other')", "delete from v2_cases", "update v2_case_runs set snapshot='{}'", "update v2_run_attempts set capacity=0", "delete from v2_run_daily_usage", "update v2_agent_messages set message='{}'", "delete from v2_agent_messages", "update v2_model_steps set requests='[]'", "delete from v2_model_steps"]) {
       await expect(c.query(forbidden)).rejects.toMatchObject({ code: "42501" });
     }
   } finally {

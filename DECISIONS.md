@@ -1,5 +1,13 @@
 # Decisions and fixes
 
+## V2 Phase 11: budget and save each model step (October 20, 2026)
+
+Phase 10 is pushed to `v2` as `7ac9372`; `main` remains unchanged. The next slice pins each model request, reserves budget before dispatch, saves validated output with its usage and reuses completed output after restart. A timeout keeps its reservation; invalid output gets at most one separately funded correction. This uses fake transports only and leaves the default worker mock. [Model-step contract](docs/v2/MODEL-STEPS.md).
+
+Both self-review passes are complete. The first reproduced and fixed mutable requests and a mock-writer bypass; the second verified the fixes, permission boundaries and failure accounting. All 735 offline tests, 146 DB tests, typecheck, lint, build, replay and fixture checks pass. [Evidence](docs/v2/DECISIONS.md), [delivery gate](docs/v2/PHASE11-REVIEW.md).
+
+No manual testing is required now. Phase 11 remains local until the next "move ahead". OpenAI adaptation and four-role live integration, financial approval/actions, learning and UI remain future work. No paid API call, application migration or deployment was made.
+
 ## V2 Phase 10: review a real pending synthetic billing proposal (October 20, 2026)
 
 Phase 9 was pushed to `v2` as `1af1f04`; `main` remains unchanged. The mock roles now reconcile invoice, payment, cancellation and policy evidence. Northside proposes a $50 allocation and $20 eligible credit, leaving $14 pending human approval. The second business's stricter cancellation policy leaves $34 instead. Existing allocations/credits are deducted, and ambiguous evidence goes to a human. No balance or customer transcript changes. [Workflow and demo](docs/v2/WORKFLOW.md).

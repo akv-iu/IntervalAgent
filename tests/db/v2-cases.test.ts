@@ -167,7 +167,7 @@ test("the V1 public reader does not gain access to V2 case facts or messages", a
     await expect(c.query("select * from v2_case_messages")).rejects.toThrow(/permission denied/);
     await expect(c.query("select * from v2_case_jobs")).rejects.toThrow(/permission denied/);
     await expect(c.query("select * from v2_visitor_sessions")).rejects.toThrow(/permission denied/);
-    for (const table of ["v2_auth_user", "v2_auth_session", "v2_auth_account", "v2_auth_verification", "v2_operators", "v2_operator_memberships", "v2_case_runs", "v2_run_attempts", "v2_run_daily_usage", "v2_agent_messages"]) {
+    for (const table of ["v2_auth_user", "v2_auth_session", "v2_auth_account", "v2_auth_verification", "v2_operators", "v2_operator_memberships", "v2_case_runs", "v2_run_attempts", "v2_run_daily_usage", "v2_agent_messages", "v2_model_steps"]) {
       await expect(c.query(`select * from ${table}`)).rejects.toMatchObject({ code: "42501" });
     }
   } finally {

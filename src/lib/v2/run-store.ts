@@ -10,6 +10,7 @@ import { transaction } from "./transaction";
 import { AgentMessage } from "./contracts";
 import { MessageStep, MockWorkflow, makeAgentMessage } from "./mock-agents";
 import { billingRecipe, billingInstructions } from "./billing";
+import { ModelStepSpec, ModelRequests, ModelUsage, modelInputCapacity } from "./model-contracts";
 
 const limits = { modelRequests: 12, toolCalls: 16, tokens: 24000, outputTokens: 600, seconds: 180 } as const;
 const DAILY_TOKENS = 24000;
@@ -36,7 +37,7 @@ const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(valu
 interface RunRow { run_id: string; snapshot: unknown; started_at: Date; model_calls: number; tool_calls: number; charged_tokens: number; blocked_reason: Reason | null; within_deadline: boolean }
 interface AttemptRow { attempt_id: string; kind: "model" | "tool"; role: string; request: unknown; lease_token: string; status: string; capacity: number; day: string | Date; actual_input: number | null; actual_output: number | null; result: unknown }
 type Context = { lease: Lease; run: RunRow; snapshot: z.infer<typeof Snapshot>; records: Records; accountId: string };
-type Reservation = { blocked: Reason } | { attemptId: string; result: z.infer<typeof ToolResult> | null };
+type Reservation = { blocked: Reason } | { attemptId: string; attemptNumber: number; result: z.infer<typeof ToolResult> | null };
 
 // Trusted worker storage only; HTTP clients and model outputs never supply this pool or lease.
 export function runStore(pool: Pool) {
@@ -71,18 +72,23 @@ export function runStore(pool: Pool) {
     await c.query(`update v2_case_runs set blocked_reason=coalesce(blocked_reason,$5) where ${where}`, [...args(context.lease), reason]);
     return { blocked: reason };
   }
-  async function reserve(rawLease: unknown, operationKey: string, kind: "tool" | "model", role: string, request: unknown, capacity: number): Promise<Reservation> {
+  async function reserve(rawLease: unknown, operationKey: string, kind: "tool" | "model", role: string, request: unknown, capacity: number, modelStep = false): Promise<Reservation> {
     return withRun(rawLease, async (c, context) => {
       const { lease, run, snapshot } = context;
       if (kind==="tool" && ToolRequest.parse(request).accountId!==context.accountId) throw new Error("tool account mismatch");
+      if (modelStep) {
+        const pin = await readModelStep(c,context,operationKey);
+        if (pin.completed_message_id) throw new Error("model operation already completed");
+        if (hash(request)!==hash({ operationKey,role: pin.step.sender,inputTokens: modelInputCapacity(pin.requests),requestHash: pin.request_hash })) throw new Error("model request identity conflict");
+      }
       const prior = (await c.query<AttemptRow>(`select * from v2_run_attempts where ${where} and operation_key=$5 order by ordinal desc`, [...args(lease), operationKey])).rows;
       const latest = prior[0];
       if (latest && (latest.kind!==kind || latest.role!==role || hash(latest.request)!==hash(request))) throw new Error("operation identity conflict");
       if (run.blocked_reason) return { blocked: run.blocked_reason };
       if (!run.within_deadline) return block(c, context, "deadline");
       if (latest?.status==="succeeded") {
-        if (kind==="tool") return { attemptId: latest.attempt_id, result: ToolResult.parse(latest.result) };
-        throw new Error("model operation already completed");
+        if (kind==="tool") return { attemptId: latest.attempt_id, attemptNumber: prior.length, result: ToolResult.parse(latest.result) };
+        if (!modelStep) throw new Error("model operation already completed");
       }
       if (latest?.status==="reserved" && latest.lease_token===lease.token) throw new Error("operation already reserved");
       if (prior.length>=2) return block(c, context, "operation_attempts");
@@ -102,7 +108,7 @@ export function runStore(pool: Pool) {
         values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,coalesce($14::date,(clock_timestamp() at time zone 'UTC')::date))`,
       [...args(lease), run.run_id, attemptId, operationKey, run.model_calls+run.tool_calls+1, lease.token, role, kind, JSON.stringify(request), capacity, fundedDay]);
       await c.query(`update v2_case_runs set charged_tokens=charged_tokens+$5,model_calls=model_calls+$6,tool_calls=tool_calls+$7 where ${where}`, [...args(lease), capacity, kind==="model" ? 1 : 0, kind==="tool" ? 1 : 0]);
-      return { attemptId, result: null };
+      return { attemptId, attemptNumber: prior.length+1, result: null };
     });
   }
   async function attempt(c: PoolClient, context: Context, id: string, kind: string) {
@@ -110,48 +116,140 @@ export function runStore(pool: Pool) {
     if (!a || a.lease_token!==context.lease.token) throw new Error("attempt lease mismatch");
     return a;
   }
+  async function writeMessage(c: PoolClient, context: Context, step: z.infer<typeof MessageStep>, generate: () => unknown) {
+    const { lease, run, snapshot } = context;
+    if (!snapshot.workflow) throw new Error("run has no role workflow");
+    if (run.blocked_reason) return { blocked: run.blocked_reason };
+    if (!run.within_deadline) return block(c, context, "deadline");
+    const messageContext = { businessId: lease.businessId, workspaceId: lease.workspaceId, caseId: lease.caseId, accountId: context.accountId, runId: run.run_id, createdAt: new Date().toISOString() };
+    const prior = (await c.query(`select message from v2_agent_messages where ${where} and operation_key=$5`, [...args(lease), step.operationKey])).rows[0];
+    if (prior) {
+      const saved = AgentMessage.parse(prior.message);
+      const expected = makeAgentMessage({ ...messageContext, createdAt: saved.createdAt }, step, { kind: saved.kind, payload: saved.payload, evidenceRefs: saved.evidenceRefs });
+      if (hash(saved)!==hash(expected)) throw new Error("agent message context conflict");
+      return { message: saved };
+    }
+    const count = (await c.query(`select count(*)::int n from v2_agent_messages where ${where}`, args(lease))).rows[0].n as number;
+    if (count>=18) return block(c, context, "agent_messages");
+    if (step.parentMessageId) {
+      const parent = (await c.query(`select message from v2_agent_messages where ${where} and message_id=$5`, [...args(lease), step.parentMessageId])).rows[0];
+      if (!parent) throw new Error("agent message parent missing");
+      if (AgentMessage.parse(parent.message).recipient!==step.sender) throw new Error("agent message parent recipient mismatch");
+    }
+    const message = makeAgentMessage(messageContext, step, generate());
+    const observed = (await c.query(`select result from v2_run_attempts where ${where} and kind='tool' and status='succeeded'`, args(lease))).rows.flatMap((r) => ToolResult.parse(r.result).evidenceRefs);
+    const observedKeys = new Set(observed.map(hash));
+    const refs = [...message.evidenceRefs, ...(message.kind === "proposal" && message.payload.resolution ? message.payload.resolution.evidenceRefs : [])];
+    if (refs.some((ref) => !observedKeys.has(hash(ref)))) throw new Error("agent message evidence was not observed");
+    const inserted = await c.query(`insert into v2_agent_messages(business_id,workspace_id,case_id,case_revision,run_id,operation_key,message_id,parent_message_id,ordinal,message)
+      select $1,$2,$3,$4,$5,$6,$7,$8,$9,$10 from v2_case_runs where ${where} and deadline_at>clock_timestamp()
+      and exists(select 1 from v2_case_jobs where ${where} and lease_token=$11 and lease_until>clock_timestamp()) returning message_id`,
+    [...args(lease), run.run_id, step.operationKey, message.messageId, message.parentMessageId, count+1, JSON.stringify(message), lease.token]);
+    if (!inserted.rowCount) {
+      const valid = (await c.query(`select lease_until>clock_timestamp() valid from v2_case_jobs where ${where} and lease_token=$5`, [...args(lease),lease.token])).rows[0]?.valid;
+      if (!valid) throw new Error("worker lease invalid");
+      return block(c, context, "deadline");
+    }
+    return { message };
+  }
+  async function settleUsage(c: PoolClient, context: Context, id: string, usage: z.infer<typeof Usage>) {
+    const a = await attempt(c, context, id, "model");
+    if (a.status!=="reserved") {
+      if ((usage===null && a.status==="unknown") || (usage!==null && a.status==="succeeded" && a.actual_input===usage.input && a.actual_output===usage.output)) return;
+      throw new Error("usage settlement conflict");
+    }
+    const delta = usage ? usage.input+usage.output-a.capacity : 0;
+    const funding = await c.query(`update v2_run_daily_usage set charged_tokens=charged_tokens+$2 where day=$1`, [a.day, delta]);
+    if (funding.rowCount!==1) throw new Error("reservation funding missing");
+    await c.query(`update v2_case_runs set charged_tokens=charged_tokens+$5,blocked_reason=case when $6 then 'reservation_overrun' else blocked_reason end where ${where}`, [...args(context.lease), delta, usage!==null && (delta>0 || usage.output>limits.outputTokens)]);
+    if (usage!==null && (delta>0 || usage.output>limits.outputTokens)) context.run.blocked_reason="reservation_overrun";
+    await c.query(`update v2_run_attempts set status=$2,actual_input=$3,actual_output=$4,settled_at=clock_timestamp() where attempt_id=$1`, [id, usage ? "succeeded" : "unknown", usage?.input ?? null, usage?.output ?? null]);
+  }
+  async function readModelStep(c: PoolClient, context: Context, operationKey: string) {
+    const pin = (await c.query(`select * from v2_model_steps where ${where} and operation_key=$5`, [...args(context.lease),operationKey])).rows[0];
+    if (!pin || pin.run_id!==context.run.run_id) throw new Error("model step missing");
+    const step = MessageStep.parse(pin.step), requests = ModelRequests.parse(pin.requests);
+    if (pin.request_hash!==hash({ step,requests })) throw new Error("model pin changed");
+    return { step,requests,request_hash: pin.request_hash as string,completed_message_id: pin.completed_message_id as string | null };
+  }
   return {
     async open(lease: unknown) { return withRun(lease, async (_c, context) => ({ runId: context.run.run_id, snapshot: context.snapshot })); },
     async agentMessage(rawLease: unknown, rawStep: unknown, generate: () => unknown): Promise<AgentMessage> {
       const step = MessageStep.parse(rawStep);
       const outcome = await withRun(rawLease, async (c, context) => {
-        const { lease, run, snapshot } = context;
-        if (!snapshot.workflow) throw new Error("run has no role workflow");
-        if (run.blocked_reason) return { blocked: run.blocked_reason };
-        if (!run.within_deadline) return block(c, context, "deadline");
-        const messageContext = { businessId: lease.businessId, workspaceId: lease.workspaceId, caseId: lease.caseId, accountId: context.accountId, runId: run.run_id, createdAt: new Date().toISOString() };
-        const prior = (await c.query(`select message from v2_agent_messages where ${where} and operation_key=$5`, [...args(lease), step.operationKey])).rows[0];
-        if (prior) {
-          const saved = AgentMessage.parse(prior.message);
-          const expected = makeAgentMessage({ ...messageContext, createdAt: saved.createdAt }, step, { kind: saved.kind, payload: saved.payload, evidenceRefs: saved.evidenceRefs });
-          if (hash(saved)!==hash(expected)) throw new Error("agent message context conflict");
-          return { message: saved };
-        }
-        const count = (await c.query(`select count(*)::int n from v2_agent_messages where ${where}`, args(lease))).rows[0].n as number;
-        if (count>=18) return block(c, context, "agent_messages");
-        if (step.parentMessageId) {
-          const parent = (await c.query(`select message from v2_agent_messages where ${where} and message_id=$5`, [...args(lease), step.parentMessageId])).rows[0];
-          if (!parent) throw new Error("agent message parent missing");
-          if (AgentMessage.parse(parent.message).recipient!==step.sender) throw new Error("agent message parent recipient mismatch");
-        }
-        const message = makeAgentMessage(messageContext, step, generate());
-        const observed = (await c.query(`select result from v2_run_attempts where ${where} and kind='tool' and status='succeeded'`, args(lease))).rows.flatMap((r) => ToolResult.parse(r.result).evidenceRefs);
-        const observedKeys = new Set(observed.map(hash));
-        const refs = [...message.evidenceRefs, ...(message.kind === "proposal" && message.payload.resolution ? message.payload.resolution.evidenceRefs : [])];
-        if (refs.some((ref) => !observedKeys.has(hash(ref)))) throw new Error("agent message evidence was not observed");
-        const inserted = await c.query(`insert into v2_agent_messages(business_id,workspace_id,case_id,case_revision,run_id,operation_key,message_id,parent_message_id,ordinal,message)
-          select $1,$2,$3,$4,$5,$6,$7,$8,$9,$10 from v2_case_runs where ${where} and deadline_at>clock_timestamp()
-          and exists(select 1 from v2_case_jobs where ${where} and lease_token=$11 and lease_until>clock_timestamp()) returning message_id`,
-        [...args(lease), run.run_id, step.operationKey, message.messageId, message.parentMessageId, count+1, JSON.stringify(message), lease.token]);
-        if (!inserted.rowCount) {
-          const valid = (await c.query(`select lease_until>clock_timestamp() valid from v2_case_jobs where ${where} and lease_token=$5`, [...args(lease),lease.token])).rows[0]?.valid;
-          if (!valid) throw new Error("worker lease invalid");
-          return block(c, context, "deadline");
-        }
-        return { message };
+        const model=(await c.query(`select 1 from v2_model_steps where ${where} and operation_key=$5`,[...args(context.lease),step.operationKey])).rows[0];
+        if (model) throw new Error("model operation requires model checkpoint");
+        return writeMessage(c,context,step,generate);
       });
       if ("blocked" in outcome) throw new RunLimit(outcome.blocked);
       return outcome.message;
+    },
+    async prepareModelStep(rawLease: unknown, rawSpec: unknown) {
+      const spec = ModelStepSpec.parse(rawSpec);
+      return withRun(rawLease, async (c,context) => {
+        const { lease,run,snapshot }=context;
+        if (!snapshot.workflow) throw new Error("run has no role workflow");
+        const instruction=snapshot.workflow.instructions[spec.step.sender];
+        const system=`${instruction.version}: ${instruction.text}\nLesson: ${snapshot.workflow.lessonVersion}. Return only a JSON object with kind, payload, evidenceRefs. Routing and identity are assigned by the worker.`;
+        const request={ model: spec.model,system,input: spec.input,maxOutputTokens: 600 as const };
+        const requests=ModelRequests.parse([request,{ ...request,system: `${system}\nThe previous output was invalid. Correct its schema and use only observed evidence. Do not add identity or routing fields.` }]);
+        modelInputCapacity(requests);
+        const requestHash=hash({ step: spec.step,requests });
+        const prior=(await c.query(`select request_hash from v2_model_steps where ${where} and operation_key=$5`,[...args(lease),spec.step.operationKey])).rows[0];
+        if (prior && prior.request_hash!==requestHash) throw new Error("model step identity conflict");
+        const first=(await c.query(`select requests->0->>'model' model from v2_model_steps where ${where} limit 1`,args(lease))).rows[0];
+        if (first && first.model!==spec.model) throw new Error("run model changed");
+        if (!prior) {
+          const existing=(await c.query(`select 1 from v2_agent_messages where ${where} and operation_key=$5 union all select 1 from v2_run_attempts where ${where} and operation_key=$5`,[...args(lease),spec.step.operationKey])).rows[0];
+          if (existing) throw new Error("model operation identity conflict");
+          await c.query(`insert into v2_model_steps(business_id,workspace_id,case_id,case_revision,run_id,operation_key,step,requests,request_hash) values($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[...args(lease),run.run_id,spec.step.operationKey,JSON.stringify(spec.step),JSON.stringify(requests),requestHash]);
+        }
+        const pin=await readModelStep(c,context,spec.step.operationKey);
+        if (pin.completed_message_id) {
+          const saved=(await c.query(`select message from v2_agent_messages where ${where} and message_id=$5`,[...args(lease),pin.completed_message_id])).rows[0];
+          return { kind: "cached" as const,message: AgentMessage.parse(saved.message) };
+        }
+        return { kind: "dispatch" as const,requests: pin.requests };
+      });
+    },
+    async reserveModelStep(lease: unknown, rawKey: unknown) {
+      const operationKey=slug.parse(rawKey);
+      const pin=await withRun(lease,(c,context)=>readModelStep(c,context,operationKey));
+      const input={ operationKey,role: pin.step.sender,inputTokens: modelInputCapacity(pin.requests),requestHash: pin.request_hash };
+      const slot=await reserve(lease,operationKey,"model",input.role,input,input.inputTokens+limits.outputTokens,true);
+      if ("blocked" in slot) throw new RunLimit(slot.blocked);
+      return { attemptId: slot.attemptId,attemptNumber: slot.attemptNumber };
+    },
+    async finishModelStep(rawLease: unknown, rawKey: unknown, rawId: unknown, rawUsage: unknown, body: unknown) {
+      const operationKey=slug.parse(rawKey),id=z.uuid().parse(rawId),usage=ModelUsage.parse(rawUsage);
+      const outcome=await withRun(rawLease,async (c,context)=>{
+        const pin=await readModelStep(c,context,operationKey), a=await attempt(c,context,id,"model");
+        const expected={ operationKey,role: pin.step.sender,inputTokens: modelInputCapacity(pin.requests),requestHash: pin.request_hash };
+        if (hash(a.request)!==hash(expected) || a.role!==pin.step.sender) throw new Error("model attempt identity conflict");
+        await settleUsage(c,context,id,usage);
+        if (context.run.blocked_reason) return { blocked: context.run.blocked_reason };
+        if (!context.run.within_deadline) return block(c,context,"deadline");
+        if (pin.completed_message_id) {
+          const saved=(await c.query(`select message from v2_agent_messages where ${where} and message_id=$5`,[...args(context.lease),pin.completed_message_id])).rows[0];
+          return { message: AgentMessage.parse(saved.message) };
+        }
+        if (body===null) return { invalid: true as const };
+        await c.query("savepoint model_output");
+        let output;
+        try { output=await writeMessage(c,context,pin.step,()=>body); }
+        catch (error) {
+          // Only validation errors permit correction; database failures roll back the whole settlement.
+          if (!(error instanceof z.ZodError) && !(error instanceof Error && /agent message (evidence was not observed|parent missing|parent recipient mismatch)/.test(error.message))) throw error;
+          await c.query("rollback to savepoint model_output");
+          return { invalid: true as const };
+        }
+        if ("blocked" in output) return output;
+        await c.query(`update v2_model_steps set completed_attempt_id=$6,completed_message_id=$7,completed_at=clock_timestamp() where ${where} and operation_key=$5`,[...args(context.lease),operationKey,id,output.message.messageId]);
+        return output;
+      });
+      if ("blocked" in outcome && outcome.blocked) throw new RunLimit(outcome.blocked);
+      if ("message" in outcome && outcome.message) return { message: outcome.message };
+      return { invalid: true as const };
     },
     async reserveModel(lease: unknown, raw: unknown) {
       const input = Model.parse(raw), slot = await reserve(lease, input.operationKey, "model", input.role, input, input.inputTokens+limits.outputTokens);
@@ -165,18 +263,7 @@ export function runStore(pool: Pool) {
     },
     async settleModel(lease: unknown, rawId: unknown, rawUsage: unknown) {
       const id = z.uuid().parse(rawId), usage = Usage.parse(rawUsage);
-      return withRun(lease, async (c, context) => {
-        const a = await attempt(c, context, id, "model");
-        if (a.status!=="reserved") {
-          if ((usage===null && a.status==="unknown") || (usage!==null && a.status==="succeeded" && a.actual_input===usage.input && a.actual_output===usage.output)) return;
-          throw new Error("usage settlement conflict");
-        }
-        const delta = usage ? usage.input+usage.output-a.capacity : 0;
-        const funding = await c.query(`update v2_run_daily_usage set charged_tokens=charged_tokens+$2 where day=$1`, [a.day, delta]);
-        if (funding.rowCount!==1) throw new Error("reservation funding missing");
-        await c.query(`update v2_case_runs set charged_tokens=charged_tokens+$5,blocked_reason=case when $6 then 'reservation_overrun' else blocked_reason end where ${where}`, [...args(context.lease), delta, usage!==null && (delta>0 || usage.output>limits.outputTokens)]);
-        await c.query(`update v2_run_attempts set status=$2,actual_input=$3,actual_output=$4,settled_at=clock_timestamp() where attempt_id=$1`, [id, usage ? "succeeded" : "unknown", usage?.input ?? null, usage?.output ?? null]);
-      });
+      return withRun(lease, (c, context) => settleUsage(c,context,id,usage));
     },
     async settleTool(lease: unknown, rawId: unknown, rawResult: unknown) {
       const id = z.uuid().parse(rawId), result = ToolResult.parse(rawResult);
