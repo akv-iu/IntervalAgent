@@ -1,5 +1,11 @@
 # Decisions and fixes
 
+## V2 Phase 2: give the Investigator real records to inspect (October 19, 2026)
+
+Phase 1 was pushed to GitHub as `936cdf2` on the user's instruction. Added synthetic invoices, payments, allocations, cancellations, credits and policies for two businesses, with scoped read tools and a preview that computes the $14 example without changing balances. The two businesses use the same code but different cancellation policies. Independent evaluation cases are the next phase; these are development records.
+
+Two self-review passes checked data and proposal boundaries. Fixed a timestamp-format edge case and a proposal citing an expired policy, with failing tests before each fix. Final checks pass 666 tests, V1 replay, typecheck, lint and build. No browser test is needed yet. Phase 2 stays local until the next "move ahead"; full details are in [V2 decisions](docs/v2/DECISIONS.md).
+
 ## V2 Phase 1: agree on how the agents can work together (October 19, 2026)
 
 Added the four agents' message formats, allowed communication paths, evidence/proposal checks, case/task state changes, and business/workspace access rules. These are foundations; the agents do not run yet. Auth and worker choices are recorded in [V2 decisions](docs/v2/DECISIONS.md).

@@ -2,6 +2,15 @@
 
 Honest record of what was built, how it was checked, and what changed after review. Automated checks are marked separately from Akshay's own review. V1 entries record separate Codex CLI reviews; V2 entries explicitly distinguish self-review from independent review.
 
+## V2 Phase 2: connected records and read tools (2026-10-19)
+
+- User requested pushing the completed phase whenever they say "move ahead". Scanned tracked/proposed files for secrets, committed/pushed Phase 1 as `936cdf2`, and verified `origin/main` points to it. New Phase 2 changes remain local until the next instruction.
+- Built deterministic connected records for two businesses (three accounts each), scoped validation, five Investigator read tools, effective policy/evidence lookup, and a read-only financial proposal preview. $84 minus a $50 allocation and $20 eligible credit previews $14; a stricter second-business policy rejects that credit. Real effects/auth/persistence are not part of this slice.
+- Split Task 2: Phase 2 is 2A development data/tools; Phase 3 is 2B independent evaluation fixtures/splits. No holdout or hidden answer-key suite is claimed yet.
+- Tests first failed on missing modules. Integration exposed extra context fields in strict evidence construction, fixed. Self-review 1 found equal-instant timestamp comparison and expired-policy citation bugs; two regression tests failed first, then passed after fixes. Self-review 2 confirmed fixes; snapshot isolation and malformed-source sanitization checked. No independent reviewer model used.
+- Final checks: 21 new tests; `npm test` 666/40 files, V1 replay gate, typecheck, lint and build PASS. Existing filesystem tracing build warnings remain. No paid API calls, database changes or browser checks; nothing manual for Akshay yet.
+- Known limit: loader timeout cannot cancel arbitrary external I/O; add DB query cancellation with persistent loaders. Phase 2 complete; waiting before starting Phase 3.
+
 ## V2 Phase 1: contracts and boundaries (2026-10-19)
 
 - Scope: exactly four role IDs, strict message/tool/proposal contracts, scoped evidence, case/task transitions, and pure access checks. Documented auth/worker decisions in `docs/v2/DECISIONS.md`; preserved V1 imports and behavior. No new dependencies, endpoints, migrations, UI, or model calls.

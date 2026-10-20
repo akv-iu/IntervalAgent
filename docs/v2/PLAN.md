@@ -1,6 +1,6 @@
 # Recovery Lab Version 2: implementation plan
 
-Status: Phase 1 complete (Task 1 contracts and deployment decisions). Subsequent tasks are not started. See [DECISIONS.md](DECISIONS.md) for scope and verification evidence.
+Status: Phases 1 and 2 complete (Task 1 and Task 2A). Task 2B (independent evaluation fixtures) is the next phase; persistence and later tasks are not started. See [DECISIONS.md](DECISIONS.md) for verification evidence.
 Date: October 19, 2026.
 Build contract: [SPEC.md](SPEC.md). V2 requirement IDs in this plan refer to that document.
 
@@ -61,6 +61,10 @@ Requirements: V2-FR-03, 07-09, 23, 35-37; V2-NFR-06, 10-11, 15.
 Done when: example envelopes and transition tests pass; unauthorized routes and cross-scope IDs fail; a short decision record makes auth/worker setup concrete. No unimplemented success endpoints or empty agent stubs.
 
 ### Task 2: Build connected synthetic data and domain tools
+
+This task is split into two reviewable phases. Phase 2 / Task 2A delivers connected development records, five scoped read tools, and a non-mutating proposal preview. Phase 3 / Task 2B separately authors and freezes evaluation families/splits and hidden expectations before persistence work starts. Development examples are not claimed as independent evaluation evidence.
+
+Phase 2 completed October 19: two businesses, three accounts each, scoped record validation/read tools, policy-aware $14 preview, sanitized unavailable/not-found results, and two self-review passes. Final checks passed: 666 offline tests, V1 replay gate, typecheck, lint and build. Phase 1 was pushed as `936cdf2` when the user said to move ahead; Phase 2 remains local until the next such instruction. No manual browser check is required for these pure modules.
 
 Requirements: V2-FR-14-17, 20, 32, 35-36; V2-NFR-07, 11, 13.
 

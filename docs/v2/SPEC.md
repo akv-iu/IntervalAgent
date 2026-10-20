@@ -1,6 +1,6 @@
 # Recovery Lab Version 2: functional and non-functional specification
 
-Status: V2 build contract. Phase 1 contracts and transition/access checks are implemented; agent execution, persistence, UI and remaining features are planned. Performance targets are unmeasured. See [implementation evidence](DECISIONS.md).
+Status: V2 build contract. Contracts, transition/access checks, development business records, read tools and non-mutating proposal previews are implemented. Independent evaluation fixtures, agent execution, persistence, UI and remaining features are planned. Performance targets are unmeasured. See [implementation evidence](DECISIONS.md).
 Date: October 19, 2026.
 Implementation sequence: [PLAN.md](PLAN.md).
 
