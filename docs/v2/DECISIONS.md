@@ -106,3 +106,31 @@ Final checks: 13 new fixture tests and one import-boundary regression; `npm test
 These cases and their expected values were authored by Codex, which also implemented the application. They are separately specified families/expected values, not independent external review or evidence of model effectiveness. Family distinctions were manually reviewed; hashes detect exact copies/edits, not all semantic similarity. No agent outputs, prompt choices or lesson promotions were scored against the holdout. Once final answers are used for tuning, retire that holdout before claiming a fresh final evaluation.
 
 Task 2 is complete at the data/fixture boundary. Next is Task 3: persistent case storage and resumable work, delivered in bounded phases. Authentication, live agent collaboration, learning and UI remain future work.
+
+## Phase 4: transactional case storage (October 19, 2026)
+
+On "move ahead", scanned the completed phase for secret patterns, committed/pushed Phase 3 as `3b1d948`, and verified `origin/main`. Phase 4 remains local for review until the next instruction. Task 3 is split: this phase delivers storage only; durable jobs/worker execution and verified sessions/HTTP integration remain required before Task 3 can be complete.
+
+### Storage behavior and boundaries
+
+- Migration `005_v2_cases.sql` adds three private tables: cases with scoped immutable record snapshots, revisioned audit events, and customer/agent message storage. Composite scope keys and foreign keys prevent orphan messages/events; database checks reject invalid states, unsafe revisions and malformed identifiers. No V1 table is altered and existing public reader/lessons-writer grants are not widened.
+- `caseStore(pool)` requires an explicitly supplied pool and a principal obtained from a verified server session. It reads no credentials and introduces no HTTP route, auth provider or default owner connection. Principal parsing/access checks are authorization primitives, not authentication. The later web/worker integration must supply least-privilege credentials and trusted identities.
+- Creation validates and filters server records to the case account/business/workspace, stores the snapshot once and writes the creation event atomically. An identical retry returns the existing case; changed identity/facts conflict rather than resetting it. Facts reads validate and reapply scope even if stored records are unexpectedly broader.
+- Appending locks the case row, checks the expected revision and idempotency key, and commits the new case state, audit event and customer message in one transaction. Same key/body returns the original accepted message; changed content conflicts. Concurrent same-key submissions commit once, and different submissions racing one revision cannot overwrite each other. Operator-only transitions use the same revision protection.
+- STOP is recorded immediately using the locked current revision even if the client's revision is stale. It closes the case and sets contact suppression; operator reopening preserves suppression. This phase has no worker or outbound publisher to cancel; those paths must recheck the flag and revision when implemented.
+- Audit events record the verified visitor session record ID or operator ID, the actor type, reason, revision and timestamp. Message role describes transcript content; an operator testing a customer message remains identified as an operator in the audit. Session IDs here are internal record IDs, never cookie tokens. History uses bounded revision-cursor pagination and includes only messages associated with the returned event page.
+- Transactions set five-second lock and ten-second statement timeouts. A write failure rolls back all related records; a failed rollback discards that pool connection while preserving the original error. These per-statement limits are not a measured end-to-end performance guarantee.
+
+### Tests, self-review and actual checks
+
+Three offline boundary tests and the initial twelve integration tests were written before the store existed and failed on the missing module. The first DB run passed eleven; its rollback fault-injection constraint incorrectly matched existing test rows. Narrowing that constraint to its own case corrected the test without changing the store.
+
+Self-review 1 found stale STOP rejection, missing audit actor identity (including an operator mislabeled as a customer), and facts reads that trusted an already-scoped snapshot. Three new database regressions failed before fixes, then passed. Self-review 2 checked these fixes, transaction boundaries, concurrent retry/revision behavior, scope checks and V1 grants; no further in-scope issue was found. The orphan-event test asserts the actual foreign-key error, so a missing required field cannot disguise a broken relationship. No separate reviewer model was invoked.
+
+Final checks passed: 683 offline tests across 42 files; 50 database tests across four files (including all 15 new case-store integration tests); fixture integrity; pinned V1 guarded replay/full coverage; typecheck; lint; production build; and `git diff --check`. Existing V1 dynamic filesystem tracing warnings, Vitest configuration warnings and PostgreSQL SSL compatibility warnings remain unchanged.
+
+Database checks used only the configured dedicated test database after verifying it differed from the application endpoint/database. Each suite created and dropped an isolated random test schema. Migration 005 was not applied to the application database, and no deployed credentials/grants changed. No live model calls, browser test, user-facing V2 flow or deployment was performed; nothing requires manual browser testing yet.
+
+### Next bounded phase
+
+Add durable jobs and a resumable mock worker, extending the message transaction to enqueue work atomically. Cover competing claims, lease expiry/restart, retries, stale completion and STOP cancellation before running model-backed roles. Current stored messages do not create tasks, and reopening/new evidence does not start an agent. Later approved actions must use current ledger records rather than treating the original snapshot as mutable financial truth.

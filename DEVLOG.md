@@ -2,6 +2,15 @@
 
 Honest record of what was built, how it was checked, and what changed after review. Automated checks are marked separately from Akshay's own review. V1 entries record separate Codex CLI reviews; V2 entries explicitly distinguish self-review from independent review.
 
+## V2 Phase 4: persistent cases and audit history (2026-10-19)
+
+- On "move ahead", committed/pushed Phase 3 as `3b1d948` after secret-pattern checks and verified `origin/main`. Phase 4 stays local until the next instruction. Split Task 3 into storage first, then durable worker/jobs and auth/HTTP integration; Task 3 is not complete.
+- Added migration 005 and an explicitly pool-injected server store: scoped case snapshots, idempotent customer messages, operator transitions and revision-cursor history. Case/message/event writes are transactional; row locks and revision checks prevent overwritten work. V1 table grants remain unchanged.
+- Tests first failed on the missing store. Initial DB run: 11/12 passed; corrected the rollback test's constraint to target only its own case. Self-review 1 reproduced three new failures: stale STOP rejected, missing/incorrect audit actor, and overbroad stored facts trusted on read. Fixed each; self-review 2 confirmed transaction/concurrency/scope behavior with no further in-scope finding. No separate reviewer model used.
+- Final checks: 683 offline tests/42 files, 50 database tests/4 files (15 new DB + 3 new offline tests), fixture integrity, V1 replay, typecheck, lint, build and diff whitespace check PASS. Existing build tracing, Vitest config and PG SSL warnings remain.
+- Database tests ran in isolated schemas in the verified distinct test database and cleaned them up. No migration or grants applied to the application database; no live model calls, V2 UI, sessions, queue, worker or deployment. No manual browser test needed.
+- Next: durable jobs/resumable mock worker, including enqueue atomicity, claims/restart, stale completion and STOP cancellation. Storage alone does not execute agents or establish authentication. Details: `docs/v2/DECISIONS.md`.
+
 ## V2 Phase 3: frozen evaluation fixtures (2026-10-19)
 
 - On "move ahead", scanned tracked/proposed files, committed/pushed Phase 2 as `3b04057`, and verified the remote hash. Phase 3 remains local until the next instruction.

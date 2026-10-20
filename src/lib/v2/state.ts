@@ -13,7 +13,7 @@ export const CaseRecord = z.strictObject({
 });
 export type CaseRecord = z.infer<typeof CaseRecord>;
 
-const CaseEvent = z.strictObject({
+export const CaseEvent = z.strictObject({
   type: z.enum(["investigate", "request_customer", "request_human", "resolve", "close", "new_evidence", "reopen", "stop_contact"]),
   actor: z.enum(["system", "customer", "operator"]),
   reason: z.string().trim().min(1).max(2000),
@@ -50,7 +50,7 @@ export function transitionTask(rawState: unknown, rawNext: unknown): z.infer<typ
   return next;
 }
 
-const Principal = z.discriminatedUnion("kind", [
+export const Principal = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("visitor"), ...Scope.shape, sessionId: slug }),
   z.strictObject({ kind: z.literal("operator"), operatorId: slug, businessIds: z.array(slug).max(100) }),
 ]);
@@ -59,7 +59,7 @@ const CaseAction = z.enum(["read_case", "post_message", "review_case", "manage_l
 // Authorization only: callers must construct this principal from a verified server session.
 export function assertCaseAccess(rawPrincipal: unknown, rawCase: unknown, rawAction: unknown): void {
   const principal = Principal.parse(rawPrincipal);
-  const resource = CaseRecord.parse(rawCase);
+  const resource = Scope.strip().parse(rawCase); // authorization needs only scope; callers validate their own record/key shape
   const action = CaseAction.parse(rawAction);
   const allowed = principal.kind === "operator"
     ? principal.businessIds.includes(resource.businessId)

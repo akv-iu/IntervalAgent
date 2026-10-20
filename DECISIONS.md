@@ -1,5 +1,13 @@
 # Decisions and fixes
 
+## V2 Phase 4: save cases without losing or duplicating messages (October 19, 2026)
+
+Phase 3 was pushed as `3b1d948`. Added private database storage for cases, scoped business records, customer messages and audit history. Duplicate submissions save once, competing edits cannot silently overwrite a case, and a failed write rolls the whole change back. STOP closes the case even when the page's revision is old; reopening preserves contact suppression.
+
+Self-review found and fixed stale STOP rejection, missing/incorrect caller identity in audit history, and facts reads trusting an overly broad stored snapshot. Each regression failed before its fix; the second self-review found no further issue. Checks pass: 683 offline tests, 50 database tests, fixture integrity, V1 replay, typecheck, lint and build. All database changes were confined to temporary test schemas; the application database was not migrated.
+
+No browser test is needed yet. The queue, worker and login are the next parts of Task 3, so agents do not run from these saved messages yet. No live API tokens spent. Phase 4 stays local until the next "move ahead". Details: [V2 decisions](docs/v2/DECISIONS.md).
+
 ## V2 Phase 3: freeze the test cases before running agents (October 19, 2026)
 
 Phase 2 was pushed as `3b04057`. Added 36 synthetic evaluation cases across development, validation and final holdout, each with a separate answer key and pinned file hashes. Every split covers all eight required case categories. The runtime and deployment exclude the evaluator/answer files; the holdout remains unused for model scoring or tuning.
