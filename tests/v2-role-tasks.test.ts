@@ -55,3 +55,11 @@ test("coordinator must choose nonduplicate requests from the pinned allowlist",(
   }
   expect(()=>validateRoleOutput(request,{ kind: "escalation",payload: { reason: "skip the task" },evidenceRefs: [] })).toThrow();
 });
+
+test("revision feedback stays a scoped review body",()=>{
+  const feedback={ kind: "review_result",payload: { decision: "revise",summary: "Check policy",requiredChanges: ["Recheck policy"] },evidenceRefs: [] };
+  const data={ ...JSON.parse(input),parent: feedback,feedback,guard: feedback };
+  expect(parseRoleInput("investigate",JSON.stringify(data)).feedback?.kind).toBe("review_result");
+  expect(()=>parseRoleInput("investigate",JSON.stringify({ ...data,feedback: parent }))).toThrow();
+  expect(()=>parseRoleInput("investigate",JSON.stringify({ ...data,guard: { ...feedback,evidenceRefs: [{ ...scope,businessId: "other",recordType: "policy",recordId: "policy-1",version: 1 }] } }))).toThrow("scope");
+});

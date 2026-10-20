@@ -5,6 +5,8 @@ import { readFileSync } from "node:fs";
 import { migrate } from "../../src/lib/db-admin";
 import { caseStore, jobStore } from "../../src/lib/v2/case-store";
 import { executeModelStep } from "../../src/lib/v2/model-step";
+import { processModelTestJob } from "../../src/lib/v2/model-test-worker";
+import { scriptedRoleBody } from "../v2-role-fixture";
 import { demoRecords } from "../../src/lib/v2/demo-records";
 import { mockInvestigation, runMockWorkerOnce, runMockWorker } from "../../src/lib/v2/mock-worker";
 import { testSchema } from "./helpers";
@@ -216,7 +218,7 @@ test("a real worker process restart recovers an abandoned lease and commits once
   await run(process.execPath, ["--import", "tsx", "-e", "const {Pool}=require('pg');const {jobStore}=require('./src/lib/v2/case-store.ts');const p=new Pool({connectionString:process.env.V2_WORKER_DATABASE_URL});jobStore(p).claim('crashed-worker').then(j=>process.exit(j?0:2)).catch(()=>process.exit(3));"], { env, windowsHide: true, timeout: 30_000 });
   expect(await rows()).toMatchObject([{ state: "running", attempts: 1 }]);
   await expire();
-  const restarted = await run(process.execPath, ["--import", "tsx", "scripts/v2-mock-worker.ts", "--once"], { env, windowsHide: true, timeout: 30_000 });
+  const restarted = await run(process.execPath, ["--import", "tsx", "scripts/v2-mock-worker.ts", "--once"], { env, windowsHide: true, timeout: 180_000 });
   expect(restarted.stdout.trim()).toBe("completed");
   expect(await rows()).toMatchObject([{ state: "succeeded", attempts: 2, worker_id: "process-worker" }]);
   expect((await cases.history(visitor, key)).events.filter((e) => e.kind === "request_human")).toHaveLength(1);
@@ -235,7 +237,7 @@ test("expired leases and unverifiable results cannot advance case progress", asy
   expect((await cases.get(visitor, key)).revision).toBe(2);
 });
 
-test("the dedicated worker grants support processing without V1 access or facts/message edits", async () => {
+test("the dedicated worker grants support processing without V1 access or facts/message edits", { timeout: 300_000 }, async () => {
   await queued();
   const role = `vw_${db.schema.slice(5)}`;
   const sql = readFileSync("db/ops/v2_worker_role.sql", "utf8").split("\n").filter((line) => !line.startsWith("create role")).join("\n").replaceAll("recovery_v2_worker", role).replace("schema public", `schema ${db.schema}`);
@@ -258,6 +260,11 @@ test("the dedicated worker grants support processing without V1 access or facts/
       step: { operationKey: "customer-request",sender: "customer",recipient: "coordinator",parentMessageId: null },model: "test-model",input: "Untrusted customer data",
     },async()=>({ text: JSON.stringify({ kind: "task_request",payload: { instruction: "Investigate this dispute." },evidenceRefs: [] }),usage: { input: 20,output: 10 } }));
     expect(output.kind).toBe("task_request");
+    const flowKey={ ...key,caseId: "model-flow-permissions" };
+    await cases.create(visitor,{ ...flowKey,accountId: "account-1" },demoRecords());
+    await cases.append(visitor,flowKey,message());
+    const flowJob=(await jobStore(restricted).claim("restricted-flow"))!;
+    expect(await processModelTestJob(restricted,flowJob,"test-model",async(request)=>({ text: JSON.stringify(scriptedRoleBody(request.task!,request.input)),usage: { input: 80,output: 20 } }))).toMatchObject({ status: "succeeded",result: { mode: "model_test",decision: "approve" } });
     for (const forbidden of ["select * from accounts", "select * from v2_visitor_sessions", "select idempotency_key from v2_case_messages", "update v2_cases set facts='{}'", "insert into v2_case_jobs (business_id) values ('other')", "insert into v2_case_messages (business_id) values ('other')", "delete from v2_cases", "update v2_case_runs set snapshot='{}'", "update v2_run_attempts set capacity=0", "delete from v2_run_daily_usage", "update v2_agent_messages set message='{}'", "delete from v2_agent_messages", "update v2_model_steps set requests='[]'", "delete from v2_model_steps"]) {
       await expect(c.query(forbidden)).rejects.toMatchObject({ code: "42501" });
     }

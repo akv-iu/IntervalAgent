@@ -47,7 +47,7 @@ export async function runMockWorkerOnce(pool: Pool, workerId: string, handler?: 
   let deadline: ReturnType<typeof setTimeout> | undefined;
   try {
     // shortcut: timeout fences late results, not arbitrary handler I/O; add cooperative cancellation with external providers.
-    const timeout = new Promise<never>((_, reject) => { deadline = setTimeout(() => reject(new Error("mock step timeout")), 30_000); });
+    const timeout = new Promise<never>((_, reject) => { deadline = setTimeout(() => reject(new Error("mock step timeout")), 180_000); });
     const result = await Promise.race([handler ? handler(job) : runCheckpointedMock(pool, job), timeout]);
     return await jobs.complete(job.lease, result) ? "completed" as const : "stale" as const;
   } catch (error) {

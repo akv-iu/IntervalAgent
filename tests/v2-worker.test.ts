@@ -39,6 +39,8 @@ test("a timed-out handler is retried and its late result cannot commit", async (
     const late = new Promise<typeof result>((done) => { resolve = done; });
     const pending = runMockWorkerOnce({} as Pool, "worker-1", () => late);
     await vi.advanceTimersByTimeAsync(30_000);
+    expect(fail).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(150_000);
     expect(await pending).toBe("retry");
     resolve(result);
     await Promise.resolve();

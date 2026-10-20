@@ -17,7 +17,7 @@ const profiles = {
 } as const;
 
 const Body = z.union(AgentMessage.options.map(schema=>schema.pick({ kind: true,payload: true,evidenceRefs: true })));
-const Input = z.strictObject({ scope: AccountScope, sourceText: z.string().min(1).max(500), parent: Body.optional(), finding: Body.optional(), draft: Body.optional(), results: z.array(ToolResult).max(5).optional(), allowedTools: z.array(ToolRequest).max(5).optional() });
+const Input = z.strictObject({ scope: AccountScope, sourceText: z.string().min(1).max(500), parent: Body.optional(), finding: Body.optional(), draft: Body.optional(), feedback: Body.optional(), guard: Body.optional(), results: z.array(ToolResult).max(5).optional(), allowedTools: z.array(ToolRequest).max(5).optional() });
 export function bodyOf(message: AgentMessage) { return { kind: message.kind, payload: message.payload, evidenceRefs: message.evidenceRefs }; }
 export function roleTaskStep(task: RoleTask, operationKey: string, parentMessageId: string | null): MessageStep {
   const { sender, recipient } = profiles[task];
@@ -34,8 +34,11 @@ export function rolePrompts() {
 }
 export function parseRoleInput(task: RoleTask, input: string) {
   const data = Input.parse(JSON.parse(input));
-  if (task!=="customer-request") z.literal(task==="draft-task" ? "finding" : task==="review" ? "proposal" : "task_request").parse(data.parent?.kind);
-  const bodies=[data.parent,data.finding,data.draft];
+  if (task==="investigate") z.enum(["task_request","review_result"]).parse(data.parent?.kind);
+  else if (task!=="customer-request") z.literal(task==="draft-task" ? "finding" : task==="review" ? "proposal" : "task_request").parse(data.parent?.kind);
+  if (data.feedback) z.literal("review_result").parse(data.feedback.kind);
+  if (data.guard) z.literal("review_result").parse(data.guard.kind);
+  const bodies=[data.parent,data.finding,data.draft,data.feedback,data.guard];
   const refs = [...bodies.flatMap(body=>body ? [...body.evidenceRefs,...(body.kind==="proposal" && body.payload.resolution ? body.payload.resolution.evidenceRefs : [])] : []), ...(data.results?.flatMap((r) => r.evidenceRefs) ?? [])];
   if (refs.some((ref) => !sameAccount(ref, data.scope)) || data.allowedTools?.some((t) => t.accountId !== data.scope.accountId)
     || bodies.some(body=>body?.kind==="task_request" && body.payload.toolRequests?.some(t=>t.accountId!==data.scope.accountId))

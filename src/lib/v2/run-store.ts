@@ -3,7 +3,9 @@ import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { slug } from "../artifact";
 import { AgentRole, ToolRequest } from "./contracts";
-import { JobLease } from "./case-store";
+import { JobLease, finishCase } from "./case-store";
+import { CaseRecord } from "./state";
+import { runModelWorkflow } from "./model-workflow";
 import { Records, activePolicy, sameAccount } from "./records";
 import { ToolResult, toolResultInScope } from "./tools";
 import { transaction } from "./transaction";
@@ -17,14 +19,14 @@ const limits = { modelRequests: 12, toolCalls: 16, tokens: 24000, outputTokens: 
 const DAILY_TOKENS = 24000;
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const Snapshot = z.strictObject({
-  mode: z.enum(["mock","model_test"]), version: z.enum(["mock-investigation-2", "mock-workflow-1", "mock-billing-1", "model-billing-test-1"]), recordsHash: digest, policyVersion: z.number().int().positive(),
+  mode: z.enum(["mock","model_test"]), version: z.enum(["mock-investigation-2", "mock-workflow-1", "mock-billing-1", "model-billing-test-1", "model-billing-test-2"]), recordsHash: digest, policyVersion: z.number().int().positive(),
   model: ModelStepSpec.shape.model.optional(), rolePrompts: RolePrompts.optional(),
   instruction: z.string().min(1).max(2000), summary: z.string().min(1).max(1000),
   limits: z.strictObject({ modelRequests: z.literal(12), toolCalls: z.literal(16), tokens: z.literal(24000), outputTokens: z.literal(600), seconds: z.literal(180) }),
   steps: z.array(z.strictObject({ operationKey: slug, request: ToolRequest })).min(2).max(5),
   workflow: MockWorkflow.optional(),
 }).refine((s) => s.version==="mock-investigation-2" ? !s.workflow && s.steps.length===2 : s.version==="mock-workflow-1" ? !!s.workflow && !s.workflow.billing && s.steps.length===2 : !!s.workflow?.billing && s.steps.length>=4, "workflow version mismatch")
-  .refine(s=>s.mode==="model_test" ? s.version==="model-billing-test-1" && !!s.model && !!s.rolePrompts : s.version!=="model-billing-test-1" && !s.model && !s.rolePrompts,"run execution profile mismatch");
+  .refine(s=>s.mode==="model_test" ? s.version.startsWith("model-billing-test-") && !!s.model && !!s.rolePrompts : !s.version.startsWith("model-billing-test-") && !s.model && !s.rolePrompts,"run execution profile mismatch");
 const Model = z.strictObject({ operationKey: slug, role: AgentRole, inputTokens: z.number().int().min(1).max(limits.tokens-limits.outputTokens), requestHash: digest });
 const Tool = z.strictObject({ operationKey: slug, request: ToolRequest });
 const Usage = z.strictObject({ input: z.number().int().min(0).max(1000000), output: z.number().int().min(0).max(1000000) }).nullable();
@@ -58,7 +60,7 @@ export function runStore(pool: Pool) {
         const source = (await c.query(`select body from v2_case_messages where business_id=$1 and workspace_id=$2 and case_id=$3 and revision=$4`, args(lease))).rows[0];
         if (!source) throw new Error("run source message missing");
         const recipe = billingRecipe(records,{ businessId: lease.businessId, workspaceId: lease.workspaceId, accountId });
-        const snapshot = Snapshot.parse({ mode: model ? "model_test" : "mock", version: model ? "model-billing-test-1" : "mock-billing-1", ...(model ? { model,rolePrompts: rolePrompts() } : {}), recordsHash: hash(records), policyVersion: policy.version, limits,
+        const snapshot = Snapshot.parse({ mode: model ? "model_test" : "mock", version: model ? "model-billing-test-2" : "mock-billing-1", ...(model ? { model,rolePrompts: rolePrompts() } : {}), recordsHash: hash(records), policyVersion: policy.version, limits,
           workflow: { sourceText: source.body, lessonVersion: "none", instructions: billingInstructions, billing: recipe.context },
           instruction: "Read scoped account history and effective policy. Pause for human review without publishing or applying changes.",
           summary: "Mock account and policy lookup complete; human review required.",
@@ -176,11 +178,63 @@ export function runStore(pool: Pool) {
     if (pin.request_hash!==hash({ step,requests })) throw new Error("model pin changed");
     return { step,requests,request_hash: pin.request_hash as string,completed_message_id: pin.completed_message_id as string | null };
   }
+  async function renew(c: PoolClient, lease: Lease) {
+    const renewed=await c.query(`update v2_case_jobs set lease_until=clock_timestamp()+interval '60 seconds',updated_at=now()
+      where ${where} and lease_token=$5 and lease_until>clock_timestamp() returning case_revision`,[...args(lease),lease.token]);
+    if (!renewed.rowCount) throw new Error("worker lease invalid");
+  }
   return {
     async open(lease: unknown) { return withRun(lease, async (_c, context) => ({ runId: context.run.run_id, snapshot: context.snapshot })); },
     async openModelTest(lease: unknown, rawModel: unknown) {
       const model=ModelStepSpec.shape.model.parse(rawModel);
       return withRun(lease,async(_c,context)=>({ runId: context.run.run_id,snapshot: context.snapshot }),model);
+    },
+    async completeModelTest(rawLease: unknown) {
+      const outcome=await withRun(rawLease,async(c,context)=>{
+        const { lease,run,snapshot }=context;
+        if (snapshot.mode!=="model_test" || !snapshot.workflow?.billing) throw new Error("model-test workflow required");
+        if (run.blocked_reason) return { blocked: run.blocked_reason };
+        if (!run.within_deadline) return block(c,context,"deadline");
+        const pins=(await c.query(`select p.*,m.message,m.ordinal from v2_model_steps p
+          left join v2_agent_messages m on m.run_id=p.run_id and m.message_id=p.completed_message_id
+          where p.business_id=$1 and p.workspace_id=$2 and p.case_id=$3 and p.case_revision=$4 order by m.ordinal`,args(lease))).rows;
+        const attempts=(await c.query<AttemptRow & { operation_key: string;run_id: string;settled_at: Date | null }>(`select * from v2_run_attempts where ${where} order by ordinal desc`,args(lease))).rows;
+        let consumed=0;
+        const result=await runModelWorkflow(snapshot.workflow.billing,snapshot.workflow.sourceText,snapshot.steps,{
+          async model(task,step,input) {
+            const pin=pins[consumed++];
+            if (!pin) throw new Error("model completion checkpoint missing");
+            const requests=ModelRequests.parse(pin.requests), savedStep=MessageStep.parse(pin.step);
+            if (pin.run_id!==run.run_id || pin.operation_key!==step.operationKey || hash(savedStep)!==hash(step)
+              || pin.request_hash!==hash({ step: savedStep,requests }) || requests[0].task!==task || requests[0].model!==snapshot.model
+              || requests[0].system!==snapshot.rolePrompts![task] || requests[0].input!==input) throw new Error("model completion checkpoint mismatch");
+            const settled=attempts.find(a=>a.attempt_id===pin.completed_attempt_id);
+            const reserved={ operationKey: step.operationKey,role: step.sender,inputTokens: modelInputCapacity(requests),requestHash: pin.request_hash };
+            if (!settled || settled.kind!=="model" || settled.run_id!==run.run_id || settled.operation_key!==step.operationKey || settled.role!==step.sender
+              || !settled.settled_at || !["succeeded","unknown"].includes(settled.status) || hash(settled.request)!==hash(reserved)) throw new Error("model completion attempt mismatch");
+            const saved=AgentMessage.parse(pin.message);
+            const expected=makeAgentMessage({ ...lease,accountId: context.accountId,runId: run.run_id,createdAt: saved.createdAt },step,{ kind: saved.kind,payload: saved.payload,evidenceRefs: saved.evidenceRefs });
+            if (hash(saved)!==hash(expected) || pin.ordinal!==consumed) throw new Error("model completion message mismatch");
+            return saved;
+          },
+          async tool(step) {
+            const saved=attempts.find(a=>a.kind==="tool" && a.operation_key===step.operationKey);
+            if (!saved || saved.status!=="succeeded" && saved.status!=="failed" || hash(ToolRequest.parse(saved.request))!==hash(step.request)) throw new Error("model completion tool checkpoint missing");
+            return ToolResult.parse(saved.result);
+          },
+        },snapshot.version==="model-billing-test-2" ? 1 : 0);
+        const count=(await c.query(`select count(*)::int n from v2_agent_messages where ${where}`,args(lease))).rows[0].n;
+        if (consumed!==pins.length || consumed!==count) throw new Error("model completion has extra messages");
+        // Fence expiry again after reconstruction; result, handoff and audit commit together.
+        const updated=await c.query(`update v2_case_jobs set state='succeeded',result=$5,lease_token=null,lease_until=null,finished_at=now(),updated_at=now()
+          where ${where} and state='running' and lease_token=$6 and lease_until>clock_timestamp()
+          and exists(select 1 from v2_case_runs where ${where} and deadline_at>clock_timestamp() and blocked_reason is null) returning case_revision`,[...args(lease),JSON.stringify(result),lease.token]);
+        if (!updated.rowCount) throw new Error("model completion lease or deadline expired");
+        await finishCase(c,CaseRecord.parse({ businessId: lease.businessId,workspaceId: lease.workspaceId,caseId: lease.caseId,accountId: context.accountId,state: "investigating",revision: lease.caseRevision,contactSuppressed: false }),lease.workerId,result.reason);
+        return { result };
+      });
+      if ("blocked" in outcome && outcome.blocked) throw new RunLimit(outcome.blocked);
+      return outcome.result;
     },
     async agentMessage(rawLease: unknown, rawStep: unknown, generate: () => unknown): Promise<AgentMessage> {
       const step = MessageStep.parse(rawStep);
@@ -188,6 +242,7 @@ export function runStore(pool: Pool) {
         if (context.snapshot.mode!=="mock") throw new Error("model-test run cannot use mock messages");
         const model=(await c.query(`select 1 from v2_model_steps where ${where} and operation_key=$5`,[...args(context.lease),step.operationKey])).rows[0];
         if (model) throw new Error("model operation requires model checkpoint");
+        await renew(c,context.lease);
         return writeMessage(c,context,step,generate);
       });
       if ("blocked" in outcome) throw new RunLimit(outcome.blocked);
@@ -209,6 +264,7 @@ export function runStore(pool: Pool) {
         if (spec.task) roleInstruction(spec.task,spec.step);
         const system=spec.task ? snapshot.rolePrompts![spec.task]
           : `${instruction.version}: ${instruction.text}\nLesson: ${snapshot.workflow.lessonVersion}. Return only a JSON object with kind, payload, evidenceRefs. Routing and identity are assigned by the worker.`;
+        if (spec.task) await renew(c,lease);
         const request={ model: spec.model,system,input: spec.input,maxOutputTokens: 600 as const,...(spec.task ? { task: spec.task } : {}) };
         const requests=ModelRequests.parse([request,{ ...request,system: `${system}\nThe previous output was invalid. Correct its schema and use only observed evidence. Do not add identity or routing fields.` }]);
         modelInputCapacity(requests);

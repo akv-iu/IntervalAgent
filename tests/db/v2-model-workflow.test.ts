@@ -1,6 +1,6 @@
 import { caseStore, jobStore } from "../../src/lib/v2/case-store";
 import { demoRecords } from "../../src/lib/v2/demo-records";
-import { runCheckpointedModelTest } from "../../src/lib/v2/model-test-worker";
+import { processModelTestJob, runCheckpointedModelTest } from "../../src/lib/v2/model-test-worker";
 import { runCheckpointedMock } from "../../src/lib/v2/mock-worker";
 import { runStore } from "../../src/lib/v2/run-store";
 import { openAITransport } from "../../src/lib/v2/openai-transport";
@@ -38,7 +38,7 @@ test.each([["northside",1400],["subscriptions",3400]])("durable %s four-role SDK
   const result=await runCheckpointedModelTest(db.pool,h.job,"test-model",sdk.send);
   expect(result).toMatchObject({ mode: "model_test",decision: "approve",projectedBalanceCents: balance });
   expect(sdk.fetch).toHaveBeenCalledTimes(6);
-  expect((await row("v2_case_runs"))[0]).toMatchObject({ model_calls: 6,tool_calls: 5,charged_tokens: 600,snapshot: { mode: "model_test",version: "model-billing-test-1",model: "test-model",rolePrompts: { review: expect.stringContaining("billing-role-1/review") } } });
+  expect((await row("v2_case_runs"))[0]).toMatchObject({ model_calls: 6,tool_calls: 5,charged_tokens: 600,snapshot: { mode: "model_test",version: "model-billing-test-2",model: "test-model",rolePrompts: { review: expect.stringContaining("billing-role-1/review") } } });
   const messages=await row("v2_agent_messages");
   expect(messages).toHaveLength(6);
   expect(new Set(messages.map(r=>r.message.sender))).toEqual(new Set(["customer","coordinator","investigator","reviewer"]));
@@ -47,11 +47,98 @@ test.each([["northside",1400],["subscriptions",3400]])("durable %s four-role SDK
   expect((await h.cases.history(h.visitor,h.key)).messages).toHaveLength(1);
   if (business==="northside") {
     await db.pool.query("update v2_case_jobs set lease_until=clock_timestamp()-interval '1 second'");
+    await expect(h.runs.openModelTest(h.job.lease,"test-model")).rejects.toThrow("lease");
     const next=(await h.jobs.claim("replacement"))!;
     expect(await runCheckpointedModelTest(db.pool,next,"test-model",sdk.send)).toEqual(result);
     expect(sdk.fetch).toHaveBeenCalledTimes(6);
     expect((await row("v2_case_runs"))[0]).toMatchObject({ model_calls: 6,tool_calls: 5,charged_tokens: 600 });
+    await expect(h.runs.completeModelTest(h.job.lease)).rejects.toThrow("lease");
+    h.job=next;
   }
+  expect(await h.runs.completeModelTest(h.job.lease)).toEqual(result);
+  expect((await row("v2_case_jobs"))[0]).toMatchObject({ state: "succeeded",result });
+  expect((await h.cases.get(h.visitor,h.key)).state).toBe("awaiting_human");
+  expect((await h.cases.history(h.visitor,h.key)).events.filter(e=>e.kind==="request_human")).toHaveLength(1);
+  await expect(h.runs.completeModelTest(h.job.lease)).rejects.toThrow("lease");
+  expect(sdk.fetch).toHaveBeenCalledTimes(6);
+});
+
+test("review feedback drives one durable revision before guarded completion",async()=>{
+  const h=await claimed(); let reviews=0,investigations=0;
+  const sdk=fakeSDK((task,body)=>{
+    if (task==="review" && reviews++===0) return { ...(body as object),payload: { decision: "revise",summary: "Recheck the policy and pending wording.",requiredChanges: ["Recheck policy"],reinvestigate: ["policy_lookup"] } };
+    if (task==="investigate" && investigations++>0) return { ...(body as object),payload: { instruction: "Recheck the requested policy",toolRequests: [{ name: "policy_lookup",accountId: "account-1" }] } };
+    return body;
+  });
+  const outcome=await processModelTestJob(db.pool,h.job,"test-model",sdk.send);
+  expect(outcome).toMatchObject({ status: "succeeded",result: { decision: "approve",revisionCycles: 1,projectedBalanceCents: 1400 } });
+  expect(sdk.fetch).toHaveBeenCalledTimes(11);
+  const pins=await row("v2_model_steps"),second=pins.find(p=>p.operation_key==="model-investigate-1");
+  expect(JSON.parse(second.requests[0].input)).toMatchObject({ parent: { kind: "review_result",payload: { decision: "revise" } },feedback: { payload: { requiredChanges: ["Recheck policy"] } } });
+  expect((await row("v2_case_jobs"))[0].result.guard.decision).toBe("approve");
+  expect((await row("v2_case_runs"))[0].tool_calls).toBe(6);
+});
+
+test("persistent unsupported drafts exhaust one revision and persist guard escalation",async()=>{
+  const h=await claimed(),sdk=fakeSDK((task,body)=>task==="draft" ? { ...(body as object),payload: { message: "Your payment was applied.",resolution: null } } : body);
+  expect(await processModelTestJob(db.pool,h.job,"test-model",sdk.send)).toMatchObject({ status: "succeeded",result: { decision: "escalate",revisionCycles: 1,guard: { decision: "revise" },pendingProposal: null,projectedBalanceCents: null,reason: expect.stringContaining("revision limit") } });
+  expect((await h.cases.get(h.visitor,h.key)).state).toBe("awaiting_human");
+  expect(sdk.fetch).toHaveBeenCalledTimes(11);
+});
+
+test("completion refuses incomplete/mock checkpoints and rolls back handoff with its result",async()=>{
+  const h=await claimed(),sdk=fakeSDK();
+  await h.runs.open(h.job.lease);
+  await expect(h.runs.completeModelTest(h.job.lease)).rejects.toThrow("model-test workflow required");
+  await db.pool.query("delete from v2_case_runs");
+  await h.runs.openModelTest(h.job.lease,"test-model");
+  await expect(h.runs.completeModelTest(h.job.lease)).rejects.toThrow("checkpoint missing");
+  await runCheckpointedModelTest(db.pool,h.job,"test-model",sdk.send);
+  const pin=(await db.pool.query("select * from v2_model_steps where operation_key='model-review'")).rows[0];
+  const tool=(await db.pool.query("select attempt_id from v2_run_attempts where kind='tool' limit 1")).rows[0];
+  await db.pool.query("update v2_model_steps set completed_attempt_id=$1 where operation_key='model-review'",[tool.attempt_id]);
+  await expect(h.runs.completeModelTest(h.job.lease)).rejects.toThrow("attempt mismatch");
+  await db.pool.query("update v2_model_steps set completed_attempt_id=$1 where operation_key='model-review'",[pin.completed_attempt_id]);
+  await db.pool.query("update v2_model_steps set request_hash=$1 where operation_key='model-review'",["a".repeat(64)]);
+  await expect(h.runs.completeModelTest(h.job.lease)).rejects.toThrow("checkpoint mismatch");
+  await db.pool.query("update v2_model_steps set request_hash=$1 where operation_key='model-review'",[pin.request_hash]);
+  const root=(await db.pool.query("select * from v2_model_steps where operation_key='model-customer-request'")).rows[0];
+  await h.runs.prepareModelStep(h.job.lease,{ task: "customer-request",model: "test-model",step: { ...root.step,operationKey: "extra-root" },input: root.requests[0].input });
+  await expect(h.runs.completeModelTest(h.job.lease)).rejects.toThrow("extra messages");
+  await db.pool.query("delete from v2_model_steps where operation_key='extra-root'");
+  await db.pool.query(`create function reject_model_handoff() returns trigger language plpgsql as $$ begin raise exception 'injected handoff failure'; end $$;
+    create trigger reject_model_handoff before insert on v2_case_events for each row when (new.kind='request_human') execute function reject_model_handoff()`);
+  try {
+    await expect(h.runs.completeModelTest(h.job.lease)).rejects.toThrow("injected handoff failure");
+    expect((await row("v2_case_jobs"))[0]).toMatchObject({ state: "running",result: null });
+    expect((await h.cases.get(h.visitor,h.key)).state).toBe("investigating");
+  } finally { await db.pool.query("drop trigger reject_model_handoff on v2_case_events; drop function reject_model_handoff()"); }
+  expect((await h.runs.completeModelTest(h.job.lease)).decision).toBe("approve");
+});
+
+test("unknown transport failure retries from saved output without duplicating successful calls",async()=>{
+  const h=await claimed(),sdk=fakeSDK(); let fail=true;
+  const send: typeof sdk.send=async(request,options)=>{
+    if (request.task==="finding" && fail) { fail=false; throw new Error("injected transport failure"); }
+    return sdk.send(request,options);
+  };
+  expect(await processModelTestJob(db.pool,h.job,"test-model",send)).toEqual({ status: "retry" });
+  expect((await row("v2_case_jobs"))[0]).toMatchObject({ state: "queued",last_error: "handler_failed",result: null });
+  await db.pool.query("update v2_case_jobs set available_at=clock_timestamp()-interval '1 second'");
+  const next=(await h.jobs.claim("retry-worker"))!;
+  expect(await processModelTestJob(db.pool,next,"test-model",send)).toMatchObject({ status: "succeeded",result: { decision: "approve" } });
+  expect(sdk.fetch).toHaveBeenCalledTimes(6);
+  expect((await row("v2_case_runs"))[0].model_calls).toBe(7);
+  expect((await row("v2_run_attempts")).filter(a=>a.status==="unknown")).toHaveLength(1);
+});
+
+test("legacy model-test snapshots retain one-pass escalation and complete without a revision",async()=>{
+  const h=await claimed();
+  await h.runs.openModelTest(h.job.lease,"test-model");
+  await db.pool.query(`update v2_case_runs set snapshot=jsonb_set(snapshot,'{version}','"model-billing-test-1"')`);
+  const sdk=fakeSDK((task,body)=>task==="review" ? { ...(body as object),payload: { decision: "revise",summary: "Needs another check",requiredChanges: ["Recheck policy"] } } : body);
+  expect(await processModelTestJob(db.pool,h.job,"test-model",sdk.send)).toMatchObject({ status: "succeeded",result: { decision: "escalate",revisionCycles: 0,pendingProposal: null } });
+  expect(sdk.fetch).toHaveBeenCalledTimes(6);
 });
 
 test("a wrong role output gets one separately funded correction before continuing",async()=>{
@@ -96,6 +183,10 @@ test("STOP during a model call fences output and preserves its unknown reservati
   expect(attempts.filter(a=>a.kind==="model" && a.status==="reserved")).toHaveLength(1);
   expect((await h.cases.get(h.visitor,h.key)).contactSuppressed).toBe(true);
   expect(await row("v2_agent_messages")).toHaveLength(2);
+  expect(await processModelTestJob(db.pool,h.job,"test-model",sdk.send)).toEqual({ status: "stale" });
+  await expect(h.runs.completeModelTest(h.job.lease)).rejects.toThrow("lease");
+  expect((await row("v2_case_jobs"))[0]).toMatchObject({ state: "cancelled",result: null });
+  expect(sdk.fetch).toHaveBeenCalledTimes(3);
 });
 
 test("exhausted model budget blocks the complete flow before SDK dispatch",async()=>{
@@ -105,4 +196,8 @@ test("exhausted model budget blocks the complete flow before SDK dispatch",async
   await expect(runCheckpointedModelTest(db.pool,h.job,"test-model",sdk.send)).rejects.toThrow("model_requests");
   expect(sdk.fetch).not.toHaveBeenCalled();
   expect((await row("v2_case_runs"))[0].blocked_reason).toBe("model_requests");
+  expect(await processModelTestJob(db.pool,h.job,"test-model",sdk.send)).toEqual({ status: "failed" });
+  expect((await row("v2_case_jobs"))[0]).toMatchObject({ state: "failed",last_error: "resource_limit",result: null });
+  expect((await h.cases.get(h.visitor,h.key)).state).toBe("awaiting_human");
+  expect(sdk.fetch).not.toHaveBeenCalled();
 });

@@ -45,3 +45,24 @@ test("a model reviewer approval cannot override the deterministic pending-wordin
   const h=harness("northside",(task,raw)=> task==="draft" ? { ...(raw as object),payload: { message: "Your balance is zero and payment applied.",resolution: null } } : raw);
   expect((await runModelWorkflow(h.recipe.context,"I already paid",h.recipe.steps,h.io)).decision).toBe("escalate");
 });
+
+test("version 2 sends reviewer and code feedback through one bounded correction",async()=>{
+  let drafts=0;
+  const h=harness("northside",(task,raw)=>task==="draft" && drafts++===0 ? { ...(raw as object),payload: { message: "Applied payment.",resolution: null } } : raw);
+  const result=await runModelWorkflow(h.recipe.context,"I already paid",h.recipe.steps,h.io,1);
+  expect(result).toMatchObject({ decision: "approve",revisionCycles: 1 });
+  expect(h.tasks).toHaveLength(11); expect(h.requests).toHaveLength(10);
+  expect(JSON.parse(h.inputs[6])).toMatchObject({ feedback: { payload: { decision: "approve" } },guard: { payload: { decision: "revise" } } });
+  expect(h.inputs.every(input=>input.length<=8000)).toBe(true);
+});
+
+test.each(["reviewer","missing","exhausted"])("version 2 escalates %s safely",async(kind)=>{
+  const h=harness("northside",(task,raw)=>{
+    if (kind==="reviewer" && task==="review") return { ...(raw as object),payload: { decision: "escalate",summary: "Needs human judgement.",requiredChanges: [] } };
+    if (kind==="missing" && task==="investigate") return { ...(raw as object),payload: { instruction: "Read policy",toolRequests: [{ name: "policy_lookup",accountId: "account-1" }] } };
+    if (kind==="exhausted" && task==="draft") return { ...(raw as object),payload: { message: "Applied payment.",resolution: null } };
+    return raw;
+  });
+  expect(await runModelWorkflow(h.recipe.context,"I already paid",h.recipe.steps,h.io,1)).toMatchObject({ decision: "escalate",revisionCycles: kind==="exhausted" ? 1 : 0,pendingProposal: null });
+  expect(h.tasks).toHaveLength(kind==="exhausted" ? 11 : 6);
+});

@@ -5,14 +5,14 @@ Updated October 20, 2026. This page tracks product progress; numbered implementa
 | Milestone | Current state |
 | --- | --- |
 | Records and reliable case processing | Built and tested in code: two synthetic businesses, scoped tools, saved cases, sessions, jobs, recovery, cancellation and budget accounting. Hosted setup and real OAuth browser acceptance remain open. |
-| Four agents collaborating | The deterministic mock workflow investigates and reviews a pending proposal. A separate six-task model-test workflow now connects all four roles to the SDK/checkpoints with fake HTTP. Coordinator output selects scoped tools and a code guard checks the result. Live models, model revision routing and job/case completion for that path remain open. |
+| Four agents collaborating | Mock collaboration is built. The separate model-test workflow connects all four roles to SDK/checkpoints with fake HTTP, selects scoped tools, permits one feedback-driven revision, and saves a guarded proposal or escalation with atomic operator handoff. Live models and hosted activation remain open. |
 | Complete application walkthrough | Customer workspace, visible agent activity, operator approval/rejection, simulated financial changes and confirmed customer replies remain to build. |
 | Measured improvement | Evaluation fixtures exist. Comparable V2 evaluation/replay, candidate lessons, validation, promotion and rollback remain to build. |
 | V2 release | Live evidence, performance measurements, browser acceptance and deployment remain open. |
 
 ## Current step
 
-Phase 12 is pushed to `v2` as `913b0f9`. Work resumed on Phase 13: the internal four-role model-test workflow, left local for review after verification. It does not enable paid calls, change the default mock worker or deploy anything. [Workflow contract](MODEL-WORKFLOW.md), [verification](DECISIONS.md).
+Phase 13 is pushed to `v2` as `cb1f0c1`; `main` remains unchanged. Phase 14's internal model-test revision/completion lifecycle is verified locally and awaits review. OpenAI calls remain disabled and the default provider remains mock. Worker progress now renews valid leases; the mock handler ceiling matches the existing 180-second run budget. No deployment was performed. [Workflow contract](MODEL-WORKFLOW.md), [verification](DECISIONS.md).
 
 ## Decisions already agreed
 
@@ -20,7 +20,7 @@ Four roles: Customer, Coordinator, Investigator, Reviewer. OpenAI is the only li
 
 ## Decisions to review with Akshay
 
-Before UI implementation, choose whether the first visible walkthrough centers on the customer's dispute or the operator's review. Customer-first is the recommendation because it makes investigation progress and evidence visible from the entry point. This recommendation has not been accepted as a UI decision.
+Akshay selected the customer dispute, then agent activity, then operator review as the focus for the next UI discussion. That establishes the journey to discuss; individual screens and disclosure rules still need review before implementation.
 
 Review the screens, what the visitor may inspect, and the separation between internal agent activity and customer messages before building. Live model choice, actual spend controls and hosted worker setup also need an explicit bounded setup before any paid demonstration.
 

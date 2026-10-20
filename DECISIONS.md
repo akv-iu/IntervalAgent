@@ -1,5 +1,11 @@
 # Decisions and fixes
 
+## V2 Phase 14: bounded test revision and saved operator handoff (October 20, 2026)
+
+Phase 13 is pushed to `v2` as `cb1f0c1`; `main` remains `61b7ece`. This local phase connects review feedback to one revision, then saves a guarded pending proposal or escalation. Completion rebuilds its result from stored model/tool checkpoints and commits the job result, case handoff and audit together. The existing 12-request budget, 180-second deadline and human approval boundary remain. No paid calls or live activation.
+
+Both self-review passes and final checks are recorded in [the implementation evidence](docs/v2/DECISIONS.md). [Product status](docs/v2/STATUS.md) separates this backend progress from the remaining interface, actions and learning work. No browser test is needed for this phase. Akshay chose customer dispute, then agent activity, then operator review as the focus for the next UI discussion; screen details still need review before implementation.
+
 ## V2 Phase 13: four roles share the durable model path (October 20, 2026)
 
 Phase 12 is already pushed as `913b0f9`; work resumed after the usage pause. The new local slice runs six role tasks through the SDK/checkpoints with fake HTTP. Coordinator responses choose allowed scoped reads, Investigator sees their actual results, and a code guard checks the proposal independently of Reviewer. Both business policies are covered. [Workflow and boundaries](docs/v2/MODEL-WORKFLOW.md), [product status](docs/v2/STATUS.md).

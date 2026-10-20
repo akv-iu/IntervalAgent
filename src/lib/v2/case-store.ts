@@ -164,7 +164,7 @@ const MockResult = z.strictObject({ mode: z.literal("mock"), summary: z.string()
 export type MockResult = z.infer<typeof MockResult>;
 interface JobRow { case_revision: string; attempts: number }
 
-async function finishCase(c: PoolClient, current: CaseRecord, workerId: string, reason: string) {
+export async function finishCase(c: PoolClient, current: CaseRecord, workerId: string, reason: string) {
   const next = transitionCase(current, { type: "request_human", actor: "system", reason });
   await save(c, current, next);
   await event(c, current, next.revision, "request_human", { kind: "system", id: workerId }, reason);
@@ -205,7 +205,7 @@ export function jobStore(pool: Pool) {
         }
         if (job.attempts === 3) {
           await c.query(`update v2_case_jobs set state='failed',last_error='lease_expired',lease_token=null,lease_until=null,finished_at=now(),updated_at=now() where ${where} and case_revision=$4`, [...args(current), row.case_revision]);
-          await finishCase(c, current, workerId, "Mock work exhausted its attempts; operator review required.");
+          await finishCase(c, current, workerId, "Investigation exhausted its attempts; operator review required.");
           return null;
         }
         const lease = Lease.parse({ businessId: current.businessId, workspaceId: current.workspaceId, caseId: current.caseId, caseRevision: current.revision, workerId, token: randomUUID() });
@@ -261,7 +261,7 @@ export function jobStore(pool: Pool) {
         await c.query(`update v2_case_jobs set state=$5,last_error='handler_failed',lease_token=null,lease_until=null,
           available_at=clock_timestamp()+interval '5 seconds',finished_at=case when $5='failed' then now() else null end,updated_at=now()
           where ${where} and case_revision=$4`, [...args(lease), lease.caseRevision, terminal ? "failed" : "queued"]);
-        if (terminal) await finishCase(c, ownedJob.current, lease.workerId, "Mock work failed after three attempts; operator review required.");
+        if (terminal) await finishCase(c, ownedJob.current, lease.workerId, "Investigation failed after three attempts; operator review required.");
         return terminal ? "failed" : "retry";
       });
     },

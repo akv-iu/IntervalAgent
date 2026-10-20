@@ -1,11 +1,11 @@
 import type { Pool } from "pg";
-import type { ClaimedJob } from "./case-store";
+import { jobStore, type ClaimedJob } from "./case-store";
 import { executeModelStep, type ModelTransport } from "./model-step";
 import { runModelWorkflow } from "./model-workflow";
 import { createReadTools } from "./tools";
-import { runStore } from "./run-store";
+import { RunLimit, runStore } from "./run-store";
 
-// Internal injected-transport harness only; no live activation or job/case completion.
+// Internal injected-transport harness; no default-worker or live activation.
 export async function runCheckpointedModelTest(pool: Pool, job: ClaimedJob, model: string, send: ModelTransport) {
   const runs=runStore(pool), run=await runs.openModelTest(job.lease,model), workflow=run.snapshot.workflow;
   if (!workflow?.billing) throw new Error("billing workflow required");
@@ -23,5 +23,17 @@ export async function runCheckpointedModelTest(pool: Pool, job: ClaimedJob, mode
       }
       throw new Error("tool attempt limit");
     },
-  });
+  },run.snapshot.version==="model-billing-test-2" ? 1 : 0);
+}
+
+export async function processModelTestJob(pool: Pool, job: ClaimedJob, model: string, send: ModelTransport) {
+  const jobs=jobStore(pool);
+  try {
+    await runCheckpointedModelTest(pool,job,model,send);
+    const result=await runStore(pool).completeModelTest(job.lease);
+    return { status: "succeeded" as const,result };
+  } catch (error) {
+    const status=error instanceof RunLimit ? await jobs.pause(job.lease) : await jobs.fail(job.lease);
+    return { status };
+  }
 }
