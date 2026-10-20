@@ -1,6 +1,6 @@
 # Recovery Lab Version 2: implementation plan
 
-Status: Phase 13 is pushed to `v2` as `cb1f0c1`. Phase 14 adds one model-test revision, checkpoint-derived completion, persisted code guards and atomic operator handoff. The default worker remains mock; verification is recorded in [DECISIONS.md](DECISIONS.md). Start with [product status](STATUS.md) and the [model workflow contract](MODEL-WORKFLOW.md). Live activation/evidence, UI, actions and learning remain open; Task 3/4 release gates are not complete.
+Status: Phase 14 is pushed to `v2` as `9a0faaa`, with one model-test revision, checkpoint-derived completion, persisted code guards and atomic operator handoff. Phase 15 is a local [screen contract proposal](UI-JOURNEY.md), not implemented UI. The default worker remains mock; verification is recorded in [DECISIONS.md](DECISIONS.md). Start with [product status](STATUS.md) and the [model workflow contract](MODEL-WORKFLOW.md). Live activation/evidence, UI, actions and learning remain open; Task 3/4 release gates are not complete.
 Date: October 20, 2026.
 Build contract: [SPEC.md](SPEC.md). V2 requirement IDs in this plan refer to that document.
 
@@ -122,6 +122,8 @@ Phase 14 / internal test lifecycle: new `model-billing-test-2` runs permit one r
 Done when: a CLI mock case exercises all four roles; an injected unsupported claim causes review rejection and a successful targeted revision; a permanently ambiguous case pauses rather than inventing a result. Runtime limit, timeout, and STOP tests pass.
 
 ### Task 5: Make the collaboration visible in the case workspace
+
+Phase 15 / screen contract: the selected customer dispute -> agent activity -> operator review journey is mapped in [UI-JOURNEY.md](UI-JOURNEY.md). Akshay confirmed retaining the current white/blue/Barlow style; layout/disclosure remain proposed for user review. Implement in small slices: customer chat/status, scoped activity/evidence/proposal reads, then operator read-only review. Approvals/inbox/financial effects belong to Task 6. This documentation-only phase changes no runtime behavior and does not complete Task 5.
 
 Requirements: V2-FR-01-06, 24, 37-38; V2-NFR-03, 08, 12, 16.
 

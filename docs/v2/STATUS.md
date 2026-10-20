@@ -12,7 +12,7 @@ Updated October 20, 2026. This page tracks product progress; numbered implementa
 
 ## Current step
 
-Phase 13 is pushed to `v2` as `cb1f0c1`; `main` remains unchanged. Phase 14's internal model-test revision/completion lifecycle is verified locally and awaits review. OpenAI calls remain disabled and the default provider remains mock. Worker progress now renews valid leases; the mock handler ceiling matches the existing 180-second run budget. No deployment was performed. [Workflow contract](MODEL-WORKFLOW.md), [verification](DECISIONS.md).
+Phase 14 is pushed to `v2` as `9a0faaa`; `main` remains unchanged at `61b7ece`. Phase 15 prepares a local [customer-to-review screen contract](UI-JOURNEY.md) for review, with backend gaps and small UI slices made explicit. No screens were implemented. OpenAI calls remain disabled and the default provider remains mock. Worker progress renews valid leases; the mock handler ceiling matches the existing 180-second run budget. No deployment was performed. [Workflow contract](MODEL-WORKFLOW.md), [verification](DECISIONS.md).
 
 ## Decisions already agreed
 
@@ -22,7 +22,7 @@ Four roles: Customer, Coordinator, Investigator, Reviewer. OpenAI is the only li
 
 Akshay selected the customer dispute, then agent activity, then operator review as the focus for the next UI discussion. That establishes the journey to discuss; individual screens and disclosure rules still need review before implementation.
 
-Review the screens, what the visitor may inspect, and the separation between internal agent activity and customer messages before building. Live model choice, actual spend controls and hosted worker setup also need an explicit bounded setup before any paid demonstration.
+Akshay confirmed keeping the current white background, blue accent and Barlow type. Review the [proposed screens and disclosure](UI-JOURNEY.md), including the separation between internal agent activity and customer messages. Recommendation: implement customer chat/status first, then activity/evidence, then operator review. Approval/actions remain a separate integrity slice. Live model choice, actual spend controls and hosted worker setup also need an explicit bounded setup before any paid demonstration.
 
 ## How each next step will work
 

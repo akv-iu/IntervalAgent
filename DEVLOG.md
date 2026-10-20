@@ -2,6 +2,12 @@
 
 Honest record of what was built, how it was checked, and what changed after review. Automated checks are marked separately from Akshay's own review. V1 entries record separate Codex CLI reviews; V2 entries explicitly distinguish self-review from independent review.
 
+## V2 Phase 15: customer-to-review screen contract (2026-10-20)
+
+- Pushed the verified 23-file Phase 14 change as `9a0faaa` to `v2`; verified `main` remains `61b7ece`. Staged scope/whitespace/credential checks passed; user setup/dependency changes were excluded.
+- Prepared docs/v2/UI-JOURNEY.md with proposed screens, disclosure, state/recovery behavior, actual API gaps and four small implementation slices. Recommended customer chat/status first; activity/evidence reads and operator review follow. Approval controls wait for transactional decision/action support. Akshay confirmed retaining the current white/blue/Barlow style; layout/disclosure remain for user review.
+- Documentation-only: no application/database test rerun, model call, migration, deployment or runtime/UI change. Review/check evidence is recorded in docs/v2/PHASE15-REVIEW.md.
+
 ## V2 Phase 14: test revision and durable handoff (2026-10-20)
 
 - Pushed the verified 25-file Phase 13 change as `cb1f0c1` to `v2`; remote `main` remains `61b7ece`. Credential-scanned the staged diff; user setup/skill/autoskills changes were excluded. Phase 14 stays local.
