@@ -6,7 +6,7 @@ const Context = z.strictObject({ ...AccountScope.shape, role: z.literal("investi
 const refs = z.array(EvidenceRef).max(200);
 const found = { status: z.literal("found"), evidenceRefs: refs };
 const balance = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
-const ToolResult = z.union([
+export const ToolResult = z.union([
   z.strictObject({ ...found, name: z.literal("invoice_details"), data: z.strictObject({ invoice: Invoice, balanceCents: balance, allocations: z.array(Allocation).max(50), credits: z.array(Credit).max(50) }) }),
   z.strictObject({ ...found, name: z.literal("payment_search"), data: z.strictObject({ payments: z.array(Payment).max(50), allocations: z.array(Allocation).max(50) }) }),
   z.strictObject({ ...found, name: z.literal("account_history"), data: z.strictObject({ account: Account, invoices: z.array(z.strictObject({ invoiceId: z.string(), dueDate: z.iso.date(), balanceCents: balance })).max(50) }) }),

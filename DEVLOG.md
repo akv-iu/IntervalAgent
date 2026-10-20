@@ -2,6 +2,14 @@
 
 Honest record of what was built, how it was checked, and what changed after review. Automated checks are marked separately from Akshay's own review. V1 entries record separate Codex CLI reviews; V2 entries explicitly distinguish self-review from independent review.
 
+## V2 Phase 8: run resources and mock tool checkpoints (2026-10-20)
+
+- On "move ahead", pushed verified Phase 7 as `61b7ece`, excluding/preserving the user's new skill/setup files and autoskills dependency. An initial auth-import timeout passed isolated/full reruns before push. The user selected antislop during for this session; no global preference changed. Phase 8 remains local.
+- Added migration 009 and a trusted, pool-injected run store. It pins the mock recipe/policy/records/limits, atomically counts dispatches and shared daily capacity, keeps unknown reservations, settles known usage once, and checkpoints actual scoped tools. The default CLI reuses successful results after recovery; resource exhaustion pauses for human review. Worker grants remain narrow. Model accounting primitives are not connected to a live adapter.
+- Test-first missing-module failures; an initial JSONB ordering/retry failure led to canonical fingerprints. Self-review 1 reproduced/fixed UTC funding-day drift and foreign-account dispatch reservations. Self-review 2 reproduced/fixed foreign checkpoint data, settlement with a missing funding row and checkpointing after the run deadline. All findings had failing regressions before fixes; no separate reviewer model invoked.
+- The first full DB run passed 115/116; the old restricted-worker fake pool shared one physical connection across parallel transactions. Replaced that fixture with a real pool under the same restricted role, then reran the full suite. Final PASS: 711 offline/49 files, 116 DB/eight files (301.99 seconds), typecheck, lint, fixtures, V1 replay and build. Actual worker/CLI recovery, restricted grants, overage accounting, atomic rollback and pinned-checkpoint reuse pass.
+- No route/UI changes, manual browser acceptance, dependency addition, application migration, public activation, hosted worker or model call. All DB effects use isolated test schemas/temporary roles. All 16 tracing manifests exclude private env/evaluator assets; secret/text/link/whitespace checks and the scoped antislop delivery gate pass. Existing build/Vitest/PG warnings remain. Contract/limits: `docs/v2/RUNS.md`; gate: `docs/v2/PHASE8-REVIEW.md`. Four-role orchestration, role prompt/output pins and live model integration remain later work.
+
 ## V2 Phase 7: GitHub operator login and scoped reads (2026-10-19)
 
 - On "go ahead", secret-checked, committed/pushed Phase 6 as `ccbf37e` and verified HEAD against `origin/main`. Phase 7 stays local. Task 3D now supplies operator identity/membership/read APIs; operator writes and the shared-budget/checkpoint runtime remain later work.

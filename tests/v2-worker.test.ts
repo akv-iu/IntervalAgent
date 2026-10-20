@@ -32,13 +32,13 @@ test("a timed-out handler is retried and its late result cannot commit", async (
   const job = { lease: { businessId: "northside", workspaceId: "demo", caseId: "case-1", caseRevision: 2, workerId: "worker-1", token: "00000000-0000-4000-8000-000000000001" }, accountId: "account-1", records: demoRecords() };
   const result = await mockInvestigation(job);
   const complete = vi.fn(async () => true), fail = vi.fn(async () => "retry" as const);
-  vi.spyOn(storage, "jobStore").mockReturnValue({ claim: async () => job, complete, fail });
+  vi.spyOn(storage, "jobStore").mockReturnValue({ claim: async () => job, complete, fail, pause: async () => "failed" });
   vi.useFakeTimers();
   try {
     let resolve!: (value: typeof result) => void;
     const late = new Promise<typeof result>((done) => { resolve = done; });
     const pending = runMockWorkerOnce({} as Pool, "worker-1", () => late);
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(30_000);
     expect(await pending).toBe("retry");
     resolve(result);
     await Promise.resolve();

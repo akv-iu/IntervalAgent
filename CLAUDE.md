@@ -59,8 +59,8 @@ Use agreed defaults and engineering judgment for reversible choices. Ask only fo
 - Final check: after all tasks, one Codex review of everything since the initial commit `7a7374c`.
 - Keep review output short: never paste full Codex logs into context or docs; summarize findings in one line each.
 - DECISIONS.md: after each task, add a plain-language entry for Akshay: what went wrong, what Codex said, what was fixed and why it matters. No jargon without a short explanation.
-- Work directly on `main` (no feature branches). Before a push, scan tracked files for secrets.
-- One task per turn. After each task, stop and give Akshay a short summary of what the stage does and how to verify it. Do not start the next task until he says "move". When he says "move", push `main` first, then start the next task.
+- User direction (October 20, 2026): develop V2 on `v2`; reserve `main` for V1 production maintenance. Do not merge V2 into `main` or change production deployment settings without explicit release direction. Earlier V2 phases already reached `main`; do not reset or force-push to remove them. Before a push, scan tracked files for secrets.
+- One task per turn. After each task, stop and give Akshay a short summary of what the stage does and how to verify it. Do not start the next task until he says "move". When he says "move", push the completed verified phase to `v2` first, then start the next task.
 - No `Co-Authored-By` trailer in commit messages and no AI attribution lines in PR descriptions.
 - Akshay does all browser testing. Do not use browser automation tools. When a page needs checking, start `npm run dev` if needed, then give Akshay a short checklist (URL, what to click, what to expect) and wait for his results.
 

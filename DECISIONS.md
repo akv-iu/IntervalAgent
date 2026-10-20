@@ -1,5 +1,13 @@
 # Decisions and fixes
 
+## V2 Phase 8: retain progress and account for retries (October 20, 2026)
+
+Phase 7 was pushed as `61b7ece`. The mock worker now saves its recipe and completed tool results, so a replacement worker can resume without repeating successful reads. A shared ledger counts attempts and token reservations across restarts. Unknown outcomes keep their allowance, known usage settles once, and resource exhaustion pauses for human review. No live model is connected yet. [Run contract](docs/v2/RUNS.md).
+
+Both self-review passes reproduced and fixed accounting/scope/deadline issues. The full regression also exposed a test fixture incorrectly sharing one connection across parallel transactions; a real restricted pool fixed it. Final checks pass 711 offline tests, all 116 database tests, typecheck, lint, build, replay and fixture integrity. [Detailed evidence](docs/v2/DECISIONS.md), [antislop gate](docs/v2/PHASE8-REVIEW.md).
+
+No manual UI test needed now, no OpenAI API calls and no application-database migration. Phase 8 remains local. The four-role workflow and its role-specific prompt/output checkpoints are next; live execution and the V2 interface remain pending.
+
 ## V2 Phase 7: identify operators and limit their business access (October 19, 2026)
 
 Phase 6 was pushed as `ccbf37e`. GitHub login now establishes identity, while an owner-controlled database membership decides which businesses an operator can inspect. Login alone grants no access. Operators can read case evidence/history; this phase provides no financial approval or case-changing endpoint. Separate credentials and a default-off switch protect the boundary. [Setup and limits](docs/v2/OPERATORS.md).

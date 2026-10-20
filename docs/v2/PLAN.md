@@ -1,7 +1,7 @@
 # Recovery Lab Version 2: implementation plan
 
-Status: Phases 1-6 implemented; Phase 7 adds operator GitHub OAuth, database memberships and protected case reads (Task 3D), with verification recorded in [DECISIONS.md](DECISIONS.md). Task 3 still needs shared model budgets, instruction pinning and per-role checkpoints with the runtime before live dispatch. Model-backed agents and UI are not started. See [API.md](API.md), [OPERATORS.md](OPERATORS.md) and [WORKER.md](WORKER.md) for the separate default-off boundaries.
-Date: October 19, 2026.
+Status: Phases 1-7 implemented; Phase 8 adds a run-resource ledger, pinned mock recipes and tool checkpoints (Task 3E), with verification in [DECISIONS.md](DECISIONS.md). Model reservation/settlement primitives exist but no live dispatcher uses them yet. Task 3 still needs actual prompt/lesson pins and per-role output checkpoints with the four-role runtime before live dispatch. Model-backed agents and UI are not started. See [API.md](API.md), [OPERATORS.md](OPERATORS.md), [WORKER.md](WORKER.md) and [RUNS.md](RUNS.md).
+Date: October 20, 2026.
 Build contract: [SPEC.md](SPEC.md). V2 requirement IDs in this plan refer to that document.
 
 ## 1. Intended result
@@ -91,6 +91,8 @@ Phase 6: Phase 5 pushed as `55e28bc`; visitor sessions now use opaque hashed tok
 Phase 7: Phase 6 pushed as `ccbf37e`; Better Auth now provides GitHub-only login, database sessions, owner-provisioned memberships and scoped case/fact/history GETs through separate opt-in/cookies/credentials. Login never enrolls an operator. Session expiry/revocation and membership are resolved together; OAuth errors are sanitized and logout bypasses ordinary quotas. The runtime role cannot change cases or grant membership. See [operator setup](OPERATORS.md) and [verification evidence](DECISIONS.md). This phase stays local. Real GitHub browser acceptance and operator mutations remain pending; shared budgets/checkpoints precede expansion of the mock workflow to four roles.
 
 Requirements: V2-FR-02-05, 12-13, 23-24, 36-37; V2-NFR-01-02, 05-06, 08, 13, 15.
+
+Phase 8 / Task 3E: Phase 7 pushed as `61b7ece`. The default mock worker pins its recipe/policy/record hash/limits, reserves tool dispatches and reuses completed checkpoints after lease recovery. Private run/attempt/daily-usage tables support shared model token/request accounting, conservative unknown reservations, exact known settlement and immediate resource-limit escalation. No model adapter is connected. This phase stays local until the next instruction. Four-role orchestration, role prompts/output checkpoints and review-cycle enforcement are next; Task 3 remains incomplete until those runtime gates pass. [Run contract and limits](RUNS.md).
 
 - Add non-destructive V2 migrations for cases, messages, runs, tasks/jobs, tool results, events, and access scope.
 - Implement server-authoritative case read/message submission with authenticated scope and idempotency keys.
@@ -198,7 +200,7 @@ No calendar estimate is committed before Task 1 validates auth, worker hosting, 
 ## 6. Task execution and verification
 
 - Implement one reviewable task at a time. Follow the repository's existing review and user browser-check process where applicable; do not infer permission to push or deploy from this plan.
-- User instruction (October 19): on "move ahead", commit/push the completed verified phase before starting the next phase. Leave the newly completed phase for review until the next such instruction; do not force-push or publish a V2 release implicitly.
+- User instruction (October 19, branch clarified October 20): on "move ahead", commit/push the completed verified phase to `v2` before starting the next phase. Reserve `main` for V1 production maintenance. Leave the newly completed phase for review until the next such instruction; do not force-push, merge V2 into `main`, or publish a V2 release implicitly.
 - Record actual changes/checks in DEVLOG and plain-language decisions in DECISIONS; keep V1/V2 evidence distinguishable.
 - Test material behavior and failures. Run impacted checks per task, then the complete release checks at the end; documentation-only edits do not require model calls or application tests.
 - Use mocks first. Database tests require the dedicated test database; live calls require configured spend controls. Never use missing credentials as a reason to fabricate passing evidence.

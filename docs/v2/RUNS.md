@@ -1,0 +1,30 @@
+# V2 run resources and tool checkpoints
+
+The default mock worker now uses a persisted run for each accepted source-message job. It pins a mock investigation recipe, record hash, policy version and limits, reserves each tool dispatch and reuses successfully checkpointed results after a lease is reclaimed. It still performs one investigation and pauses for human review. Four-role orchestration, model prompts, review cycles, customer publication and financial effects remain later work.
+
+## Storage and deployment
+
+Migration 009 adds private `v2_case_runs`, `v2_run_attempts` and `v2_run_daily_usage` tables. All run/attempt foreign keys retain business, workspace, case and source revision. The immutable case snapshot remains the source of truth; changed records invalidate the run rather than silently changing its pinned recipe. A different accepted message revision gets a separate run.
+
+Prepare the isolated development database through migration 009 as owner, then provision the [worker role](../../db/ops/v2_worker_role.sql). For an existing worker login, apply the new run/attempt/daily-usage grant statements as owner without repeating `CREATE ROLE`. The role may insert accounting/checkpoints and update narrow usage/result columns; it cannot rewrite pinned snapshots, reservation amounts, operation identities or deadlines, delete accounting, alter facts, or gain V1/session access. Visitors/operators receive no new grants or HTTP endpoints in this phase.
+
+The worker CLI and environment variables are unchanged. No deployed database migration, role setup, public activation or hosted worker is performed by this implementation.
+
+## Limits and accounting
+
+The pinned initial limits are 12 model requests, 16 tool invocations, 24,000 reserved/observed tokens per run, 600 reserved output tokens per model request, and a 180-second deadline. A separate 24,000-token daily allowance is global across all cases and businesses, using UTC days. These are conservative limits, not measured model consumption or a dollar-cost estimate. Mock tools consume no model tokens.
+
+The deadline starts when the worker first opens the run, excluding initial queue time. It includes retry backoff and recovery downtime, so an old run may pause conservatively after a worker outage. Human waiting begins after job completion/escalation and is outside that run's execution period. There is no heartbeat or exact active-time measurement yet. The mock handler has a 30-second deadline, allowing checkpoint database work within its 60-second lease; each read tool retains its five-second timeout.
+
+`runStore(pool)` is a trusted worker API, not a client/model authority boundary. A current lease, worker identity, case revision and unsuppressed investigating case are required before reservations or settlements. Transactions lock case, job and run in that order. Counters/attempt rows and daily capacity commit together. Resource denial records a fixed reason before the worker marks the job failed and case awaiting human review; a crash between those operations leaves dispatch blocked for the replacement worker too.
+
+- `reserveModel` reserves declared input capacity plus 600 output tokens and increments the shared model-call count. Its request hash/operation identity cannot change under the same key. This is accounting infrastructure only: no model adapter or live dispatch uses it yet. A future dispatcher must derive conservative input capacity from its actual request, enforce the returned output limit, pin actual prompts and reserve every transport/output retry before making calls.
+- `settleModel` records observed input/output counts exactly once and releases unused capacity on the original funding day. Missing/unknown usage retains the whole reservation. A crashed or stale attempt never receives an automatic refund. Observed overages must be recorded honestly and block further dispatch; reservations are not a guarantee against a misbehaving future provider or an inaccurate input estimator. No pricing or hard currency-cap claim is made.
+- `reserveTool` validates the account before dispatch and increments the run's tool count. A successful checkpoint, including a valid empty result, is returned without redispatch or another charge. An unavailable result can be tried once more. Every operation has at most two attempts, including reservations abandoned across leases. Parallel duplicate reservations on the same lease are denied.
+- `settleTool` validates the result and its scoped record/version evidence before checkpointing it. A retry can reuse completed results; pending unknown work needs a fresh, separately counted reservation under a replacement lease. STOP, newer evidence, closed cases, expired/replaced leases and wrong scope fence stale reservations/results. The mock uses only the trusted read-tool implementation; model text cannot author tool checkpoints.
+
+Rows retain unknown reservations and history for audit. There is no cleanup/refund job, run-reset endpoint, owner budget editor or automated escalation recovery. Those do not need to exist for this bounded mock slice. Do not delete funding records while their attempts may still require reconciliation. Model-output checkpoints, per-role prompt/lesson pins and the two-review-cycle limit must arrive with the actual four-role workflow before live dispatch.
+
+## Verification
+
+Offline and isolated-database tests cover input validation, shared reservations/refunds, unknown outcomes, duplicate dispatch, cross-case daily concurrency, reclaimed leases, cached tools, retry exhaustion, fixed run limits, deadline exhaustion, STOP/scope fencing, UTC rollover and actual default-worker checkpoint use. The existing restricted-role and restarted CLI tests exercise the updated worker path. All model usage in these tests is simulated; no OpenAI API call is required.

@@ -154,7 +154,8 @@ export function caseStore(pool: Pool) {
   };
 }
 
-const Lease = CaseKey.extend({ caseRevision: revision, workerId: slug, token: z.uuid() });
+export const JobLease = CaseKey.extend({ caseRevision: revision, workerId: slug, token: z.uuid() });
+const Lease = JobLease;
 export type ClaimedJob = { lease: z.infer<typeof Lease>; accountId: string; records: unknown };
 const MockResult = z.strictObject({ mode: z.literal("mock"), summary: z.string().trim().min(1).max(1000), evidenceRefs: z.array(EvidenceRef).min(1).max(200) });
 export type MockResult = z.infer<typeof MockResult>;
@@ -236,6 +237,16 @@ export function jobStore(pool: Pool) {
           where ${where} and case_revision=$4`, [...args(lease), lease.caseRevision, terminal ? "failed" : "queued"]);
         if (terminal) await finishCase(c, ownedJob.current, lease.workerId, "Mock work failed after three attempts; operator review required.");
         return terminal ? "failed" : "retry";
+      });
+    },
+    async pause(rawLease: unknown): Promise<"failed" | "stale"> {
+      const lease = Lease.parse(rawLease);
+      return transaction(pool, async (c) => {
+        const current = await owned(c, lease);
+        if (!current) return "stale";
+        await c.query(`update v2_case_jobs set state='failed',last_error='resource_limit',lease_token=null,lease_until=null,finished_at=now(),updated_at=now() where ${where} and case_revision=$4`, [...args(lease), lease.caseRevision]);
+        await finishCase(c, current.current, lease.workerId, "Run resource limit reached; operator review required.");
+        return "failed";
       });
     },
   };

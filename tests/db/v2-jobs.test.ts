@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import { Pool } from "pg";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { readFileSync } from "node:fs";
@@ -197,9 +197,9 @@ test("migration backfills only eligible Phase 4 messages and is repeatable", asy
   const closed = { ...key, caseId: "already-closed" };
   await cases.create(visitor, { ...closed, accountId: "account-1" }, demoRecords());
   await cases.append(visitor, closed, message("STOP"));
-  await db.pool.query("drop table v2_case_jobs");
-  await db.pool.query("delete from schema_migrations where name='006_v2_jobs.sql'");
-  expect(await migrate(db.pool)).toEqual(["006_v2_jobs.sql"]);
+  await db.pool.query("drop table v2_run_attempts,v2_case_runs,v2_run_daily_usage,v2_case_jobs");
+  await db.pool.query("delete from schema_migrations where name in ('006_v2_jobs.sql','009_v2_run_resources.sql')");
+  expect(await migrate(db.pool)).toEqual(["006_v2_jobs.sql", "009_v2_run_resources.sql"]);
   expect(await migrate(db.pool)).toEqual([]);
   expect(await rows()).toMatchObject([{ case_id: "jobs-case", case_revision: "2", state: "queued" }]);
   expect((await cases.history(visitor, closed)).messages[0].text).toBe("STOP");
@@ -239,17 +239,21 @@ test("the dedicated worker grants support processing without V1 access or facts/
   const role = `vw_${db.schema.slice(5)}`;
   const sql = readFileSync("db/ops/v2_worker_role.sql", "utf8").split("\n").filter((line) => !line.startsWith("create role")).join("\n").replaceAll("recovery_v2_worker", role).replace("schema public", `schema ${db.schema}`);
   const c = await db.pool.connect();
+  let restricted: Pool | undefined;
   try {
     await c.query(`create role ${role} nologin`);
     await c.query(`grant ${role} to current_user`);
     await c.query(sql);
     await c.query(`set role ${role}`);
-    const restricted = { connect: async () => ({ query: c.query.bind(c), release() {} }) } as unknown as Pool;
+    const url = new URL(process.env.TEST_DATABASE_URL!);
+    url.searchParams.set("options", `-c search_path=${db.schema} -c role=${role}`);
+    restricted = new Pool({ connectionString: url.toString(), max: 3 });
     expect(await runMockWorkerOnce(restricted, "restricted-worker")).toBe("completed");
-    for (const forbidden of ["select * from accounts", "select * from v2_visitor_sessions", "update v2_cases set facts='{}'", "insert into v2_case_jobs (business_id) values ('other')", "insert into v2_case_messages (business_id) values ('other')", "delete from v2_cases"]) {
+    for (const forbidden of ["select * from accounts", "select * from v2_visitor_sessions", "update v2_cases set facts='{}'", "insert into v2_case_jobs (business_id) values ('other')", "insert into v2_case_messages (business_id) values ('other')", "delete from v2_cases", "update v2_case_runs set snapshot='{}'", "update v2_run_attempts set capacity=0", "delete from v2_run_daily_usage"]) {
       await expect(c.query(forbidden)).rejects.toMatchObject({ code: "42501" });
     }
   } finally {
+    await restricted?.end();
     await c.query("reset role"); await c.query(`drop owned by ${role}`); await c.query(`drop role ${role}`); c.release();
   }
 });
