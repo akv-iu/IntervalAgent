@@ -8,18 +8,19 @@ import { Records, activePolicy, sameAccount } from "./records";
 import { ToolResult } from "./tools";
 import { transaction } from "./transaction";
 import { AgentMessage } from "./contracts";
-import { MessageStep, MockWorkflow, makeAgentMessage, mockInstructions } from "./mock-agents";
+import { MessageStep, MockWorkflow, makeAgentMessage } from "./mock-agents";
+import { billingRecipe, billingInstructions } from "./billing";
 
 const limits = { modelRequests: 12, toolCalls: 16, tokens: 24000, outputTokens: 600, seconds: 180 } as const;
 const DAILY_TOKENS = 24000;
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const Snapshot = z.strictObject({
-  mode: z.literal("mock"), version: z.enum(["mock-investigation-2", "mock-workflow-1"]), recordsHash: digest, policyVersion: z.number().int().positive(),
+  mode: z.literal("mock"), version: z.enum(["mock-investigation-2", "mock-workflow-1", "mock-billing-1"]), recordsHash: digest, policyVersion: z.number().int().positive(),
   instruction: z.string().min(1).max(2000), summary: z.string().min(1).max(1000),
   limits: z.strictObject({ modelRequests: z.literal(12), toolCalls: z.literal(16), tokens: z.literal(24000), outputTokens: z.literal(600), seconds: z.literal(180) }),
-  steps: z.array(z.strictObject({ operationKey: slug, request: ToolRequest })).length(2),
+  steps: z.array(z.strictObject({ operationKey: slug, request: ToolRequest })).min(2).max(5),
   workflow: MockWorkflow.optional(),
-}).refine((s) => (s.version === "mock-workflow-1") === (s.workflow !== undefined), "workflow version mismatch");
+}).refine((s) => s.version==="mock-investigation-2" ? !s.workflow && s.steps.length===2 : s.version==="mock-workflow-1" ? !!s.workflow && !s.workflow.billing && s.steps.length===2 : !!s.workflow?.billing && s.steps.length>=4, "workflow version mismatch");
 const Model = z.strictObject({ operationKey: slug, role: AgentRole, inputTokens: z.number().int().min(1).max(limits.tokens-limits.outputTokens), requestHash: digest });
 const Tool = z.strictObject({ operationKey: slug, request: ToolRequest });
 const Usage = z.strictObject({ input: z.number().int().min(0).max(1000000), output: z.number().int().min(0).max(1000000) }).nullable();
@@ -52,11 +53,12 @@ export function runStore(pool: Pool) {
         if (!policy) throw new Error("run policy missing");
         const source = (await c.query(`select body from v2_case_messages where business_id=$1 and workspace_id=$2 and case_id=$3 and revision=$4`, args(lease))).rows[0];
         if (!source) throw new Error("run source message missing");
-        const snapshot = Snapshot.parse({ mode: "mock", version: "mock-workflow-1", recordsHash: hash(records), policyVersion: policy.version, limits,
-          workflow: { sourceText: source.body, lessonVersion: "none", instructions: mockInstructions },
+        const recipe = billingRecipe(records,{ businessId: lease.businessId, workspaceId: lease.workspaceId, accountId });
+        const snapshot = Snapshot.parse({ mode: "mock", version: "mock-billing-1", recordsHash: hash(records), policyVersion: policy.version, limits,
+          workflow: { sourceText: source.body, lessonVersion: "none", instructions: billingInstructions, billing: recipe.context },
           instruction: "Read scoped account history and effective policy. Pause for human review without publishing or applying changes.",
           summary: "Mock account and policy lookup complete; human review required.",
-          steps: [{ operationKey: "account-history", request: { name: "account_history", accountId } }, { operationKey: "policy-lookup", request: { name: "policy_lookup", accountId } }],
+          steps: recipe.steps,
         });
         run = (await c.query<RunRow>(`insert into v2_case_runs(business_id,workspace_id,case_id,case_revision,snapshot) values($1,$2,$3,$4,$5) returning *,true within_deadline`, [...args(lease), JSON.stringify(snapshot)])).rows[0];
       }

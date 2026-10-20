@@ -7,6 +7,12 @@ const accountScope = { ...Scope.shape, accountId: slug };
 const text = z.string().trim().min(1).max(2000);
 const version = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const cents = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const balance = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+export const BillingFacts = z.strictObject({
+  invoiceId: slug, currentBalanceCents: balance, projectedBalanceCents: balance, policyVersion: version,
+  payment: z.strictObject({ paymentId: slug, amountCents: cents }).nullable(),
+  credit: z.strictObject({ cancellationId: slug, amountCents: cents }).nullable(),
+}).refine((f) => !!(f.payment || f.credit) && f.projectedBalanceCents===f.currentBalanceCents-(f.payment?.amountCents ?? 0)-(f.credit?.amountCents ?? 0), "billing facts need consistent integer-cent arithmetic");
 
 export const EvidenceRef = z.strictObject({
   ...accountScope,
@@ -88,7 +94,8 @@ const Review = z.strictObject({
   decision: z.enum(["approve", "revise", "escalate"]),
   summary: text,
   requiredChanges: z.array(text).max(8),
-}).refine((r) => r.decision === "approve" ? r.requiredChanges.length === 0 : r.decision !== "revise" || r.requiredChanges.length > 0,
+  reinvestigate: z.array(ToolName).max(5).optional(),
+}).refine((r) => r.decision === "approve" ? r.requiredChanges.length === 0 && !r.reinvestigate?.length : r.decision !== "revise" || r.requiredChanges.length > 0,
   "approval cannot require changes; revision must name a change");
 
 const routes = {
@@ -103,7 +110,7 @@ const routes = {
 // These envelopes are the four agents' output contracts, not executable instructions.
 export const AgentMessage = z.discriminatedUnion("kind", [
   z.strictObject({ ...envelope, kind: z.literal("task_request"), payload: z.strictObject({ instruction: text, toolRequests: z.array(ToolRequest).max(8).optional() }) }),
-  z.strictObject({ ...envelope, kind: z.literal("finding"), payload: z.strictObject({ summary: text, uncertainties: z.array(text).max(8) }) }),
+  z.strictObject({ ...envelope, kind: z.literal("finding"), payload: z.strictObject({ summary: text, uncertainties: z.array(text).max(8), billing: BillingFacts.nullable().optional() }) }),
   z.strictObject({ ...envelope, kind: z.literal("clarification_request"), payload: z.strictObject({ question: text }) }),
   z.strictObject({ ...envelope, kind: z.literal("proposal"), payload: z.strictObject({ message: text, resolution: Proposal.nullable() }) }),
   z.strictObject({ ...envelope, kind: z.literal("review_result"), payload: Review }),
@@ -116,6 +123,12 @@ export const AgentMessage = z.discriminatedUnion("kind", [
     invalid("only an initial customer task request can have no parent");
   }
   const refs = [...m.evidenceRefs, ...(m.kind === "proposal" && m.payload.resolution ? m.payload.resolution.evidenceRefs : [])];
+  if (m.kind==="finding" && m.payload.billing) {
+    const facts = m.payload.billing;
+    const has = (type: string, id: string) => m.evidenceRefs.some((r) => r.recordType===type && r.recordId===id);
+    if (m.payload.uncertainties.length || !has("invoice",facts.invoiceId) || (facts.payment && !has("payment",facts.payment.paymentId))
+      || (facts.credit && !has("cancellation",facts.credit.cancellationId)) || !m.evidenceRefs.some((r) => r.recordType==="policy" && r.version===facts.policyVersion)) invalid("billing facts need their observed invoice, payment, cancellation and policy evidence");
+  }
   if (refs.some((e) => e.businessId !== m.businessId || e.workspaceId !== m.workspaceId || e.accountId !== m.accountId)) {
     invalid("evidence must belong to the message's business, workspace and account");
   }

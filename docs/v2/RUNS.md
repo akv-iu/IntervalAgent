@@ -1,6 +1,6 @@
 # V2 run resources and tool checkpoints
 
-The default mock worker uses a persisted run for each accepted source-message job. It pins its mock instruction manifests, record hash, policy version and limits, reserves each tool dispatch and reuses successful tool/role checkpoints after lease recovery. Its [four-role mock workflow](WORKFLOW.md) performs bounded review and pauses for a human. Provider dispatch/model prompts, customer publication, active lessons and financial effects remain later work.
+The default mock worker uses a persisted run for each accepted source-message job. It pins mock instruction manifests, business context, record hash, policy and limits, reserves each tool dispatch and reuses successful tool/role checkpoints after lease recovery. Its [four-role billing workflow](WORKFLOW.md) reviews evidence-based pending proposals and pauses for a human. Provider dispatch/model prompts, customer publication, active lessons and financial effects remain later work.
 
 ## Storage and deployment
 

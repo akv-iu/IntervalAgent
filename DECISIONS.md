@@ -1,5 +1,13 @@
 # Decisions and fixes
 
+## V2 Phase 10: review a real pending synthetic billing proposal (October 20, 2026)
+
+Phase 9 was pushed to `v2` as `1af1f04`; `main` remains unchanged. The mock roles now reconcile invoice, payment, cancellation and policy evidence. Northside proposes a $50 allocation and $20 eligible credit, leaving $14 pending human approval. The second business's stricter cancellation policy leaves $34 instead. Existing allocations/credits are deducted, and ambiguous evidence goes to a human. No balance or customer transcript changes. [Workflow and demo](docs/v2/WORKFLOW.md).
+
+Both self-review passes reproduced and fixed cent formatting, contradictory findings, conflicting review instructions, uncited billing facts and inconsistent arithmetic. Database integration also caught a strict account-scope mismatch, fixed without loosening validation. Typecheck, lint, 730 offline tests, build, V1 replay, fixture integrity and CLI assertions pass. The full DB run passed 132/133; the remaining test expected the old two-tool recipe. Its count/status expectations now require five, and the corrected test passes on rerun. [Evidence](docs/v2/DECISIONS.md), [delivery gate](docs/v2/PHASE10-REVIEW.md).
+
+No manual UI test is required. Optional: `npm run workflow:v2:mock -- --reject-once`. Phase 10 remains local. OpenAI dispatch, human financial approval/actions, learning and the V2 interface are still pending; no model call or application migration was made.
+
 ## V2 Phase 9: the four mock roles exchange durable messages (October 20, 2026)
 
 Phase 8 was pushed to `v2` as `7914b5c`; future V2 work stays on that branch. The new worker connects Customer, Coordinator, Investigator and Reviewer through stored, addressed messages. Restarted workers reuse completed outputs. Unsupported wording triggers a policy recheck and correction; missing evidence or two unsuccessful corrections escalate to a human. [Offline demo and limits](docs/v2/WORKFLOW.md).

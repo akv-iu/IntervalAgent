@@ -1,6 +1,6 @@
 # V2 mock worker
 
-This is a deterministic background-work demonstration. Four mock roles exchange persisted internal messages, read account history and policy through scoped tools, review a pending acknowledgement and move the case to `awaiting_human`. These are not model-backed agents; the worker does not publish a customer reply, approve a financial proposal or change a balance. See the [workflow and offline demo](WORKFLOW.md).
+This is a deterministic background-work demonstration. Four mock roles exchange persisted messages, reconcile five scoped billing tools and review a pending proposal before moving the case to `awaiting_human`. These are not model-backed agents; Reviewer verifies the proposal but cannot grant human financial approval. The worker publishes no customer reply and changes no balance. See the [workflow and offline demo](WORKFLOW.md).
 
 ## Running
 
@@ -27,6 +27,6 @@ The first command polls until SIGINT/SIGTERM. The second makes one claim attempt
 
 ## Limits
 
-This is one persisted mock workflow per message with [run accounting and checkpoints](RUNS.md). Its mock instructions, source text, empty lesson set, policy, record hash and limits are pinned; successful tools and role outputs are reused after recovery. There is no heartbeat, provider dispatcher/model-output checkpoint, active learning, customer publication or financial action. The timeout fences late results but cannot cancel arbitrary handler I/O; cooperative cancellation and full usage integration are required before external model calls. Fixed limits have not been load tested. Injected custom handlers are a trusted testing hook; the CLI always uses the checkpointed default.
+This is one persisted mock workflow per message with [run accounting and checkpoints](RUNS.md). Its mock instructions, source text, business context, empty lesson set, policy, record hash and limits are pinned; successful tools and role outputs are reused after recovery. New runs use the billing recipe; both prior recipe versions remain supported for in-flight work. Pending proposals live in internal messages/job results, not an approval/action ledger or exposed timeline API. There is no heartbeat, provider dispatcher/model-output checkpoint, active learning, customer publication or financial action. The timeout fences late results but cannot cancel arbitrary handler I/O; cooperative cancellation and full usage integration are required before external model calls. Fixed limits have not been load tested. Injected custom handlers are a trusted testing hook; the CLI always uses the checkpointed default.
 
 Automated checks use isolated schemas in `TEST_DATABASE_URL`, including an abruptly exited child process, a restarted CLI, rollback/concurrency tests and temporary restricted database roles. No application-database migration or production login provisioning is part of those checks.

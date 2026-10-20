@@ -37,8 +37,8 @@ test("a run pins the mock recipe, policy, record hash and limits once across wor
   const { runs, job } = await claimed();
   const first = await runs.open(job.lease), repeated = await runStore(db.pool).open(job.lease);
   expect(repeated).toEqual(first);
-  expect(first.snapshot).toMatchObject({ mode: "mock", version: "mock-workflow-1", policyVersion: 43, limits: { modelRequests: 12, toolCalls: 16, tokens: 24000, outputTokens: 600, seconds: 180 } });
-  expect(first.snapshot.steps).toHaveLength(2);
+  expect(first.snapshot).toMatchObject({ mode: "mock", version: "mock-billing-1", policyVersion: 43, limits: { modelRequests: 12, toolCalls: 16, tokens: 24000, outputTokens: 600, seconds: 180 } });
+  expect(first.snapshot.steps).toHaveLength(5);
   expect(first.snapshot.recordsHash).toMatch(/^[a-f0-9]{64}$/);
   await db.pool.query("update v2_cases set facts=jsonb_set(facts,'{accounts,0,firstName}',to_jsonb('Changed'::text))");
   await expect(runs.open(job.lease)).rejects.toThrow(/records changed/);
@@ -138,8 +138,8 @@ test("late STOP and wrong-scope leases fence reservations and checkpoints", asyn
 test("the default mock worker actually checkpoints its tools and pauses immediately on an exhausted run", async () => {
   await queued();
   expect(await runMockWorkerOnce(db.pool, "worker-1")).toBe("completed");
-  expect((await row()).tool_calls).toBe(2);
-  expect((await attempts()).map((a) => a.status)).toEqual(["succeeded", "succeeded"]);
+  expect((await row()).tool_calls).toBe(5);
+  expect((await attempts()).map((a) => a.status)).toEqual(Array(5).fill("succeeded"));
   await db.pool.query("truncate v2_cases,v2_run_daily_usage cascade");
   const { runs, jobs, job } = await claimed();
   await runs.open(job.lease);
@@ -235,7 +235,7 @@ test("a reclaimed worker resumes the pinned recipe and does not repeat a complet
   const slot = await runs.reserveTool(job.lease, step);
   if (slot.kind!=="dispatch") throw new Error("unexpected cache");
   await runs.settleTool(job.lease, slot.attemptId, await result(job));
-  await db.pool.query("update v2_case_runs set snapshot=jsonb_set(jsonb_set(snapshot-'workflow','{version}',to_jsonb('mock-investigation-2'::text)),'{summary}',to_jsonb('Pinned earlier recipe summary.'::text))");
+  await db.pool.query("update v2_case_runs set snapshot=jsonb_set(jsonb_set(jsonb_set(snapshot-'workflow','{version}',to_jsonb('mock-investigation-2'::text)),'{steps}',jsonb_build_array(snapshot->'steps'->0,snapshot->'steps'->1)),'{summary}',to_jsonb('Pinned earlier recipe summary.'::text))");
   await db.pool.query("update v2_case_jobs set lease_until=clock_timestamp()-interval '1 second'");
   expect(await runMockWorkerOnce(db.pool, "replacement-worker")).toBe("completed");
   expect((await row()).tool_calls).toBe(2);

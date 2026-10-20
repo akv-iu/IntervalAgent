@@ -4,8 +4,9 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { slug } from "../artifact";
 import { isStop } from "../patterns";
-import { Records, sameAccount } from "./records";
-import { AgentMessage, EvidenceRef } from "./contracts";
+import { Records, previewProposal, sameAccount } from "./records";
+import { AgentMessage, EvidenceRef, Proposal } from "./contracts";
+import { pendingBillingText } from "./billing";
 import { CaseEvent, CaseRecord, Principal, assertCaseAccess, transitionCase } from "./state";
 import { transaction } from "./transaction";
 
@@ -157,7 +158,9 @@ export function caseStore(pool: Pool) {
 export const JobLease = CaseKey.extend({ caseRevision: revision, workerId: slug, token: z.uuid() });
 const Lease = JobLease;
 export type ClaimedJob = { lease: z.infer<typeof Lease>; accountId: string; records: unknown };
-const MockResult = z.strictObject({ mode: z.literal("mock"), summary: z.string().trim().min(1).max(1000), evidenceRefs: z.array(EvidenceRef).max(200), workflow: z.strictObject({ decision: z.enum(["approve", "escalate"]), revisionCycles: z.number().int().min(0).max(2), finalMessageId: slug }).optional() }).refine((r) => r.evidenceRefs.length>0 || r.workflow?.decision==="escalate", "missing evidence can only escalate");
+const MockResult = z.strictObject({ mode: z.literal("mock"), summary: z.string().trim().min(1).max(1000), evidenceRefs: z.array(EvidenceRef).max(200), workflow: z.strictObject({ decision: z.enum(["approve", "escalate"]), revisionCycles: z.number().int().min(0).max(2), finalMessageId: slug }).optional(), pendingProposal: Proposal.optional(), projectedBalanceCents: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional() })
+  .refine((r) => r.evidenceRefs.length>0 || r.workflow?.decision==="escalate", "missing evidence can only escalate")
+  .refine((r) => (r.pendingProposal!==undefined)===(r.projectedBalanceCents!==undefined) && (!r.pendingProposal || r.workflow?.decision==="approve"), "pending proposal requires a reviewed preview");
 export type MockResult = z.infer<typeof MockResult>;
 interface JobRow { case_revision: string; attempts: number }
 
@@ -222,7 +225,7 @@ export function jobStore(pool: Pool) {
             || !tables[ref.recordType].some((r) => r.id === ref.recordId && r.version === ref.version)) throw new Error("unverifiable job evidence");
         }
         if (result.workflow) {
-          const checkpoint = (await c.query(`select m.message,
+          const checkpoint = (await c.query(`select m.message,r.snapshot,
             (select count(*)::int from v2_agent_messages where ${where} and case_revision=$4 and message->>'kind'='review_result') reviews
             from v2_agent_messages m join v2_case_runs r using(business_id,workspace_id,case_id,case_revision,run_id)
             where m.business_id=$1 and m.workspace_id=$2 and m.case_id=$3 and m.case_revision=$4 and m.message_id=$5
@@ -233,6 +236,14 @@ export function jobStore(pool: Pool) {
           const approved = message.kind==="review_result" && message.payload.decision==="approve";
           if ((result.workflow.decision==="approve" ? !approved : message.kind!=="escalation") || checkpoint.reviews-1!==result.workflow.revisionCycles
             || JSON.stringify(message.evidenceRefs)!==JSON.stringify(result.evidenceRefs)) throw new Error("final workflow checkpoint mismatch");
+          if (result.pendingProposal || (checkpoint.snapshot.version==="mock-billing-1" && approved)) {
+            if (!result.pendingProposal) throw new Error("billing proposal missing");
+            const draftRow = (await c.query(`select message from v2_agent_messages where ${where} and case_revision=$4 and message_id=$5`, [...args(lease),lease.caseRevision,message.parentMessageId])).rows[0];
+            const draft = AgentMessage.parse(draftRow?.message);
+            const preview = previewProposal(data,{ businessId: current.businessId, workspaceId: current.workspaceId, accountId: current.accountId },result.pendingProposal);
+            if (draft.kind!=="proposal" || JSON.stringify(draft.payload.resolution)!==JSON.stringify(result.pendingProposal) || preview.length!==1 || preview[0].balanceCents!==result.projectedBalanceCents
+              || draft.payload.message!==pendingBillingText(result.pendingProposal,result.projectedBalanceCents)) throw new Error("billing proposal checkpoint or preview mismatch");
+          }
         }
         await finishCase(c, current, lease.workerId, "Mock investigation complete; operator review required.");
         await c.query(`update v2_case_jobs set state='succeeded',result=$5,lease_token=null,lease_until=null,finished_at=now(),updated_at=now() where ${where} and case_revision=$4`, [...args(lease), lease.caseRevision, JSON.stringify(result)]);

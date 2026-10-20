@@ -12,23 +12,25 @@ npm run workflow:v2:mock -- --business subscriptions --missing-policy
 
 These commands use the existing labeled development records, require no database or credentials, and print JSON containing internal envelopes, tool operation keys and the result. IDs/time are fixed for repeatability. `--reject-once` explicitly injects unsupported wording into the first draft so the review/correction path is visible. `--missing-policy` injects a missing record; it is not evidence of a real outage. Unknown flags/businesses fail.
 
-## What runs
+## What runs now
 
 1. Customer sends the accepted customer text to Coordinator as untrusted task data.
-2. Coordinator requests account history and effective policy from Investigator.
-3. Investigator reads the scoped tools concurrently and reports evidence or uncertainty.
-4. Coordinator requests a pending-review draft from Customer.
-5. Customer sends that draft to Reviewer. It contains no financial proposal.
-6. Reviewer checks the fixed mock wording and evidence. Unsupported wording triggers targeted policy reinvestigation and another draft. Missing evidence escalates immediately. After at most two correction cycles, unresolved review escalates.
+2. Coordinator requests account history, invoice details, payment search, adjustment history and effective policy from Investigator. Multiple invoices are not silently reduced to the first one.
+3. Investigator reads independent tools concurrently and reconciles their records, existing allocations/credits, available settled payment and cancellation eligibility. Missing, contradictory or ambiguous evidence produces explicit uncertainty.
+4. Coordinator requests a pending proposal from Customer using the structured finding.
+5. Customer proposes the verified candidate allocation/eligible credit and a projected balance, with versioned evidence and mandatory human approval.
+6. Reviewer recomputes the existing code-based proposal preview from observed records and checks the finding, proposal, evidence and fixed pending wording. Rejection names the relevant billing tools for reinvestigation. After at most two correction cycles, unresolved review escalates.
 
-This is a fixed mock routing demonstration. Its Reviewer uses an exact acknowledgement/evidence check, not general language understanding. It does not resolve payment matching, calculate a proposed adjustment, or demonstrate model-selected delegation. The $14 resolution and financial approval workflow remain later work.
+The reference Northside case proposes a $50 allocation plus a policy-eligible $20 credit against $84, leaving **$14 pending approval**. Harbor Subscriptions uses the same runtime with a one-day cancellation window; its three-day cancellation is ineligible, so only the $50 allocation is proposed, leaving **$34 pending approval**. Existing allocations/credits reduce what can be proposed; nothing is applied again. These are synthetic development examples, not independent model evaluation.
+
+This remains fixed mock routing and deterministic text, not general language understanding or model-selected delegation. Automatic proposals require one invoice, at most one available settled payment and at most one eligible cancellation; ambiguity or an unsafe preview goes to a human. Record/customer text cannot choose tools or authorize effects. Standalone preview/approval capability is not inferred from a successful Reviewer result.
 
 ## Durable worker
 
 The existing [worker command](WORKER.md) runs the same workflow against scoped persisted case snapshots. Migration 010 adds private, append-only `v2_agent_messages`. Every envelope links business/workspace/account, case/run/task, parent, sender/recipient, evidence and a stable operation key. Scope, permitted routes, parent ownership and observed tool evidence are validated before insertion. Existing visitor/operator APIs do not expose this internal timeline yet.
 
-A new run pins the accepted source text, four mock instruction versions/texts, policy, record hash and an explicit `none` lesson version. Unsupported instruction snapshots fail rather than silently substituting current code. In-flight legacy `mock-investigation-2` runs retain their two-tool behavior. New `mock-workflow-1` runs reuse stored outputs and successful tools after lease recovery; envelope timestamps record the actual persisted step time and remain unchanged on reuse. Only trusted synchronous mock functions execute inside the checkpoint transaction; do not attach an external provider there. Unavailable tools get one separately counted retry; valid missing results do not.
+A new `mock-billing-1` run pins accepted source text, four billing instruction manifests, scoped business/snapshot/invoice context, policy, record hash and explicit `none` lesson version. Unsupported instruction snapshots fail rather than silently substituting code. In-flight `mock-investigation-2` and `mock-workflow-1` runs retain their prior two-tool behavior. New runs reuse outputs and successful tools after lease recovery; timestamps retain each persisted step time. Only trusted synchronous mock functions execute inside the checkpoint transaction; do not attach an external provider there. Unavailable tools get one separately counted retry; valid missing results do not.
 
-There are at most 18 persisted mock messages per run, enough for the normal six-message path, two five-message correction cycles and a final escalation. Deadline, lease, case revision, STOP and existing tool caps still apply. Mock role functions consume zero model requests/tokens; those counters must describe provider dispatches, not role names. Existing model accounting primitives are not connected to a dispatcher.
+There are at most 18 persisted mock messages per run, enough for the normal six-message path, two five-message correction cycles and a final escalation. Initial billing uses five tools; each financial correction requests four relevant tools, so two cycles use thirteen calls before any transient retries. The shared sixteen-tool cap can pause earlier if retries exhaust it. Deadline, lease, case revision and STOP still apply. Mock role functions consume zero model requests/tokens; existing model accounting is not connected to a dispatcher.
 
-Both approval and escalation end at `awaiting_human`. A mock Reviewer approval is an internal acknowledgement check, not operator approval. No customer reply is published, no ledger is changed and no lesson becomes active. The next phase must connect substantive billing evidence/proposals and model dispatch accounting before claiming model-backed four-agent behavior.
+Both approval and escalation end at `awaiting_human`. A mock Reviewer approval is an internal proposal check, not operator approval. The pending proposal/preview is stored only when it matches the reviewed draft and a fresh preview against the scoped case facts. Missing/altered proposals, wrong projected balances and completed-action wording cannot commit as reviewed results. No customer reply is published, no ledger is changed and no lesson becomes active. Provider dispatch/output checkpoints, human approval/actions and UI remain later work.

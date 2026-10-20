@@ -1,6 +1,6 @@
 # Recovery Lab Version 2: functional and non-functional specification
 
-Status: V2 build contract. Contracts, scoped tools, previews, frozen evaluation fixtures, transactional cases/history, private visitor APIs and operator OAuth/membership reads are implemented. The leased worker now checkpoints four mock roles, observed tool evidence and bounded review revisions with pinned mock instruction manifests. Model accounting primitives exist; provider dispatch/model-output checkpoints, substantive billing proposals, active lesson pins, operator mutations and UI remain planned. Real GitHub browser acceptance is pending credentials; model performance and NFR targets are unmeasured. See [implementation evidence](DECISIONS.md), [mock workflow](WORKFLOW.md) and [run limits](RUNS.md).
+Status: V2 build contract. Contracts, scoped tools, frozen evaluation fixtures, transactional cases/history, visitor APIs and operator OAuth/membership reads are implemented. The leased worker checkpoints four mock roles and bounded review, now producing typed pending billing proposals from observed tools with policy/arithmetic checks before completion. Model accounting primitives exist; provider dispatch/model-output checkpoints, active lesson pins, operator approval/actions and UI remain planned. Real GitHub browser acceptance is pending credentials; model performance and NFR targets are unmeasured. See [implementation evidence](DECISIONS.md), [mock workflow](WORKFLOW.md) and [run limits](RUNS.md).
 Date: October 20, 2026.
 Implementation sequence: [PLAN.md](PLAN.md).
 
