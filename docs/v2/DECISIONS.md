@@ -328,3 +328,27 @@ Self-review 2 checked those fixes, shared accounting/transaction boundaries, rol
 ### Actual verification and limits
 
 Passed: all 735 offline tests/52 files; all 146 database tests/10 files in 590.40 seconds; typecheck; lint; V1 pinned guarded replay/full coverage; all 36 frozen input hashes; production build; and source/link/credential/whitespace checks. All sixteen server manifests exclude environment files and private V2 evaluation assets/scripts. The full DB run includes the actual restricted worker/CLI restart, legacy recipes, migration replay, V1 reader isolation and all thirteen new model-step cases. [Backend delivery gate](PHASE11-REVIEW.md). Final read-only cleanup confirmed zero temporary test schemas or V2 test roles remain. No application migration, deployed role change, OpenAI call, credential setup, browser/OAuth acceptance, hosted worker or UI change was performed. Fake transport results do not demonstrate model reasoning or live performance. The default worker stays mock. Live adaptation, role-specific provider prompts/controller integration, customer publication, financial approval/actions and active learning remain planned. Task 4 is not complete. Existing Next tracing, Vitest and PostgreSQL compatibility warnings remain. A packaging check initially also rejected traced test source files; that broader condition is not the private-evaluation exclusion. All sixteen manifests exclude environment files and private V2 evaluation assets/scripts; existing broad tracing still includes source/tests.
+
+
+## Phase 12: single-attempt OpenAI SDK transport (October 20, 2026)
+
+Pushed verified Phase 11 as `73e86ac` to `v2`; remote `main` remains `61b7ece`. Only its nineteen files were staged and credential-scanned. User skill/setup and autoskills dependency changes were excluded. Phase 12 stays local. Akshay asked for clearer product progress and more involvement, so [STATUS.md](STATUS.md) now separates built capabilities, current work, remaining milestones and decisions to review before UI work.
+
+The adapter uses the installed SDK directly, with explicit credentials, a fixed OpenAI endpoint, no SDK retries, 30-second timeout, cancellation, JSON output, one choice, 600 completion tokens and no stored completion. It maps known/unknown usage and rejects incomplete/refused/tool-call output without losing valid usage. Error details and SDK logging are suppressed. The SDK's ambient custom-header feature is rejected at construction. The default worker and web routes remain disconnected; no live enablement or new dependency/configuration is introduced. [Contract](MODEL-STEPS.md).
+
+### Tests and two self-review passes
+
+Initial tests failed because the adapter module did not exist. The implementation passed nineteen offline tests, typecheck and two actual SDK-to-durable-store database tests, with fake HTTP injected below the SDK. One proves dispatch follows reservation, usage settles and output is reused; the other proves a retryable server error sends once and retains the unknown charge.
+
+Self-review 1 found no confirmed implementation defect. Extended verification to SDK timeout, in-flight abort, refusal/tool-call responses, malformed choices/usage and malformed pinned requests; all twenty-nine adapter tests passed. No deliberate faulty implementation was introduced to manufacture findings.
+
+Self-review 2 identified that import-boundary tests watched the old provider directory but did not recognize the new adapter. A probe import reproduced that gap before fixing it. A shared model-code path list now guards web components, V2 routes and the mock-worker entry point. All thirty-eight targeted adapter/import tests and typecheck passed afterward. No further in-scope defect was found. Both passes were self-reviews, not an independent reviewer-model invocation.
+
+### Actual verification and limits
+
+Passed: all 765 offline tests/53 files; typecheck; lint; production build; V1 pinned guarded replay/full coverage; all 36 frozen input hashes; source/local-link/credential/whitespace checks; and environment/private-evaluation exclusions in all sixteen server manifests. Final read-only cleanup confirmed zero temporary schemas or V2 test roles remain. [Backend delivery gate](PHASE12-REVIEW.md). The targeted model-step DB suite passed all fifteen tests in 82.48 seconds. The full ten-file database suite was not rerun this phase: SQL/grants and runtime storage behavior are unchanged; the prior Phase 11 full run passed all 146 cases. This phase adds two SDK integration cases. No paid OpenAI call, application-database migration, hosting/deployment change, real OAuth/browser check or UI work was performed. Live model compatibility, quality, latency, spend controls and four-role integration remain unverified. Task 4 remains open. Existing Next tracing, Vitest and PG compatibility warnings remain.
+
+
+### Phase 12 push and pause checkpoint
+
+Akshay requested pushing all completed work, then waiting for the hourly usage allowance to reset. Phase 12 is verified for this push; no next implementation phase starts in this turn. The assistant cannot observe the allowance reset, so continuation waits for Akshay to resume. Existing validation evidence above remains applicable; only status documentation changed after verification. User setup/dependency edits remain excluded.

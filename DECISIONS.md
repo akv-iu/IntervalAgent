@@ -1,5 +1,13 @@
 # Decisions and fixes
 
+## V2 Phase 12: controlled OpenAI calls, still disabled in the worker (October 20, 2026)
+
+Phase 11 is pushed to `v2` as `73e86ac`; `main` is unchanged. This local slice adds the SDK adapter that future live agents will use. One reserved attempt makes at most one SDK request; timeout/cancellation and usage mapping feed the existing durable checkpoint controls. The default worker still uses mocks. [Start with the product status page](docs/v2/STATUS.md), then [adapter details](docs/v2/MODEL-STEPS.md).
+
+Both self-review passes are complete. The first expanded SDK timeout/error/output checks without finding an implementation defect. The second reproduced and fixed an import-test gap so the new adapter is recognized as model code and stays outside web routes and the mock worker. Final verification passed 765 offline tests, all 15 targeted model-step DB tests, typecheck, lint, build, replay and fixture integrity. The other DB files were not rerun because storage/SQL are unchanged; the prior full run passed 146 tests. [Evidence](docs/v2/DECISIONS.md).
+
+No manual testing is required now, no paid calls were made and no deployment or application migration changed. Akshay requested pushing Phase 12 and pausing until usage resets and he resumes. Four-role live integration and the application interface are still unfinished. Before UI work, review the first customer/operator walkthrough together; customer-first remains a recommendation, not an accepted UI decision.
+
 ## V2 Phase 11: budget and save each model step (October 20, 2026)
 
 Phase 10 is pushed to `v2` as `7ac9372`; `main` remains unchanged. The next slice pins each model request, reserves budget before dispatch, saves validated output with its usage and reuses completed output after restart. A timeout keeps its reservation; invalid output gets at most one separately funded correction. This uses fake transports only and leaves the default worker mock. [Model-step contract](docs/v2/MODEL-STEPS.md).

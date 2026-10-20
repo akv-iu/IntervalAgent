@@ -1,6 +1,6 @@
 # Recovery Lab Version 2: implementation plan
 
-Status: Phase 10 is pushed to `v2` as `7ac9372`. Phase 11 adds durable request/usage/output checkpoints with an injected single-attempt fake transport, bounded correction and saved-output reuse. See [model-step contract](MODEL-STEPS.md) and [verification](DECISIONS.md). The default worker remains mock. OpenAI adaptation, four-role provider integration, active lessons, operator approvals/actions and UI remain planned; Task 3/4 release gates stay open.
+Status: Phase 12 is complete and verified for the user-requested push to `v2`. It adds the single-attempt OpenAI SDK adapter with fake-HTTP verification; the default worker remains mock. Work is paused at the user's request until usage resets and they resume. Live four-role integration, active lessons, operator approval/actions and UI remain planned; Task 3/4 release gates stay open. Start with [product status](STATUS.md); see [model-step contract](MODEL-STEPS.md) and [verification](DECISIONS.md).
 Date: October 20, 2026.
 Build contract: [SPEC.md](SPEC.md). V2 requirement IDs in this plan refer to that document.
 

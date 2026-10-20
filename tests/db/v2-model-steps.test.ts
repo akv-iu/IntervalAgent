@@ -2,6 +2,7 @@ import { caseStore, jobStore } from "../../src/lib/v2/case-store";
 import { demoRecords } from "../../src/lib/v2/demo-records";
 import { executeModelStep, type ModelTransport } from "../../src/lib/v2/model-step";
 import { runStore } from "../../src/lib/v2/run-store";
+import { openAITransport } from "../../src/lib/v2/openai-transport";
 import { testSchema } from "./helpers";
 
 let db: Awaited<ReturnType<typeof testSchema>>;
@@ -177,4 +178,29 @@ test("exhausted daily allowance prevents any transport call",async()=>{
   await expect(executeModelStep(db.pool,lease,spec,send)).rejects.toThrow("daily_tokens");
   expect(send).not.toHaveBeenCalled();
   expect(await rows("v2_run_attempts")).toHaveLength(0);
+});
+
+test("the real SDK adapter dispatches after funding and reuses the durable output",async()=>{
+  const { lease }=await claimed();
+  const fetch=vi.fn<typeof globalThis.fetch>(async()=>{
+    expect((await rows("v2_run_attempts"))[0].status).toBe("reserved");
+    return Response.json({ choices: [{ finish_reason: "stop",message: { content: JSON.stringify(body) } }],usage: { prompt_tokens: 100,completion_tokens: 20 } });
+  });
+  const send=openAITransport("test-key",fetch);
+  const first=await executeModelStep(db.pool,lease,spec,send);
+  expect(await executeModelStep(db.pool,lease,spec,send)).toEqual(first);
+  expect(fetch).toHaveBeenCalledOnce();
+  expect((await rows("v2_case_runs"))[0]).toMatchObject({ model_calls: 1,charged_tokens: 120 });
+  expect((await rows("v2_model_steps"))[0].completed_message_id).toBe(first.messageId);
+});
+
+test("an SDK retryable failure consumes one reservation and keeps unknown usage",async()=>{
+  const { lease }=await claimed();
+  const fetch=vi.fn<typeof globalThis.fetch>(async()=>Response.json({ error: { message: "injected provider failure" } },{ status: 500 }));
+  await expect(executeModelStep(db.pool,lease,spec,openAITransport("test-key",fetch))).rejects.toThrow("transport_failed");
+  expect(fetch).toHaveBeenCalledOnce();
+  const a=(await rows("v2_run_attempts"))[0];
+  expect(a.status).toBe("unknown");
+  expect((await rows("v2_case_runs"))[0]).toMatchObject({ model_calls: 1,charged_tokens: a.capacity });
+  expect(await rows("v2_agent_messages")).toHaveLength(0);
 });

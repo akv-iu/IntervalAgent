@@ -2,6 +2,20 @@
 
 Honest record of what was built, how it was checked, and what changed after review. Automated checks are marked separately from Akshay's own review. V1 entries record separate Codex CLI reviews; V2 entries explicitly distinguish self-review from independent review.
 
+## Phase 12 push/pause checkpoint (2026-10-20)
+
+Akshay requested pushing all completed work and waiting for hourly usage to reset. Prepared the verified Phase 12 files for `v2`, excluding user setup/dependency edits. No next-phase implementation or paid call is started. Resume waits for Akshay because the assistant cannot observe his allowance reset. Only documentation status changed after the recorded checks.
+
+## V2 Phase 12: single-attempt OpenAI SDK adapter (2026-10-20)
+
+- Staged/credential-scanned only the nineteen verified Phase 11 files, committed/pushed `73e86ac` to `v2`, and verified remote `main` remains `61b7ece`. User setup/skill files and autoskills dependency/lock edits remain uncommitted. Phase 12 stays local.
+- Added the SDK transport with explicit key, fixed endpoint, zero client/request retries, 30-second timeout, forwarded abort, JSON output, one choice, 600 completion tokens and store:false. Preserves known usage on refusal/incomplete/malformed choices and unknown usage conservatively. Disables SDK logging/ambient account credentials and rejects ambient custom headers. No new dependency, SQL migration, grant, HTTP route or live-mode switch. Default mock worker remains unchanged.
+- Used OpenAI Docs: official Chat Completions request reference fetched; TypeScript overview fetch failed twice, so retry/timeout/cancellation behavior was checked against the actual installed SDK README/source/types and fake-HTTP tests. No API-key setup tool was available or needed for these fake-only requests.
+- Test-first missing module failure, then nineteen offline tests and two SDK-to-store DB cases passed. Self-review 1 found no confirmed implementation defect and expanded timeout/abort/refusal/malformed-response tests; all twenty-nine adapter tests passed. Self-review 2 reproduced a missing import-boundary recognition with a probe file, then fixed the shared model-code list for web/V2 routes/mock worker. All thirty-eight targeted tests and typecheck passed afterward. These were self-reviews, not an independent reviewer invocation.
+- Final checks: 765 offline tests/53 files; all fifteen targeted model-step DB cases in 82.48 seconds; typecheck; lint; production build; V1 pinned guarded replay/full coverage; 36 frozen input hashes. No full DB rerun: SQL/storage behavior are unchanged and the previous phase passed all 146 DB cases; this phase adds two SDK integration cases. Cleanup confirms zero temporary schemas/V2 test roles. Source/local-link/credential/whitespace and sixteen server-manifest exclusions are checked before delivery. Existing Next tracing/Vitest/PG compatibility warnings remain.
+- Added docs/v2/STATUS.md in response to Akshay wanting clearer progress and involvement. It distinguishes mock collaboration, adapter readiness, unfinished live orchestration, product UI, actions, learning and deployment, with unresolved walkthrough choices. Plan/spec/README and model-step contract reflect current status.
+- No paid model call, live credential setup, application migration, hosted worker, browser/OAuth acceptance, public activation or deployment. SDK/model compatibility and live performance remain unverified; four-role provider routing/prompts and provenance are required before activation. Task 4 remains open. See docs/v2/PHASE12-REVIEW.md.
+
 ## V2 Phase 11: durable model-step requests, usage and output (2026-10-20)
 
 - Secret-scanned/staged only the completed Phase 10 files and pushed `7ac9372` to `v2` before implementation. Remote `main` remains `61b7ece`. User skill/setup files and autoskills dependency edits remain outside the commit. Phase 11 stays local.

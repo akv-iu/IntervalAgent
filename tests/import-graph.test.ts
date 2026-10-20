@@ -2,7 +2,8 @@ import { existsSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileS
 import { dirname, join, resolve } from "node:path";
 
 // The public web app must never reach LLM code, the conversation loop, or database write code.
-const FORBIDDEN = ["src/lib/llm", "src/lib/sim/loop", "src/lib/sim/eval", "src/lib/db-admin", "src/lib/lessons-store"];
+const MODEL_CODE = ["src/lib/llm", "src/lib/v2/openai-transport"];
+const FORBIDDEN = [...MODEL_CODE, "src/lib/sim/loop", "src/lib/sim/eval", "src/lib/db-admin", "src/lib/lessons-store"];
 const ROOT = resolve(".");
 
 function files(dir: string): string[] {
@@ -65,6 +66,15 @@ test("the walker also follows bare side-effect imports", () => {
   }
 });
 
+test("the model boundary recognizes the V2 OpenAI adapter through imports", () => {
+  const probe = resolve("tests/.probe-v2-model.ts");
+  writeFileSync(probe, 'import "../src/lib/v2/openai-transport";\n');
+  try {
+    const seen = [...reachable([probe])].map((f) => f.replace(ROOT, "").replace(/\\/g, "/").replace(/^\//, ""));
+    expect(seen.some((f) => FORBIDDEN.some((prefix) => f.startsWith(prefix)))).toBe(true);
+  } finally { unlinkSync(probe); }
+});
+
 test("the live route is the single exception and guards itself", () => {
   const src = readFileSync(LIVE_ROUTE, "utf8");
   // Who may run it is decided by tryMode (tests/try-mode.test.ts); anything else is a 404.
@@ -95,7 +105,7 @@ test("V2 exposes only enumerated visitor/operator routes through their own sessi
     const seen = [...reachable([entry])].map((f) => f.replace(/\\/g, "/"));
     const operator = /\/api\/v2\/(auth|operator)\//.test(entry.replace(/\\/g, "/"));
     expect(seen.some((f) => f.endsWith(`/src/lib/v2/${operator ? "operator" : "visitor"}-runtime.ts`))).toBe(true);
-    expect(seen.filter((f) => ["/src/lib/llm/", "/src/lib/db-admin", "/src/lib/db.ts", "/scripts/db-pool", "/scripts/v2-eval/"].some((p) => f.includes(p)))).toEqual([]);
+    expect(seen.filter((f) => [...MODEL_CODE.map((p) => `/${p}`), "/src/lib/db-admin", "/src/lib/db.ts", "/scripts/db-pool", "/scripts/v2-eval/"].some((p) => f.includes(p)))).toEqual([]);
   }
 });
 
@@ -108,5 +118,5 @@ test("runtime source cannot import the evaluation harness or private fixture set
 
 test("mock worker entry point cannot reach model providers, owner credentials or evaluator assets", () => {
   const seen = [...reachable([resolve("scripts/v2-mock-worker.ts")])].map((f) => f.replace(/\\/g, "/"));
-  expect(seen.filter((f) => ["/src/lib/llm/", "/src/lib/db-admin", "/scripts/db-pool", "/scripts/v2-eval/", "/fixtures/v2/evaluation/"].some((p) => f.includes(p)))).toEqual([]);
+  expect(seen.filter((f) => [...MODEL_CODE.map((p) => `/${p}`), "/src/lib/db-admin", "/scripts/db-pool", "/scripts/v2-eval/", "/fixtures/v2/evaluation/"].some((p) => f.includes(p)))).toEqual([]);
 });

@@ -1,6 +1,6 @@
 # V2 run resources and tool checkpoints
 
-The default mock worker uses a persisted run for each accepted source-message job. It pins mock instruction manifests, business context, record hash, policy and limits, reserves each tool dispatch and reuses successful tool/role checkpoints after lease recovery. Its [four-role billing workflow](WORKFLOW.md) reviews evidence-based pending proposals and pauses for a human. A separate [model-step primitive](MODEL-STEPS.md) now pins requests, reserves dispatch and atomically checkpoints validated output using injected fake transports in tests. OpenAI adaptation, four-role provider integration, customer publication, active lessons and financial effects remain later work.
+The default mock worker uses a persisted run for each accepted source-message job. It pins mock instruction manifests, business context, record hash, policy and limits, reserves each tool dispatch and reuses successful tool/role checkpoints after lease recovery. Its [four-role billing workflow](WORKFLOW.md) reviews evidence-based pending proposals and pauses for a human. A separate [model-step primitive](MODEL-STEPS.md) now pins requests, reserves dispatch and atomically checkpoints validated output using injected fake transports in tests. The single-attempt OpenAI adapter is tested with fake HTTP responses. Four-role provider integration, customer publication, active lessons and financial effects remain later work.
 
 ## Storage and deployment
 

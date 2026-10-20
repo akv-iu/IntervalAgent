@@ -6,7 +6,7 @@ import { runStore } from "./run-store";
 export type ModelTransport = (request: z.infer<typeof ModelRequest>, options: { signal: AbortSignal; timeoutMs: 30000; maxRetries: 0 }) => Promise<unknown>;
 export class ModelStepError extends Error { constructor(public code: "transport_failed" | "timeout" | "invalid_output") { super(`Model step: ${code}`); } }
 
-// shortcut: injected transport only; add the single-attempt OpenAI adapter with the live-worker phase.
+// shortcut: transports stay worker-injected; add live routing after run provenance and role prompts are implemented.
 export async function executeModelStep(pool: Pool, lease: unknown, rawSpec: unknown, send: ModelTransport) {
   const spec = ModelStepSpec.parse(rawSpec), runs = runStore(pool);
   const prepared = await runs.prepareModelStep(lease,spec);

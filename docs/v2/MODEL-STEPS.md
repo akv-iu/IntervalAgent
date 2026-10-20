@@ -2,7 +2,7 @@
 
 Requirement coverage: foundations for V2-FR-07/08/12/13/36/37 and V2-NFR-01/02/04/05/06/08/16. Live model roles and the full Task 4 acceptance gate remain open.
 
-Phase 11 adds a trusted worker primitive, `executeModelStep(pool, lease, spec, send)`. Tests inject a fake transport against PostgreSQL. The default worker and CLI still run deterministic mocks. There is no OpenAI adapter, enabled live mode, model-selected routing, new HTTP endpoint or public UI in this slice.
+Phase 11 adds a trusted worker primitive, `executeModelStep(pool, lease, spec, send)`. Tests inject a fake transport against PostgreSQL. The default worker and CLI still run deterministic mocks. Phase 12 adds the OpenAI adapter described below. There is no enabled live mode, model-selected routing, new HTTP endpoint or public UI in this slice.
 
 `spec` contains a validated operation/role/recipient/parent, explicit model name and at most 8,000 characters of worker-selected input. Input is untrusted task data, not instructions. The run snapshot supplies versioned role instructions and the pinned `none` lesson set. Two complete requests are pinned before dispatch: original and a fixed schema-correction instruction. Invalid output is never copied into instructions. All steps in a run must use the same model. Reusing a key with changed input, model, routing or parent fails closed.
 
@@ -24,4 +24,19 @@ Migration 011 adds private `v2_model_steps`, scoped to the exact run/source revi
 
 Checks use `npm test`, `npm run test:db`, typecheck/lint, replay, fixture integrity and build. Fake-transport tests cover timeout fencing, no dispatch on denied capacity, separate correction funding, pinned-request immutability, exact/unknown usage, restart reuse, concurrent duplicates, operation identity, two-attempt exhaustion, STOP, deadline, evidence rejection, overrun and atomic checkpoint failure. Existing default-worker and restricted-role tests remain required. [Phase evidence](DECISIONS.md) records actual results.
 
-Live credentials/spending controls, SDK response mapping, provider token-estimator calibration, heartbeats, four-role provider integration and live evaluation remain future work. Customer publication, human financial approvals/actions and learning are separate later phases.
+Live credentials/spending controls, provider token-estimator calibration, heartbeats, four-role provider integration and live evaluation remain future work. Customer publication, human financial approvals/actions and learning are separate later phases.
+
+
+## Phase 12: single-attempt OpenAI adapter
+
+`openAITransport(explicitKey, optionalTestFetch)` returns a transport for `executeModelStep`; it does not reserve budget on its own. Production callers must dispatch through `executeModelStep`. The default worker/CLI and all HTTP routes remain disconnected from the adapter. No live environment toggle or new credential variable is introduced.
+
+The adapter uses the installed OpenAI SDK and the existing Chat Completions API. The pinned system text is sent as a developer message and pinned input as a user message. It requests one JSON-object completion with `max_completion_tokens: 600` and `store: false`, without provider-side tool execution. [Official request contract](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create). JSON mode does not replace the worker's output validation; strict role-specific provider prompts/integration remain future work.
+
+Client and per-request SDK retries are zero; client and request timeout are 30 seconds. The dispatcher signal is forwarded and already-aborted calls never dispatch. SDK errors become the fixed `transport_failed` code without raw response text or error causes. The adapter makes no local retry; schema correction remains a separately reserved dispatcher attempt.
+
+Successful usage maps prompt/completion counts into the existing accounting contract, including any reasoning tokens included by the API in completion usage. Missing/malformed usage stays unknown. Truncated, filtered, refused, tool-call or malformed-choice responses return empty text while retaining valid reported usage, so validation/correction cannot refund their cost.
+
+The key must be explicitly supplied and contain no whitespace; there is no environment-key fallback. The endpoint is fixed to `https://api.openai.com/v1`, ambient organization/project/admin credentials are disabled, and SDK logging is off. The installed SDK also reads `OPENAI_CUSTOM_HEADERS`, so construction rejects that ambient setting rather than allowing hidden header overrides. These are adapter boundaries, not an activation or spend-control setup.
+
+Verification uses the real installed SDK with injected fake HTTP responses, not a mocked SDK method. Tests cover request fields, no retries for HTTP/network errors, timeout/cancellation, credential/endpoint/logging behavior, refusal/incomplete output and usage mapping. Database cases confirm dispatch follows reservation, output is reused and a server failure retains one full reservation. No real OpenAI request was made; model compatibility, output quality and live latency remain unverified.
