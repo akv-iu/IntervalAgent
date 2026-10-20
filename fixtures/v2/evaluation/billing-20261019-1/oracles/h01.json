@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 2,
+  "disposition": "propose",
+  "actions": [
+    {
+      "type": "allocate_payment",
+      "paymentId": "payment-1",
+      "invoiceId": "invoice-1",
+      "amountCents": 6000
+    },
+    {
+      "type": "allocate_payment",
+      "paymentId": "payment-1",
+      "invoiceId": "invoice-2",
+      "amountCents": 4000
+    }
+  ],
+  "remainingBalances": [
+    {
+      "invoiceId": "invoice-1",
+      "balanceCents": 0
+    },
+    {
+      "invoiceId": "invoice-2",
+      "balanceCents": 0
+    }
+  ],
+  "requiredEvidence": [
+    {
+      "recordType": "invoice",
+      "recordId": "invoice-1"
+    },
+    {
+      "recordType": "invoice",
+      "recordId": "invoice-2"
+    },
+    {
+      "recordType": "invoice",
+      "recordId": "invoice-3"
+    },
+    {
+      "recordType": "payment",
+      "recordId": "payment-1"
+    },
+    {
+      "recordType": "policy",
+      "recordId": "policy-1"
+    }
+  ],
+  "rationale": "deposit net of prior settled invoice"
+}

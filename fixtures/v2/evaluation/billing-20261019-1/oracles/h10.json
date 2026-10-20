@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 2,
+  "disposition": "propose",
+  "actions": [
+    {
+      "type": "credit_invoice",
+      "invoiceId": "invoice-1",
+      "cancellationId": "cancellation-2",
+      "amountCents": 1000
+    }
+  ],
+  "remainingBalances": [
+    {
+      "invoiceId": "invoice-1",
+      "balanceCents": 6400
+    }
+  ],
+  "requiredEvidence": [
+    {
+      "recordType": "invoice",
+      "recordId": "invoice-1"
+    },
+    {
+      "recordType": "cancellation",
+      "recordId": "cancellation-1"
+    },
+    {
+      "recordType": "cancellation",
+      "recordId": "cancellation-2"
+    },
+    {
+      "recordType": "policy",
+      "recordId": "policy-1"
+    }
+  ],
+  "rationale": "two cancellations share one credit cap"
+}

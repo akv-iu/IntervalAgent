@@ -83,3 +83,10 @@ test("V1 pages and its live exception do not reach the new V2 modules", () => {
   const seen = [...reachable(entries)].map((f) => f.replace(/\\/g, "/"));
   expect(seen.filter((f) => f.includes("/src/lib/v2/"))).toEqual([]);
 });
+
+test("runtime source cannot import the evaluation harness or private fixture set", () => {
+  const seen = [...reachable(files("src"))].map((f) => f.replace(/\\/g, "/"));
+  expect(seen.filter((f) => f.includes("/scripts/v2-eval/") || f.includes("/fixtures/v2/evaluation/"))).toEqual([]);
+  const check = [...reachable([resolve("scripts/check-v2-fixtures.ts")])].map((f) => f.replace(/\\/g, "/"));
+  expect(check.some((f) => f.includes("/scripts/v2-eval/fixtures.ts"))).toBe(true);
+});

@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 2,
+  "scope": {
+    "businessId": "northside",
+    "workspaceId": "workspace-011",
+    "accountId": "account-1"
+  },
+  "customerMessage": "Invoice-2 already used $20 of BANK-U. Apply its remaining funds to invoice-1.",
+  "records": {
+    "schemaVersion": 2,
+    "snapshotAt": "2026-03-10T16:00:00.000Z",
+    "businesses": [
+      {
+        "businessId": "northside",
+        "displayName": "Northside Fitness",
+        "currency": "USD",
+        "policyVersion": 1,
+        "tools": [
+          "invoice_details",
+          "payment_search",
+          "account_history",
+          "adjustment_history",
+          "policy_lookup"
+        ]
+      }
+    ],
+    "accounts": [
+      {
+        "businessId": "northside",
+        "workspaceId": "workspace-011",
+        "accountId": "account-1",
+        "version": 1,
+        "id": "account-1",
+        "firstName": "Maya",
+        "currency": "USD",
+        "timezone": "America/Denver"
+      }
+    ],
+    "invoices": [
+      {
+        "businessId": "northside",
+        "workspaceId": "workspace-011",
+        "accountId": "account-1",
+        "version": 1,
+        "id": "invoice-1",
+        "issuedAt": "2026-03-01T12:00:00.000Z",
+        "dueDate": "2026-03-05",
+        "lines": [
+          {
+            "id": "main",
+            "description": "Monthly service",
+            "amountCents": 8400,
+            "serviceAt": "2026-03-01T12:00:00.000Z"
+          }
+        ]
+      },
+      {
+        "businessId": "northside",
+        "workspaceId": "workspace-011",
+        "accountId": "account-1",
+        "version": 1,
+        "id": "invoice-2",
+        "issuedAt": "2026-03-01T12:00:00.000Z",
+        "dueDate": "2026-03-05",
+        "lines": [
+          {
+            "id": "main",
+            "description": "Monthly service",
+            "amountCents": 2000,
+            "serviceAt": "2026-03-01T12:00:00.000Z"
+          }
+        ]
+      }
+    ],
+    "payments": [
+      {
+        "businessId": "northside",
+        "workspaceId": "workspace-011",
+        "accountId": "account-1",
+        "version": 1,
+        "id": "payment-1",
+        "amountCents": 5000,
+        "status": "settled",
+        "reference": "BANK-U",
+        "receivedAt": "2026-03-06T12:00:00.000Z"
+      }
+    ],
+    "allocations": [
+      {
+        "businessId": "northside",
+        "workspaceId": "workspace-011",
+        "accountId": "account-1",
+        "version": 1,
+        "id": "allocation-1",
+        "paymentId": "payment-1",
+        "invoiceId": "invoice-2",
+        "amountCents": 2000
+      }
+    ],
+    "cancellations": [],
+    "credits": [],
+    "policies": [
+      {
+        "businessId": "northside",
+        "workspaceId": "workspace-011",
+        "id": "policy-1",
+        "version": 1,
+        "effectiveFrom": "2026-01-01T00:00:00.000Z",
+        "effectiveTo": null,
+        "cancellationWindowDays": 7,
+        "maxInstallments": 3
+      }
+    ]
+  }
+}

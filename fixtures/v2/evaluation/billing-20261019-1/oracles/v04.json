@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 2,
+  "disposition": "propose",
+  "actions": [
+    {
+      "type": "allocate_payment",
+      "paymentId": "payment-1",
+      "invoiceId": "invoice-1",
+      "amountCents": 3000
+    },
+    {
+      "type": "allocate_payment",
+      "paymentId": "payment-2",
+      "invoiceId": "invoice-1",
+      "amountCents": 2000
+    }
+  ],
+  "remainingBalances": [
+    {
+      "invoiceId": "invoice-1",
+      "balanceCents": 3400
+    }
+  ],
+  "requiredEvidence": [
+    {
+      "recordType": "invoice",
+      "recordId": "invoice-1"
+    },
+    {
+      "recordType": "payment",
+      "recordId": "payment-1"
+    },
+    {
+      "recordType": "payment",
+      "recordId": "payment-2"
+    },
+    {
+      "recordType": "policy",
+      "recordId": "policy-1"
+    }
+  ],
+  "rationale": "two separate part payments"
+}

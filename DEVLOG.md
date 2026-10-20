@@ -2,6 +2,14 @@
 
 Honest record of what was built, how it was checked, and what changed after review. Automated checks are marked separately from Akshay's own review. V1 entries record separate Codex CLI reviews; V2 entries explicitly distinguish self-review from independent review.
 
+## V2 Phase 3: frozen evaluation fixtures (2026-10-19)
+
+- On "move ahead", scanned tracked/proposed files, committed/pushed Phase 2 as `3b04057`, and verified the remote hash. Phase 3 remains local until the next instruction.
+- Added 36 manually specified cases (12 development/12 validation/12 holdout), separate inputs/oracles, pinned hashes, locked holdout reads, scoped tool fault injection, and functional `fixtures:v2:check`. Cases cover all eight required categories per split. No evaluator code or private asset is imported by runtime source or included in the nine production server tracing manifests.
+- Tests first failed on the missing harness. Self-review 1 found fault/category inconsistency and fixture tools switching accounts; two failing regressions reproduced them, then passed after fixes. Self-review 2 found incomplete financial oracle balances/evidence; failing regression reproduced it, then schema validation fixed it. Frozen answers did not change during either implementation review.
+- Final checks: 13 fixture tests + one import regression added; `npm test` 680 tests/41 files; fixture integrity, V1 replay gate, typecheck, lint and build PASS. Existing V1 tracing warnings remain. No model calls, DB changes or browser test needed.
+- Limit: cases/oracles are authored by Codex, not an external independent evaluator. Holdout public records/schema and byte hashes were checked, but its answers were not decoded/scored after authoring or used to tune prompts/lessons. No model-performance claim. Next: persistent cases/resumable work, one bounded phase at a time.
+
 ## V2 Phase 2: connected records and read tools (2026-10-19)
 
 - User requested pushing the completed phase whenever they say "move ahead". Scanned tracked/proposed files for secrets, committed/pushed Phase 1 as `936cdf2`, and verified `origin/main` points to it. New Phase 2 changes remain local until the next instruction.

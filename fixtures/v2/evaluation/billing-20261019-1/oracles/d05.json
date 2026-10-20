@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 2,
+  "disposition": "clarify",
+  "actions": [],
+  "remainingBalances": [
+    {
+      "invoiceId": "invoice-1",
+      "balanceCents": 8400
+    }
+  ],
+  "requiredEvidence": [
+    {
+      "recordType": "invoice",
+      "recordId": "invoice-1"
+    }
+  ],
+  "rationale": "missing cancellation confirmation"
+}

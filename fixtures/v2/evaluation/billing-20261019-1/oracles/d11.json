@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 2,
+  "disposition": "propose",
+  "actions": [
+    {
+      "type": "allocate_payment",
+      "paymentId": "payment-1",
+      "invoiceId": "invoice-1",
+      "amountCents": 3000
+    }
+  ],
+  "remainingBalances": [
+    {
+      "invoiceId": "invoice-1",
+      "balanceCents": 5400
+    }
+  ],
+  "requiredEvidence": [
+    {
+      "recordType": "invoice",
+      "recordId": "invoice-1"
+    },
+    {
+      "recordType": "invoice",
+      "recordId": "invoice-2"
+    },
+    {
+      "recordType": "payment",
+      "recordId": "payment-1"
+    },
+    {
+      "recordType": "policy",
+      "recordId": "policy-1"
+    }
+  ],
+  "rationale": "transfer reserved for another invoice"
+}

@@ -79,3 +79,30 @@ Self-review pass 1 found two policy issues: string timestamp comparisons could m
 Final verification: 21 new tests; `npm test` passed 666 tests across 40 files; pinned V1 guarded replay/full-coverage gate passed; typecheck, lint and production build passed. The same two build tracing warnings remain in unchanged `project-env.ts`. No live API calls, database access/migrations, or browser testing occurred. There is no V2 user-facing change to test yet.
 
 Next: Phase 3 / Task 2B evaluation fixtures and split manifests. Runtime agents, persistent cases, worker execution, auth and UI are not implemented by this phase.
+
+## Phase 3: frozen evaluation inputs and separate answer keys (October 19, 2026)
+
+On "move ahead", scanned tracked/proposed files for secret patterns, committed/pushed Phase 2 as `3b04057`, and verified `origin/main`. Phase 3 stays local for review until the next instruction.
+
+### Delivered and frozen
+
+- Set `billing-20261019-1`: 36 manually specified cases, with 12 development, 12 validation and 12 final holdout cases. All eight required categories appear in every split, with distinct declared case families. Relationships and decision conditions differ across splits; no cosmetic paraphrase generator or application-generated answer oracle is used.
+- Public inputs contain only scope, customer text and connected records. Evaluator-only oracles contain explicit actions, balances, evidence requirements and short rationale. Fault injection/repeated-submission controls live only in the manifest/harness. The agent runtime must not receive the full fixture metadata or answer keys.
+- Manifest SHA256 is `9d5195aec6cf2cb5465fadf8a4aa6030e94e9c477bdf3b596c1704a1860c3414`; it pins every input/oracle hash. Editing a frozen file fails closed. Intentional fixture revisions require a deliberate new set/pin, not replacing data silently.
+- `npm run fixtures:v2:check` validates coverage, public record schemas and file integrity, plus development/validation oracle schemas. It hashes raw holdout oracle bytes without decoding or scoring them. `loadExpectation` refuses holdout access unless explicitly passed literal `allowHoldout: true` by a future final-evaluation runner.
+- Fault injection uses the existing tools' real sanitized failure path. Fixture tool access is bound to the case scope, including cases containing another account as a distractor. Duplicate-submission controls are defined but cannot be run end to end until persistent submission/idempotency is implemented.
+- Import-graph tests prohibit runtime imports of the evaluator/assets. Next.js tracing excludes the fixture tree and evaluator scripts; the production build's nine server tracing manifests contain neither these assets nor private environment files.
+
+### Review and actual verification
+
+Tests first failed on the missing harness. Initial fixture checks and non-holdout financial-consistency checks passed. Self-review 1 found two bugs: failure controls on a non-failure category and fixture tool access switching to another account in a snapshot. Both were reproduced in failing tests and fixed. Holdout opt-in was also restricted to literal `true`.
+
+Self-review 2 found that the oracle schema allowed financial actions with missing/wrong affected-invoice balances or missing evidence. A failing test reproduced it; the schema now requires exactly the affected balances and policy/record evidence. The existing files did not need alteration; all fixes changed validation, not frozen case answers.
+
+Final checks: 13 new fixture tests and one import-boundary regression; `npm test` 680 tests/41 files, fixture integrity command, pinned V1 guarded replay/full coverage, typecheck, lint and build all passed. The unchanged V1 filesystem reader still emits two build tracing warnings. No model calls, database access/migrations or browser checks were performed. Nothing requires manual UI testing yet.
+
+### Measurement limits and next phase
+
+These cases and their expected values were authored by Codex, which also implemented the application. They are separately specified families/expected values, not independent external review or evidence of model effectiveness. Family distinctions were manually reviewed; hashes detect exact copies/edits, not all semantic similarity. No agent outputs, prompt choices or lesson promotions were scored against the holdout. Once final answers are used for tuning, retire that holdout before claiming a fresh final evaluation.
+
+Task 2 is complete at the data/fixture boundary. Next is Task 3: persistent case storage and resumable work, delivered in bounded phases. Authentication, live agent collaboration, learning and UI remain future work.

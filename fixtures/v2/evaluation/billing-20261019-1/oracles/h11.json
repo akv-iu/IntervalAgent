@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 2,
+  "disposition": "propose",
+  "actions": [
+    {
+      "type": "allocate_payment",
+      "paymentId": "payment-1",
+      "invoiceId": "invoice-1",
+      "amountCents": 2000
+    }
+  ],
+  "remainingBalances": [
+    {
+      "invoiceId": "invoice-1",
+      "balanceCents": 6400
+    }
+  ],
+  "requiredEvidence": [
+    {
+      "recordType": "invoice",
+      "recordId": "invoice-1"
+    },
+    {
+      "recordType": "payment",
+      "recordId": "payment-1"
+    },
+    {
+      "recordType": "policy",
+      "recordId": "policy-1"
+    }
+  ],
+  "rationale": "customer authorizes only part of available funds"
+}

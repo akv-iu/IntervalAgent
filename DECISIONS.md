@@ -1,5 +1,11 @@
 # Decisions and fixes
 
+## V2 Phase 3: freeze the test cases before running agents (October 19, 2026)
+
+Phase 2 was pushed as `3b04057`. Added 36 synthetic evaluation cases across development, validation and final holdout, each with a separate answer key and pinned file hashes. Every split covers all eight required case categories. The runtime and deployment exclude the evaluator/answer files; the holdout remains unused for model scoring or tuning.
+
+Two self-review passes fixed fault controls that could alter the wrong case category, tools switching to another account, and incomplete financial answer keys. Regression tests failed before fixes. Checks pass 680 tests, fixture integrity, V1 replay, typecheck, lint and build. No browser test is needed. These cases were authored by Codex; they are not external independent evaluation evidence. Phase 3 stays local until the next "move ahead". Details: [V2 decisions](docs/v2/DECISIONS.md).
+
 ## V2 Phase 2: give the Investigator real records to inspect (October 19, 2026)
 
 Phase 1 was pushed to GitHub as `936cdf2` on the user's instruction. Added synthetic invoices, payments, allocations, cancellations, credits and policies for two businesses, with scoped read tools and a preview that computes the $14 example without changing balances. The two businesses use the same code but different cancellation policies. Independent evaluation cases are the next phase; these are development records.

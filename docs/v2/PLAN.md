@@ -1,6 +1,6 @@
 # Recovery Lab Version 2: implementation plan
 
-Status: Phases 1 and 2 complete (Task 1 and Task 2A). Task 2B (independent evaluation fixtures) is the next phase; persistence and later tasks are not started. See [DECISIONS.md](DECISIONS.md) for verification evidence.
+Status: Phases 1-3 complete (Tasks 1 and 2). Frozen evaluation fixtures and evaluator-only expectations are available. Task 3 (persistent cases and resumable work) is next; running agents and UI are not started. See [DECISIONS.md](DECISIONS.md) for verification evidence and authorship limits.
 Date: October 19, 2026.
 Build contract: [SPEC.md](SPEC.md). V2 requirement IDs in this plan refer to that document.
 
@@ -65,6 +65,8 @@ Done when: example envelopes and transition tests pass; unauthorized routes and 
 This task is split into two reviewable phases. Phase 2 / Task 2A delivers connected development records, five scoped read tools, and a non-mutating proposal preview. Phase 3 / Task 2B separately authors and freezes evaluation families/splits and hidden expectations before persistence work starts. Development examples are not claimed as independent evaluation evidence.
 
 Phase 2 completed October 19: two businesses, three accounts each, scoped record validation/read tools, policy-aware $14 preview, sanitized unavailable/not-found results, and two self-review passes. Final checks passed: 666 offline tests, V1 replay gate, typecheck, lint and build. Phase 1 was pushed as `936cdf2` when the user said to move ahead; Phase 2 remains local until the next such instruction. No manual browser check is required for these pure modules.
+
+Phase 3 completed October 19: Phase 2 pushed as `3b04057`; frozen set `billing-20261019-1` contains 12 development, 12 validation and 12 holdout cases with distinct declared families and every mandatory category in each split. Inputs and evaluator-only expectations are separate, file/manifest hashes are pinned, holdout answers are locked by default, and import/deployment boundaries exclude evaluation assets from the runtime. `npm run fixtures:v2:check`, 680 offline tests, V1 replay, typecheck, lint and build passed after two self-review/fix passes. Holdout answers were not decoded/scored after authoring or used to tune any model. The cases were authored by Codex, not an independent external reviewer. Phase 3 remains local until the next "move ahead".
 
 Requirements: V2-FR-14-17, 20, 32, 35-36; V2-NFR-07, 11, 13.
 

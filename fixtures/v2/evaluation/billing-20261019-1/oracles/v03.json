@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 2,
+  "disposition": "escalate",
+  "actions": [],
+  "remainingBalances": [
+    {
+      "invoiceId": "invoice-1",
+      "balanceCents": 8400
+    }
+  ],
+  "requiredEvidence": [
+    {
+      "recordType": "invoice",
+      "recordId": "invoice-1"
+    },
+    {
+      "recordType": "cancellation",
+      "recordId": "cancellation-1"
+    },
+    {
+      "recordType": "policy",
+      "recordId": "policy-1"
+    }
+  ],
+  "rationale": "credit request after policy window"
+}

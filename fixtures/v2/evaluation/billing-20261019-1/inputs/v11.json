@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 2,
+  "scope": {
+    "businessId": "northside",
+    "workspaceId": "workspace-023",
+    "accountId": "account-1"
+  },
+  "customerMessage": "Apply BANK-PART for $20 to the balance after my cancellation credit.",
+  "records": {
+    "schemaVersion": 2,
+    "snapshotAt": "2026-03-10T16:00:00.000Z",
+    "businesses": [
+      {
+        "businessId": "northside",
+        "displayName": "Northside Fitness",
+        "currency": "USD",
+        "policyVersion": 1,
+        "tools": [
+          "invoice_details",
+          "payment_search",
+          "account_history",
+          "adjustment_history",
+          "policy_lookup"
+        ]
+      }
+    ],
+    "accounts": [
+      {
+        "businessId": "northside",
+        "workspaceId": "workspace-023",
+        "accountId": "account-1",
+        "version": 1,
+        "id": "account-1",
+        "firstName": "Maya",
+        "currency": "USD",
+        "timezone": "America/Denver"
+      }
+    ],
+    "invoices": [
+      {
+        "businessId": "northside",
+        "workspaceId": "workspace-023",
+        "accountId": "account-1",
+        "version": 1,
+        "id": "invoice-1",
+        "issuedAt": "2026-03-01T12:00:00.000Z",
+        "dueDate": "2026-03-05",
+        "lines": [
+          {
+            "id": "main",
+            "description": "Monthly service",
+            "amountCents": 6400,
+            "serviceAt": "2026-03-01T12:00:00.000Z"
+          },
+          {
+            "id": "extra",
+            "description": "Additional service",
+            "amountCents": 2000,
+            "serviceAt": "2026-03-01T12:00:00.000Z"
+          }
+        ]
+      }
+    ],
+    "payments": [
+      {
+        "businessId": "northside",
+        "workspaceId": "workspace-023",
+        "accountId": "account-1",
+        "version": 1,
+        "id": "payment-1",
+        "amountCents": 2000,
+        "status": "settled",
+        "reference": "BANK-PART",
+        "receivedAt": "2026-03-06T12:00:00.000Z"
+      }
+    ],
+    "allocations": [],
+    "cancellations": [
+      {
+        "businessId": "northside",
+        "workspaceId": "workspace-023",
+        "accountId": "account-1",
+        "version": 1,
+        "id": "cancellation-1",
+        "invoiceId": "invoice-1",
+        "lineId": "extra",
+        "requestedAt": "2026-03-04T12:00:00.000Z"
+      }
+    ],
+    "credits": [
+      {
+        "businessId": "northside",
+        "workspaceId": "workspace-023",
+        "accountId": "account-1",
+        "version": 1,
+        "id": "credit-1",
+        "invoiceId": "invoice-1",
+        "cancellationId": "cancellation-1",
+        "amountCents": 2000
+      }
+    ],
+    "policies": [
+      {
+        "businessId": "northside",
+        "workspaceId": "workspace-023",
+        "id": "policy-1",
+        "version": 1,
+        "effectiveFrom": "2026-01-01T00:00:00.000Z",
+        "effectiveTo": null,
+        "cancellationWindowDays": 7,
+        "maxInstallments": 3
+      }
+    ]
+  }
+}
