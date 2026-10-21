@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { slug } from "../artifact";
 import { CaseRecord } from "./state";
+import { ActivitySnapshot } from "./activity";
 
 const Session = z.object({ businessId: z.enum(["northside", "subscriptions"]), workspaceId: slug, expiresAt: z.iso.datetime() });
 export type VisitorSession = z.infer<typeof Session>;
@@ -68,6 +69,13 @@ export async function postVisitorMessage(session: VisitorSession, record: CaseRe
   const sent = await request(`cases/${record.caseId}/messages`, Sent, "POST", { text, idempotencyKey, expectedRevision: record.revision });
   scoped(sent.case, session, record.caseId);
   return sent;
+}
+
+export async function loadVisitorActivity(session: VisitorSession, caseId: string, signal?: AbortSignal) {
+  slug.parse(caseId);
+  const result = await request(`cases/${caseId}/activity`, ActivitySnapshot, "GET", undefined, signal);
+  scoped(result.case, session, caseId);
+  return result;
 }
 
 export function mergeVisitorMessages(before: VisitorMessage[], incoming: VisitorMessage[]) {

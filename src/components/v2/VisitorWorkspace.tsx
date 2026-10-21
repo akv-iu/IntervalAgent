@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Thread from "@/components/Thread";
+import VisitorActivity from "./VisitorActivity";
 import type { CaseRecord } from "@/lib/v2/state";
 import { createVisitorCase, endVisitorSession, getVisitorSession, loadVisitorCase, mergeVisitorMessages, postVisitorMessage, startVisitorSession, VisitorRequestError, type VisitorMessage, type VisitorSession } from "@/lib/v2/visitor-client";
 
@@ -51,6 +52,8 @@ export default function VisitorWorkspace({ caseId }: { caseId?: string }) {
     }
     setMessages((previous) => mergeVisitorMessages(previous, incoming));
   }, []);
+
+  const acceptActivity = useCallback((next: CaseRecord) => accept(next, []), [accept]);
 
   const fail = useCallback((reason: unknown) => {
     const failure = reason instanceof VisitorRequestError ? reason : new VisitorRequestError(0);
@@ -194,7 +197,7 @@ export default function VisitorWorkspace({ caseId }: { caseId?: string }) {
           <p className="mt-2 font-medium">{businesses[session.businessId]}</p>
           <p className="mt-1 break-all text-sm text-muted">Account: {record.accountId}</p>
           <p role="status" className="mt-4 text-sm">{record.contactSuppressed ? "Contact stopped. This case cannot send further customer contact." : statusText[record.state]}</p>
-          <p className="mt-4 text-sm text-muted">Agent activity, proposals and run provenance are not available in this view. A saved draft is not a sent reply.</p>
+          <p className="mt-4 text-sm text-muted">Follow the saved investigation below your conversation. A saved draft is not a sent reply.</p>
           <Link href="/v2" className="mt-4 inline-flex min-h-11 items-center text-sm text-accent-ink underline">Workspace options</Link>
         </aside>
         <section aria-labelledby="conversation" className="min-w-0 md:col-start-1 md:row-start-1">
@@ -213,6 +216,7 @@ export default function VisitorWorkspace({ caseId }: { caseId?: string }) {
           </form>
         </section>
       </div>}
+      {caseId && record && session && <VisitorActivity key={`${session.businessId}/${session.workspaceId}/${caseId}`} session={session} record={record} retryAt={retryAt} onAccessError={fail} onCaseChange={acceptActivity} />}
     </div>
   );
 }

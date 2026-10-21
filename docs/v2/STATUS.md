@@ -6,13 +6,13 @@ Updated October 20, 2026. Goal: a resume-ready four-agent demonstration, not a p
 | --- | --- |
 | Records and reliable case processing | Built and tested in code: two synthetic businesses, scoped tools, saved cases, sessions, jobs, recovery, cancellation and budget accounting. Local demo setup remains; hosted operation is deferred. |
 | Four agents collaborating | Mock collaboration is built. Model-test workflow connects all four roles to SDK/checkpoints with fake HTTP, selected scoped tools, one revision and guarded handoff. A small real-model recording remains; no hosted activation is required. |
-| Complete application walkthrough | Customer chat and case-status UI are built and tested with fake HTTP. Agent activity/evidence, operator review/actions, simulated financial changes and confirmed customer replies remain to build. Real V2 setup/browser acceptance remains open. |
+| Complete application walkthrough | Customer chat/status and the latest investigation's activity/evidence/pending proposal are implemented. Activity has isolated DB/API/client/render verification; browser acceptance and actual local setup remain open. Operator review/actions, simulated financial changes and confirmed replies remain. |
 | Repeatable learning | Fixtures exist. Multiple feedback/candidate/evaluation cycles, eligibility-controlled decisions, version history and rollback remain. Full architecture benchmark, automatic promotion and elaborate learning dashboard are deferred. |
 | Resume demonstration | Selected real-model evidence/replay, user browser acceptance, architecture diagram and local walkthrough remain. Public deployment, load targets and commercial readiness are outside scope. |
 
 ## Current step
 
-Phase 15 is pushed to `v2` as `168c354`; `main` remains unchanged at `61b7ece`. Phase 16 implements the first [screen-contract slice](UI-JOURNEY.md): `/v2` starts an isolated reference case and `/v2/cases/{caseId}` restores chat/status, submits messages and stops contact through the existing APIs. It is verified locally and awaits review. OpenAI calls remain disabled and the default provider remains mock. No database setup or deployment was performed. [Phase 16 evidence](PHASE16-REVIEW.md).
+Phase 16 is pushed to `v2` as `3b9a2b2`; `main` remains unchanged at `61b7ece`. Phase 17 locally adds saved role handoffs, tool outcomes, scoped evidence, pending proposals and provenance/resource use to the case screen. Read-only activity views keep private prompts, requests and worker identities out of the web role. STOP/new input hides older proposals; a pending amount is not an applied financial change. OpenAI calls remain disabled and the default worker remains mock. Only disposable test schemas were migrated; no application database setup or deployment occurred. [Phase 17 evidence](PHASE17-REVIEW.md).
 
 ## Decisions already agreed
 
@@ -20,9 +20,9 @@ Four roles: Customer, Coordinator, Investigator, Reviewer. OpenAI is the only li
 
 ## Decisions to review with Akshay
 
-Akshay selected customer dispute, then agent activity, then operator review, confirmed the existing style and said to move ahead with the first slice. Customer chat/status is now implemented. Activity/evidence disclosure and operator screens remain to review before their implementation.
+Akshay selected customer dispute, then agent activity, then operator review, confirmed the existing style and approved the activity/evidence/proposal slice from the 7:28 PM usage checkpoint. Customer chat/status and visitor-safe activity are implemented. Operator screen decisions remain open.
 
-Next: scoped activity/evidence/proposal reads, keeping internal exchanges separate from customer messages, and isolated local setup for Akshay's test. Reusable case review with approve/reject/request-information and lightweight case selection follows. A local worker is enough; elaborate admin features stay deferred. Explicit spend controls are required before selected paid demonstrations. This phase did not change the V2 database setup.
+Next: separately approved isolated mock setup for Akshay's browser test. Provide a working URL and steps after that setup, rather than asking him to test a default-off API. Operator case review, approve/reject/request-information and lightweight case selection follow. A local worker is enough; elaborate admin features stay deferred. Explicit spend controls are required before selected paid demonstrations. Activity reads require migration 012 and the updated web-view SELECT grants; neither has been applied to the application database.
 
 ## How each next step will work
 
@@ -30,7 +30,7 @@ Before coding: explain the user-visible result, meaningful choices, recommendati
 
 Akshay owns browser/web testing by default. Provide a ready URL, concise steps and expected results, then wait for his report. Only automate browser testing when he explicitly selects the assistant for that pass. After results/fixes, confirm who runs the next browser pass. Automated tests, typecheck/lint/build and two self-review/fix passes continue as appropriate. Earlier assistant browser evidence remains historical; it does not authorize future browser runs.
 
-Before every next implementation phase, report fresh account usage/reset information, summarize the task and wait for explicit approval. Once approved, execute that phase autonomously, then ask again at the next boundary. Requested checkpoint: October 20 at 7:28 PM America/Denver. Phone pairing is confirmed. A one-time Windows task (`RecoveryLab-Approval-20261020-1928`) is saved and verified Ready for 7:28 PM Mountain to queue the usage/approval request into this existing conversation. Implementation remains pending explicit approval. Keep the computer awake, signed in and ChatGPT open; phone notification delivery is untested. This is not a ChatGPT Scheduled entry. Latest observed usage at October 20, 6:09 PM Mountain: five-hour window 100% used (reset 7:27:51 PM), weekly window 31% used. This is a historical snapshot, not the allowance for the next task.
+Before every next implementation phase, report fresh account usage/reset information, summarize the task and wait for explicit approval. Once approved, execute that phase autonomously, then ask again at the next boundary. The one-time October 20, 7:28 PM Mountain checkpoint delivered and its Windows task returned 0. At 7:28:15 PM, allowance remaining was 100% five-hour (next reset October 21, 12:28:15 AM Mountain) and 69% weekly (reset October 27, 8:02:49 AM Mountain). Akshay replied "Move ahead" and approved Phase 17. This is historical usage, not the allowance for a future task. Phone messages now reach this chat; phone push notifications remain unconfirmed. The checkpoint was a Windows task, not a ChatGPT Scheduled entry.
 
 ## Remaining work and planning estimate
 
@@ -38,7 +38,7 @@ The earlier 12-20/30-50-hour figures described the larger plan and are supersede
 
 | Remaining slice | Enough for the resume demonstration |
 | --- | --- |
-| Activity and local test setup | Follow the four roles, scoped evidence and pending proposal; Akshay tests a working local URL. |
+| Local test setup and acceptance | Activity/evidence/proposal code is built. Prepare an isolated mock setup, then Akshay follows all four roles and tests a working local URL. |
 | Human decisions and outcomes | Varied cases, lightweight selection, approve/reject/clarify with reason, effects committed once and guarded replies matching state. |
 | Repeatable learning | Multiple feedback-derived candidates/versions across role/situation contexts, declared validation/regression evidence, manual activation/rejection, history and rollback. |
 | Evidence and finish | Small budget-approved real four-role recording, strict replay, diagram, local setup instructions and short walkthrough. |

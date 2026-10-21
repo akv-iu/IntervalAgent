@@ -103,6 +103,7 @@ test("V2 exposes only enumerated visitor/operator routes through their own sessi
   const entries = files("src/app/api/v2");
   expect(entries.map((f) => f.replace(/\\/g, "/")).sort()).toEqual([
     "src/app/api/v2/auth/[...all]/route.ts",
+    "src/app/api/v2/cases/[caseId]/activity/route.ts",
     "src/app/api/v2/cases/[caseId]/messages/route.ts", "src/app/api/v2/cases/[caseId]/route.ts", "src/app/api/v2/cases/route.ts", "src/app/api/v2/session/route.ts",
     "src/app/api/v2/operator/cases/[businessId]/[workspaceId]/[caseId]/route.ts", "src/app/api/v2/operator/session/route.ts",
   ].sort());

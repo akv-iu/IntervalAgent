@@ -2,13 +2,14 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import { slug } from "../artifact";
 import { isStop } from "../patterns";
+import { activityStore } from "./activity-store";
 import { CaseSubmission, caseStore } from "./case-store";
 import { workspaceRecords } from "./demo-records";
 import type { VisitorConfig } from "./visitor-config";
 import { HttpError, readVisitorJson, visitorResponse } from "./visitor-http";
 import { VisitorBusiness, visitorStore } from "./visitor-store";
 
-export type VisitorOperation = "session" | "cases" | "case" | "messages";
+export type VisitorOperation = "session" | "cases" | "case" | "messages" | "activity";
 const Start = z.strictObject({ businessId: VisitorBusiness });
 const Create = z.strictObject({ caseId: slug, accountId: z.enum(["account-1", "account-2", "account-3"]) });
 const Page = z.strictObject({ afterRevision: z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0), limit: z.coerce.number().int().min(1).max(100).default(50) });
@@ -64,6 +65,10 @@ export function createVisitorApi(pool: Pool, config: VisitorConfig) {
           return visitorResponse({ case: record }, 201);
         }
         const key = { ...scope, caseId: input(slug, rawCaseId) };
+        if (operation === "activity" && request.method === "GET") {
+          if (new URL(request.url).search) throw new HttpError(400, "Activity does not accept query parameters.");
+          return visitorResponse(await activityStore(pool).read(principal, key));
+        }
         if (operation === "case" && request.method === "GET") {
           const params = new URL(request.url).searchParams;
           for (const key of params.keys()) if (params.getAll(key).length > 1) throw new HttpError(400, "Duplicate query parameter.");

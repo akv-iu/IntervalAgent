@@ -1,6 +1,6 @@
 # Phase 16: customer chat and case status
 
-Status: verified locally, not pushed. Phase 15 is pushed as `168c354` on `v2`; production `main` remains `61b7ece`. Exactly four application roles remain unchanged. No application database, migration, worker activation, live model or deployment was used in this phase.
+Status: verified and pushed as `3b9a2b2` on `v2` following Akshay's October 20 advancement approval; production `main` remains `61b7ece`. Exactly four application roles remain unchanged. No application database, migration, worker activation, live model or deployment was used in this phase.
 
 ## Delivered and deferred
 
@@ -96,4 +96,4 @@ Antislop: during, existing user session override. Design Read: billing case work
 | C-4 resilience | PASS for tested browser paths: revision conflicts, lost acknowledgement, scope changes, late responses, STOP and responsive checks above. |
 | C-5 honesty | PASS: internal drafts are not customer replies, execution is not a financial outcome, no model evidence fabricated. |
 
-Remaining risks/acceptance: real isolated V2 DB/worker browser walkthrough, full screen-reader testing, long-history/load measurements and later activity/proposal/operator/financial workflows. No paid model call, deployment or new grants. Phase 16 remains local until the next push instruction.
+Remaining risks/acceptance at this phase's completion: real isolated V2 DB/worker browser walkthrough, full screen-reader testing, long-history/load measurements and later activity/proposal/operator/financial workflows. No paid model call, deployment or new grants. Phase 16 was subsequently pushed as `3b9a2b2`; [Phase 17](PHASE17-REVIEW.md) adds activity/proposal code without claiming browser acceptance.

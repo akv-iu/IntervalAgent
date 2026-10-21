@@ -8,6 +8,7 @@ import * as session from "../src/app/api/v2/session/route";
 import * as collection from "../src/app/api/v2/cases/route";
 import * as detail from "../src/app/api/v2/cases/[caseId]/route";
 import * as messages from "../src/app/api/v2/cases/[caseId]/messages/route";
+import * as activity from "../src/app/api/v2/cases/[caseId]/activity/route";
 
 afterEach(() => { vi.unstubAllEnvs(); serve.mockReset(); });
 
@@ -20,6 +21,7 @@ test("route exports delegate every operation through the visitor boundary and aw
   await collection.POST(request); expect(serve).toHaveBeenLastCalledWith(request, "cases");
   await detail.GET(request, { params: Promise.resolve({ caseId: "one" }) }); expect(serve).toHaveBeenLastCalledWith(request, "case", "one");
   await messages.POST(request, { params: Promise.resolve({ caseId: "two" }) }); expect(serve).toHaveBeenLastCalledWith(request, "messages", "two");
+  await activity.GET(request, { params: Promise.resolve({ caseId: "two" }) }); expect(serve).toHaveBeenLastCalledWith(request, "activity", "two");
 });
 
 test("disabled routes and incomplete opt-in fail closed without database access", async () => {
