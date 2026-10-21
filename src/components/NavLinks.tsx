@@ -21,7 +21,7 @@ export default function NavLinks() {
             <Link
               href={href}
               aria-current={active ? "page" : undefined}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${active ? "bg-tint text-accent-ink" : "text-ink-2 hover:bg-tint hover:text-accent-ink"}`}
+              className={`inline-flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-medium ${active ? "bg-tint text-accent-ink" : "text-ink-2 hover:bg-tint hover:text-accent-ink"}`}
             >
               {label}
             </Link>

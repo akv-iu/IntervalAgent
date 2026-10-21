@@ -89,9 +89,14 @@ test("the live route is the single exception and guards itself", () => {
 });
 
 test("V1 pages and its live exception do not reach the new V2 modules", () => {
-  const entries = [...files("src/app"), ...files("src/components")].filter((f) => !f.replace(/\\/g, "/").startsWith("src/app/api/v2/"));
+  const entries = [...files("src/app"), ...files("src/components")].filter((f) => !["src/app/api/v2/", "src/app/v2/", "src/components/v2/"].some((prefix) => f.replace(/\\/g, "/").startsWith(prefix)));
   const seen = [...reachable(entries)].map((f) => f.replace(/\\/g, "/"));
   expect(seen.filter((f) => f.includes("/src/lib/v2/"))).toEqual([]);
+});
+
+test("V2 visitor screens cannot reach database, credentials, model or worker modules", () => {
+  const seen = [...reachable([...files("src/app/v2"), ...files("src/components/v2")])].map((f) => f.replace(/\\/g, "/"));
+  expect(seen.filter((f) => ["/src/lib/db", "/src/lib/env", "/src/lib/project-env", "/src/lib/v2/visitor-api", "/src/lib/v2/visitor-runtime", "/src/lib/v2/visitor-store", "/src/lib/v2/case-store", "/src/lib/v2/run-store", "/src/lib/v2/model-", "/src/lib/v2/openai-", "/src/lib/v2/operator-", "/scripts/"].some((prefix) => f.includes(prefix)))).toEqual([]);
 });
 
 test("V2 exposes only enumerated visitor/operator routes through their own session boundaries", () => {

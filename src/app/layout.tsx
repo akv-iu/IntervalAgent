@@ -1,6 +1,7 @@
 import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 import { Barlow } from "next/font/google";
+import { Suspense } from "react";
 import NavLinks from "@/components/NavLinks";
 import "./globals.css";
 
@@ -21,13 +22,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <span aria-hidden="true" className="inline-block size-3 rounded-sm bg-accent" />
               Recovery Lab
             </span>
-            <NavLinks />
+            <Suspense><NavLinks /></Suspense>
           </nav>
         </header>
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-10">{children}</main>
         <footer className="border-t border-line">
           <p className="mx-auto max-w-6xl px-4 py-4 text-xs text-muted sm:px-6">
-            Fictional business (Northside Fitness) and synthetic data. No real messages or payments are sent. The rules checked here are a simplified model,
+            Fictional businesses and synthetic data. No real messages or payments are sent. The rules checked here are a simplified model,
             not a legal standard.
           </p>
         </footer>

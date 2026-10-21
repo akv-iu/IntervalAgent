@@ -1,14 +1,31 @@
 # Recovery Lab Version 2: implementation plan
 
-Status: Phase 14 is pushed to `v2` as `9a0faaa`, with one model-test revision, checkpoint-derived completion, persisted code guards and atomic operator handoff. Phase 15 is a local [screen contract proposal](UI-JOURNEY.md), not implemented UI. The default worker remains mock; verification is recorded in [DECISIONS.md](DECISIONS.md). Start with [product status](STATUS.md) and the [model workflow contract](MODEL-WORKFLOW.md). Live activation/evidence, UI, actions and learning remain open; Task 3/4 release gates are not complete.
+Status: Phase 15 is pushed to `v2` as `168c354`. Phase 16 locally implements customer chat and case status, the first [screen-contract slice](UI-JOURNEY.md). The default worker remains mock; verification is recorded in [PHASE16-REVIEW.md](PHASE16-REVIEW.md). Start with [product status](STATUS.md) and the [model workflow contract](MODEL-WORKFLOW.md). Activity/evidence/operator UI, live activation/evidence, actions and learning remain open; Task 3/4 release gates are not complete.
 Date: October 20, 2026.
 Build contract: [SPEC.md](SPEC.md). V2 requirement IDs in this plan refer to that document.
+
+Scope correction, October 20: Akshay confirmed this is a resume project, not a product to launch or sell. The portfolio completion boundary below replaces the broader launch-oriented backlog. Existing implementation/history remains; deferred work is not a reason to keep building after the demonstration is complete.
 
 ## 1. Intended result
 
 Deliver a four-agent case-resolution portfolio project: Customer Agent, Coordinator, Investigator, and Reviewer. Agents exchange structured tasks and evidence, use scoped synthetic business tools, carry cases through human review, and improve through evaluated, versioned lessons. The existing chat remains the customer's entry point.
 
 Build additive vertical slices alongside V1. Each task must leave a working, reviewable increment, with tests for its material failure modes. Completion of these planning documents does not authorize a deployment, create paid model calls, or claim any implementation task is complete.
+
+### Portfolio completion boundary
+
+Build a compact, reusable application with varied case outcomes and repeatable learning cycles. A reference case anchors the walkthrough, but is neither the only supported case nor the completion criterion. Cover verified and partial payments, ambiguity/missing evidence, policy differences and tool failure, using existing synthetic fixture work. Show successful resolution, clarification, reviewer-requested reinvestigation and escalation. Preserve evaluation/runtime separation and the locked holdout. Use both existing businesses to demonstrate configuration differences, not just a renamed screen.
+
+Learning must process multiple feedback events and candidate versions across different role/situation contexts, with independent evaluation, rejection, eligible activation, history and rollback. It is a reusable loop, not a hardcoded lesson or a cap of one candidate. Demonstrate useful and unsafe/ineffective candidates where evidence permits; do not promise a positive result or tune without a declared evaluation/spend boundary.
+
+Finish only these remaining slices:
+
+1. Visible agent activity, scoped evidence and pending proposal, plus the isolated local setup needed for Akshay's browser test.
+2. Reusable authorized case review with approve/reject/request-information, reason, decision history and idempotent simulated effects/guarded replies. Include lightweight case/scenario selection for the varied demo; reuse existing auth rather than adding administration infrastructure.
+3. A declared regression/validation set, feedback-driven candidate generation and evaluation, eligibility-controlled manual activation/rejection, version history and rollback over repeated cycles. Compact history/report artifacts are enough; no elaborate learning dashboard or automatic promotion.
+4. Budget-approved selected real four-role recordings, strict offline replay, measured small-sample results, architecture diagram, demo instructions and final targeted checks/user acceptance. Run the worker locally; hosted operation is unnecessary.
+
+Keep input/output validation, scope isolation, STOP, spend limits, stale-write protection and duplicate-action tests. Defer public hosting/deployment, scale benchmarks, production migration rehearsals, an elaborate operator/admin platform, automatic lesson promotion, general connector interfaces and the three-way architecture benchmark. Clarification and request-information are core case behavior, not deferred enterprise features. Do not delete working foundations or build replacement infrastructure to narrow scope. Do not claim better accuracy/cost than a single agent without comparison evidence.
 
 ## 2. Architecture decisions
 
@@ -18,7 +35,7 @@ Build additive vertical slices alongside V1. Each task must leave a working, rev
 | Model use | Reuse the installed provider and a configured model; independent prompts/contracts per role | Makes role specialization measurable without provider migration |
 | Orchestration | Model Coordinator proposes tasks; code validates and executes transitions | Allows evidence-dependent delegation with enforced limits |
 | Agent communication | Persisted, typed, addressed envelopes associated with a case and task | Makes collaboration inspectable, resumable, and replayable |
-| Background work | PostgreSQL jobs with leases, handled by an explicitly hosted Node worker | Fits the existing database and survives web request completion |
+| Background work | Existing PostgreSQL jobs/leases and a locally run Node worker | Reuses durable execution without requiring a hosted service |
 | Business tools | Validated server functions, scoped to business/workspace | Enables investigation while keeping SQL and mutations under application control |
 | Data | Connected deterministic synthetic records; hidden evaluation oracles kept separate | Enables evidence-based tasks and repeatable scoring |
 | Customer chat | Reuse useful UI/guard logic; move V2 history and case truth to the server | Supports persistent investigations and trustworthy state |
@@ -127,6 +144,8 @@ Phase 15 / screen contract: the selected customer dispute -> agent activity -> o
 
 Requirements: V2-FR-01-06, 24, 37-38; V2-NFR-03, 08, 12, 16.
 
+Phase 16 / slice A: `/v2` and `/v2/cases/{caseId}` use existing private APIs for session creation/reuse/end, reference-case creation, saved paginated messages, case-state polling, conflict recovery, stable message retries and priority STOP. The client resets on workspace change and fences late responses. Shared navigation gained a required Suspense boundary and 44-pixel targets; the footer no longer names only one business. Two self-review/fix passes, 790 offline tests, typecheck/lint/build, V1 replay and browser checks with a temporary fake HTTP backend passed. Activity/proposals/provenance reads, operator screens and real V2 DB/worker browser acceptance remain open. This phase stays local; Task 5 is not complete.
+
 - Add the V2 workspace/case page with customer chat, durable status, agent activity, evidence, and proposed resolution.
 - Show typed messages, tool statuses, concise decision summaries, and resource use; separate internal activity from customer chat.
 - Add polling, pagination, accessible loading/error states, and clear mock/live/replay labels.
@@ -138,24 +157,24 @@ Done when: the user can submit the reference dispute, follow all four roles, ins
 
 Requirements: V2-FR-03-04, 15, 17-19, 21-24; V2-NFR-01-02, 06, 08, 12-13.
 
-- Add typed proposals, review/approval records, simulated ledger actions, and the operator inbox.
+- Add typed proposals, review/approval records and simulated ledger actions for reusable authorized case review, with lightweight case selection. Defer elaborate inbox/admin functionality.
 - Require appropriate operator permission, current record/policy versions, and an allowed proposal type before action.
 - Commit action and audit trail atomically; resume customer communication with confirmed results.
-- Support reject/request-information and ensure concurrent/stale approvals cannot apply conflicting effects.
+- Support rejection/request-information with a reason and ensure concurrent/stale approvals cannot apply conflicting effects. Clarification must resume the correct case revision without inventing evidence.
 
 Done when: the $50 payment allocation and $20 credit commit once after approval, balance is $14, customer wording reflects actual committed state, and rejection leaves balances unchanged. This is the first complete product milestone.
 
-### Task 7: Establish comparable evaluation and V2 replay
+### Task 7: Establish bounded evaluation and V2 replay
 
 Requirements: V2-FR-20, 31-34, 37; V2-NFR-04-05, 08-09, 16.
 
-- Add a tool-enabled single-agent runner using the same records, permitted actions, and maximum budgets as the four-agent workflow.
+- Declare a small regression/validation subset from the existing frozen fixtures before lesson iteration. Keep source examples separate from validation; do not open final holdout answers.
 - Record model responses, tool request/results, internal messages/transitions, human fixture decisions, and pinned versions. Keep V1 recordings immutable.
 - Implement independent scoring from hidden expected facts/outcomes. Mandatory hard checks remain deterministic; subjective judgments are labeled and secondary.
-- Report resolution accuracy, unsupported claims, escalation correctness, completion, latency, token use, and per-role breakdowns. Preserve failures in denominators.
+- Report actual correctness, escalation, unsupported claims, elapsed time and usage for the demonstrated runs, with small sample sizes and failures explicit. No scale or architecture-superiority claim.
 - Add offline/mock evaluation and a V2 replay gate alongside V1 CI. Expose only functional documented commands.
 
-Done when: replay runs without network/DB/keys; missing entries fail; a deliberately bad fixture is caught; comparison explains the V1 tool-access difference. Do not inspect/tune against the final holdout yet.
+Done when: selected V2 replay runs without network/DB/keys, missing entries fail and a deliberately bad fixture is caught. Defer the tool-enabled single-agent runner and three-way architecture benchmark. Keep V1 recordings intact and final holdout answers locked.
 
 ### Task 8: Implement the evaluated improvement loop
 
@@ -164,35 +183,35 @@ Requirements: V2-FR-25-30, 32-34, 36; V2-NFR-05-08, 14, 16.
 - Capture source feedback and have the Reviewer propose role/business/situation-scoped candidate lessons offline.
 - Add lifecycle/version storage, conflict checks, bounded lesson retrieval, paired active-versus-candidate evaluation, and eligibility reports.
 - Add operator promotion, rejection, activation history, and rollback; pin instruction sets to runs.
-- Add opt-in automatic promotion only inside the isolated synthetic sandbox after the same eligibility gates.
-- Provide a learning view showing the observed failure, candidate, independent evidence, decision, and actual before/after results.
+- Defer automatic promotion, including sandbox auto mode.
+- Provide a CLI/report artifact showing the observed failure, candidate, source-independent validation/regression evidence, manual decision, actual before/after results and rollback. A dedicated learning UI is deferred.
 
-Done when: a genuine candidate improves independently authored validation cases without mandatory regressions and can be promoted/rolled back; an unsafe or overfitted candidate stays inactive; changing one business's lessons cannot affect the other. If no candidate qualifies, show that result and continue iteration without claiming improvement.
+Done when: repeated feedback events produce distinct scoped candidates/versions evaluated on the declared set; decisions/history and rollback are inspectable; unsafe candidates stay inactive and lessons do not cross business scope. Cover different role/situation contexts and multiple case families rather than repeating one source example. Only claim improvement when saved validation evidence supports it. Respect the declared tuning/spend boundary if no candidate qualifies.
 
-### Task 9: Verify isolation, reliability, and measured limits
+### Task 9: Verify the demonstrated workflow
 
 Requirements: V2-FR-05, 12-13, 19, 23, 30, 35-37; V2-NFR-01-16.
 
 - Run multi-worker race/restart, stale output/approval, duplicate action, budget exhaustion, tool/model failure, and malicious-record scenarios.
 - Run both business configurations through the same runtime and verify visitor/operator/data/lesson isolation.
-- Measure API responsiveness with the SPEC dataset/concurrency; measure live-case duration and actual usage separately.
-- Rehearse additive migrations on a V1 database copy, worker/web restart, feature disable, and lesson rollback. Do not reverse financial history by deleting committed ledger entries.
+- Record actual demo duration and usage, without a throughput/SLA claim. Defer the 1,000-case load benchmark.
+- Test new persistence/actions in isolated test schemas and check worker restart/lesson rollback. Defer production migration rehearsal; do not modify V1 production or delete ledger history.
 - User completes keyboard/browser checks for ordinary, ambiguous, failed, and stopped cases.
 
-Done when: hard correctness/security gates pass and measured performance is reported against targets. Document any unmet target; do not mark the corresponding release criterion complete.
+Done when: targeted correctness/isolation/action/rollback checks and Akshay's demo acceptance pass. Production-scale readiness is neither required nor claimed. Reuse existing broad backend evidence; rerun affected suites rather than unrelated long DB suites after each UI change.
 
-### Task 10: Record live evidence and prepare the V2 release
+### Task 10: Record evidence and finish the resume demonstration
 
 Requirements: V2-FR-20, 28, 31-34, 37-38; V2-NFR-08-09, 14-16.
 
-- Confirm configured live credentials/spend controls and a working worker host through the existing authorized setup process; continue mock/replay work if unavailable.
+- Confirm explicit live credentials/spend controls for a small real-model recording and a locally run worker; continue mock/replay if unavailable. No hosted worker is required.
 - Pin a small live four-agent collaboration/reinvestigation recording and a genuine learning before/after example. Record actual usage and limitations.
-- Freeze selected prompts/lessons, then evaluate the locked final holdout once across the comparison setups. Report full results; retire/replace the holdout before tuning from its failures.
+- Freeze selected demo prompts/lessons and preserve the declared validation report. Keep final holdout answers locked; full holdout benchmarking is deferred rather than labeled complete.
 - Update README/runbook/demo notes with setup, actual commands, role architecture, learning boundaries, worker operation, provenance, and extension instructions.
 - Complete typecheck, lint, offline tests, explicit DB integration tests, V1 and V2 replay, and production build. User performs the release browser pass.
-- Prepare deployment configuration and release notes; publishing is a separate explicit action.
+- Provide an architecture diagram, a short walkthrough and evidence-linked resume claims. Deployment configuration and public launch are deferred.
 
-Done when: every applicable SPEC release checkbox has linked evidence, the three-minute demonstration is repeatable, and there are no claims of autonomous training or business effectiveness unsupported by results.
+Done when: the SPEC portfolio checklist has linked evidence and the three-minute demonstration is repeatable. Stop there; no public launch or sales readiness is needed. Do not claim autonomous training, improvement or business effectiveness without supporting results.
 
 ## 5. Dependencies and milestones
 
@@ -201,18 +220,21 @@ Order: Task 1 -> Task 2 -> Task 3 -> Task 4 -> Task 5 -> Task 6 -> Task 7 -> Tas
 | Milestone | Tasks | Observable result |
 | --- | --- | --- |
 | M1: Collaboration core | 1-4 | Four roles exchange evidence-backed tasks; execution survives restart and respects limits |
-| M2: Complete business case | 5-6 | Customer chat, collaboration timeline, human review, and one committed simulated resolution |
-| M3: Demonstrated learning | 7-8 | Comparable evaluation/replay and a versioned candidate evaluated, promoted or rejected, and rolled back |
-| M4: Portfolio release | 9-10 | Two businesses, reliability evidence, recorded live demonstration, final holdout, and operating instructions |
+| M2: Complete case workflows | 5-6 | Varied cases exercise chat, evidence, reinvestigation, clarification, human decisions and simulated outcomes |
+| M3: Demonstrated learning | 7-8 | Repeated scoped candidate/evaluation cycles, decisions, version history and rollback across varied cases |
+| M4: Resume demonstration | 9-10 | Two business configurations, targeted reliability evidence, a small recorded live run, replay, diagram and walkthrough |
 
-No calendar estimate is committed before Task 1 validates auth, worker hosting, and implementation scope. Track completed acceptance criteria rather than treating agent count as progress.
+No delivery date is committed. The previous expanded-plan 30-50-hour estimate is withdrawn for this reduced scope. See the [remaining-work note](STATUS.md#remaining-work-and-planning-estimate); re-estimate after the activity/evidence slice instead of promising an unmeasured smaller total.
 
 ## 6. Task execution and verification
 
+- New user instruction (October 20, before leaving): before each implementation task/next phase, check available Codex account usage, report remaining five-hour/weekly percentages and reset time with the observation timestamp, summarize the proposed task and wait for explicit approval. Use a fresh current-thread rate-limit snapshot when available; if usage is unavailable/stale, say so instead of inventing a value. Once approved, execute that bounded phase autonomously with appropriate automated checks and two self-review/fix passes, then repeat the approval checkpoint. This overrides automatic progression; browser testing remains user-owned.
+- Requested next checkpoint: October 20, 2026 at 7:28 PM America/Denver (October 21, 01:28 UTC). Check usage and ask for approval at that time; do not implement before the reply. Phone pairing was visually confirmed in ChatGPT Connections. After Akshay asked to finish scheduling, Windows task `RecoveryLab-Approval-20261020-1928` was registered and verified Ready for 19:28 Mountain. It runs the installed Codex queue command against this existing conversation, requesting only a fresh usage/status report and explicit approval; it does not authorize implementation or an alternate agent. This is a one-time Windows checkpoint, not an entry in ChatGPT Scheduled. Keep the computer awake, signed in and ChatGPT open. Missed execution can run when available; phone notification delivery has not been tested.
 - Implement one reviewable task at a time. Follow the repository's existing review and user browser-check process where applicable; do not infer permission to push or deploy from this plan.
 - User instruction (October 19, branch clarified October 20): on "move ahead", commit/push the completed verified phase to `v2` before starting the next phase. Reserve `main` for V1 production maintenance. Leave the newly completed phase for review until the next such instruction; do not force-push, merge V2 into `main`, or publish a V2 release implicitly.
 - Record actual changes/checks in DEVLOG and plain-language decisions in DECISIONS; keep V1/V2 evidence distinguishable.
 - Test material behavior and failures. Run impacted checks per task, then the complete release checks at the end; documentation-only edits do not require model calls or application tests.
+- User instruction (October 20): browser/web testing belongs to Akshay by default. Prepare a working test environment, exact URL, short steps and expected results, then ask him to test and wait for his report. Do not start browser automation unless he explicitly chooses the assistant to test. After results/fixes, ask who should perform the next browser pass; do not assume continuing authorization. Automated code checks and the two self-review/fix passes continue. Keep pending browser acceptance distinct from passed automated checks.
 - Use mocks first. Database tests require the dedicated test database; live calls require configured spend controls. Never use missing credentials as a reason to fabricate passing evidence.
 - Maintain requirement traceability through task IDs, behavioral tests, and release evidence. Reconcile specification changes before declaring a task complete.
 
@@ -224,4 +246,4 @@ No calendar estimate is committed before Task 1 validates auth, worker hosting, 
 - [x] Synthetic evidence, business extension, isolation, and deployment boundaries are specified.
 - [x] Functional/non-functional requirements have IDs and verification criteria.
 - [x] An ordered implementation plan maps tasks to requirements and completion gates.
-- [ ] Implementation tasks 1-10 completed and evidenced.
+- [ ] Reduced portfolio completion boundary implemented and evidenced; deferred launch work is not a completion gate.
