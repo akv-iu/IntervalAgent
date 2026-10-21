@@ -1,15 +1,5 @@
 # Working rules
 
-## Version 2 scope and execution
-
-The user's V2 scope is defined in [docs/v2/SPEC.md](docs/v2/SPEC.md) and [docs/v2/PLAN.md](docs/v2/PLAN.md); the original PRD/SPEC below remain the V1 contract. [V2 decisions](docs/v2/DECISIONS.md) record new boundaries and implementation evidence.
-
-User direction (October 19, 2026): implement one phase, test, review/fix, verify again, then report and wait before starting the next phase. OpenAI remains the only live provider; use mock/replay for routine checks and conserve tokens. Self-review must be labeled accurately. Do not infer permission to push/deploy from a phase completion.
-
-User direction (October 19, 2026): when the user says "move ahead", commit and push the completed, verified phase to GitHub first, then start the next bounded phase. Report any push failure and continue independent work where possible. This does not authorize force-pushes, unrelated changes, or publishing a V2 application release.
-
-V2 may add authenticated case APIs and a separately hosted, scoped worker in its planned phases. V1 read-only pages and its existing live-route exception stay protected. No broad database grants or new unguarded write endpoints are authorized. V2's mock worker is separate from web requests. Its explicit `/api/v2/session` and scoped case/message routes may write only when V2 is enabled with its own web credential, an origin-checked mutation and a verified database-backed visitor session (session creation is the bounded public bootstrap). Separately enabled `/api/v2/auth/[...all]` permits only GitHub sign-in/callback and sign-out through Better Auth; operator session/scoped case GETs require verified database sessions and owner-provisioned business memberships through their own credential. Operator mutations remain a later phase; client-provided principals never establish access. Keep V1 checks separate from these enumerated V2 routes. Better Auth's internal adapter uses transitive Kysely; application storage remains pg/SQL.
-
 Read [Collections Simulator PRD.md](<Collections Simulator PRD.md>) for scope and [SPEC.md](SPEC.md) for implementation. PRD wins on scope; keep the documents consistent. [DEMO-NOTES.md](DEMO-NOTES.md) holds the pitch and design review.
 
 Complete one narrow example of each job responsibility before adding depth. Documents describe planned behavior until verified in code.

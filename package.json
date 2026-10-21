@@ -14,8 +14,6 @@
     "eval": "tsx scripts/eval.ts",
     "picker": "tsx scripts/picker.ts",
     "eval:replay": "tsx scripts/eval.ts --provider replay --gate",
-    "fixtures:v2:check": "tsx scripts/check-v2-fixtures.ts",
-    "worker:v2:mock": "tsx scripts/v2-mock-worker.ts",
     "test:db": "vitest run --config vitest.db.config.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
@@ -23,7 +21,6 @@
   },
   "dependencies": {
     "@vercel/analytics": "2.0.1",
-    "better-auth": "1.7.11",
     "dotenv": "18.0.8",
     "next": "16.4.2",
     "openai": "7.34.0",

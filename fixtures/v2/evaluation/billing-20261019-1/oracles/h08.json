@@ -1,8 +1,0 @@
-{
-  "schemaVersion": 2,
-  "disposition": "escalate",
-  "actions": [],
-  "remainingBalances": [],
-  "requiredEvidence": [],
-  "rationale": "malformed invoice service response"
-}

@@ -1,55 +1,5 @@
 # Decisions and fixes
 
-## V2 Phase 7: identify operators and limit their business access (October 19, 2026)
-
-Phase 6 was pushed as `ccbf37e`. GitHub login now establishes identity, while an owner-controlled database membership decides which businesses an operator can inspect. Login alone grants no access. Operators can read case evidence/history; this phase provides no financial approval or case-changing endpoint. Separate credentials and a default-off switch protect the boundary. [Setup and limits](docs/v2/OPERATORS.md).
-
-Two self-review passes found and fixed access surviving a mid-request session revocation and raw provider errors being forwarded into callback redirects. Tests reproduced each before the fix. Final checks pass 710 offline tests, all 98 database tests, typecheck, lint, fixture integrity, V1 replay, production build and an HTTP smoke under restricted database grants. [Detailed evidence](docs/v2/DECISIONS.md).
-
-No OpenAI API calls or application-database migration. No manual UI test needed now; real GitHub consent/logout in a browser still needs OAuth credentials and isolated local setup later. Phase 7 stays local until the next "move ahead". Budgeted/checkpointed mock agent execution is next; V2 remains disabled publicly.
-
-## V2 Phase 6: give each visitor a private workspace (October 19, 2026)
-
-Phase 5 was pushed as `55e28bc`. Visitors now get an opaque, hashed, expiring session cookie and a private workspace. Protected APIs create cases, accept messages once and read customer history through that session. Scope and roles cannot be forged in the request; internal notes, tokens and raw records stay out of responses. V2 remains off by default.
-
-Two self-review passes plus build/HTTP verification fixed a revocation race, misclassified server errors, stalled uploads, Next.js runtime/host compatibility and STOP being blocked by the request counter. Findings were reproduced before fixes. Checks pass 700 offline tests, the 87-test full DB suite and the final 18-test visitor suite. The built server also passes the complete visitor-to-mock-worker flow, including STOP after rate exhaustion, using a restricted database role.
-
-No manual browser testing needed yet. No live model calls or application-database migration; Phase 6 stays local until the next "move ahead". Operator GitHub login and memberships are next. [API setup and limits](docs/v2/API.md), [detailed evidence](docs/v2/DECISIONS.md).
-
-## V2 Phase 5: let background work survive a restart (October 19, 2026)
-
-Phase 4 was pushed as `f59b066`. Accepted messages now queue one durable mock investigation. A worker claims it with an expiring lease, reads scoped account/policy tools and saves its result with the case/audit update. Retries are bounded; STOP and newer case changes invalidate old work. The mock pauses for human review and sends no customer reply.
-
-Two self-review/validation passes are complete. The first found and reproduced a live-lease overwrite and old-job cleanup cancelling newer work; both were fixed and checked again. Verification passes 688 offline tests, the full 69-test database suite, a separately added worker-permissions test, typecheck, lint, build, fixture integrity and V1 replay. A child-process restart test confirms recovery after a committed claim is abandoned. The restricted worker can process jobs but cannot read V1 data or edit facts/customer messages.
-
-No browser test is needed and no live API tokens were spent. Migrations/grants ran only in isolated test schemas; no hosted worker or application-database change. Phase 5 stays local until the next "move ahead". Login and protected V2 routes are next; the four model-backed agents are still later. [Worker setup and limits](docs/v2/WORKER.md), [full evidence](docs/v2/DECISIONS.md).
-
-## V2 Phase 4: save cases without losing or duplicating messages (October 19, 2026)
-
-Phase 3 was pushed as `3b1d948`. Added private database storage for cases, scoped business records, customer messages and audit history. Duplicate submissions save once, competing edits cannot silently overwrite a case, and a failed write rolls the whole change back. STOP closes the case even when the page's revision is old; reopening preserves contact suppression.
-
-Self-review found and fixed stale STOP rejection, missing/incorrect caller identity in audit history, and facts reads trusting an overly broad stored snapshot. Each regression failed before its fix; the second self-review found no further issue. Checks pass: 683 offline tests, 50 database tests, fixture integrity, V1 replay, typecheck, lint and build. All database changes were confined to temporary test schemas; the application database was not migrated.
-
-No browser test is needed yet. The queue, worker and login are the next parts of Task 3, so agents do not run from these saved messages yet. No live API tokens spent. Phase 4 stays local until the next "move ahead". Details: [V2 decisions](docs/v2/DECISIONS.md).
-
-## V2 Phase 3: freeze the test cases before running agents (October 19, 2026)
-
-Phase 2 was pushed as `3b04057`. Added 36 synthetic evaluation cases across development, validation and final holdout, each with a separate answer key and pinned file hashes. Every split covers all eight required case categories. The runtime and deployment exclude the evaluator/answer files; the holdout remains unused for model scoring or tuning.
-
-Two self-review passes fixed fault controls that could alter the wrong case category, tools switching to another account, and incomplete financial answer keys. Regression tests failed before fixes. Checks pass 680 tests, fixture integrity, V1 replay, typecheck, lint and build. No browser test is needed. These cases were authored by Codex; they are not external independent evaluation evidence. Phase 3 stays local until the next "move ahead". Details: [V2 decisions](docs/v2/DECISIONS.md).
-
-## V2 Phase 2: give the Investigator real records to inspect (October 19, 2026)
-
-Phase 1 was pushed to GitHub as `936cdf2` on the user's instruction. Added synthetic invoices, payments, allocations, cancellations, credits and policies for two businesses, with scoped read tools and a preview that computes the $14 example without changing balances. The two businesses use the same code but different cancellation policies. Independent evaluation cases are the next phase; these are development records.
-
-Two self-review passes checked data and proposal boundaries. Fixed a timestamp-format edge case and a proposal citing an expired policy, with failing tests before each fix. Final checks pass 666 tests, V1 replay, typecheck, lint and build. No browser test is needed yet. Phase 2 stays local until the next "move ahead"; full details are in [V2 decisions](docs/v2/DECISIONS.md).
-
-## V2 Phase 1: agree on how the agents can work together (October 19, 2026)
-
-Added the four agents' message formats, allowed communication paths, evidence/proposal checks, case/task state changes, and business/workspace access rules. These are foundations; the agents do not run yet. Auth and worker choices are recorded in [V2 decisions](docs/v2/DECISIONS.md).
-
-Two self-review passes found and fixed gaps around tool routing, missing or conflicting evidence, duplicate financial actions, and closing resolved cases. Each finding was reproduced in a failing test before its fix. The final suite passes 645 tests; V1 replay, typecheck, lint and build also pass. No independent reviewer model or live API calls were used. Database and browser checks wait until their respective implementation phases.
-
 A plain-language log, one entry per build step: what went wrong, what the reviewer (Codex) pointed out, and what was changed. DEVLOG.md has the technical detail; this file is the readable version.
 
 How review works: after each step, Codex reads the new code and reports problems (check 1). Fixes go in with a test that proves the problem existed and is now gone. Then Codex looks again to confirm the fixes (check 2). Steps 1 to 6 below were reviewed with one check under the earlier process. From step 11 on, every step gets both checks.

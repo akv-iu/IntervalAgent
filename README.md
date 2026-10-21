@@ -1,7 +1,5 @@
 # Recovery Lab
 
-Version 2 is in development: a four-agent case-resolution system with persistent cases, evidence-based investigation, human review, and evaluated lessons. Its foundations include scoped synthetic tools, 36 frozen evaluation fixtures, transactional cases/history, a durable mock worker, private visitor APIs and GitHub operator login with business-scoped case reads. Operator actions, model-backed agents and the V2 UI remain planned. See the [V2 plan](docs/v2/PLAN.md), [specification](docs/v2/SPEC.md), [visitor API](docs/v2/API.md), [operator setup](docs/v2/OPERATORS.md), and [mock worker](docs/v2/WORKER.md). V2 is off by default; routine checks require no model calls. The behavior and results below describe Version 1.
-
 An AI collections agent tested like production software: a live model writes past-due payment messages, code guards what it is allowed to send, scripted customers try to break it, and every result is stored and reported from PostgreSQL.
 
 **Live site:** https://interval-agent.vercel.app

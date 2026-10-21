@@ -8,13 +8,7 @@ export async function testSchema() {
   const admin = new Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 1 });
   await admin.query(`create schema ${schema}`);
   const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 3, options: `-c search_path=${schema}` });
-  try { await migrate(pool); }
-  catch (error) {
-    await pool.end();
-    await admin.query(`drop schema ${schema} cascade`);
-    await admin.end();
-    throw error;
-  }
+  await migrate(pool);
   return {
     pool,
     schema,
