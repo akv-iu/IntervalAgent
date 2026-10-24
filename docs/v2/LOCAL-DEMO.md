@@ -1,7 +1,20 @@
-# V2 local demo: Phase 2B business dashboard checkpoint
+# V2 local demo: Phase 2C operator correction checkpoint
 
 Worktree: `D:\Projects\IntervalAgent-v1-rebuild`, branch `v2-rebuild`.
 Open **http://127.0.0.1:3012/v2**. Akshay owns browser/UI/manual acceptance.
+
+## Check Phase 2C first
+
+Refresh the existing page; no reset or schema migration is needed. These are private case corrections, not reusable learning rules.
+
+1. Open a case with a reviewed agent response, including Sam's installment conversation. Under **Operator review → Correct this case**, select the role to correct. The latest reviewed attempt is the target; an initial synthetic opening alone cannot be corrected.
+2. For Sam, select **Case Orchestrator** and try: `Answer Sam's question directly and briefly. State that two installments are a request requiring review. Do not imply an arrangement or callback has been approved.` Click **Save correction and pause**. Expect operator control, saved original output/feedback and unchanged model-call/customer-turn counters. The latest Runtime summary should remain visible.
+3. Click **Retry with correction and resume**. This explicit action makes paid API calls on your account. The orchestrator can select specialists; Reviewer checks the revised result. An accepted revision appends a **Reviewed correction** reply without deleting the original. A rejected revision stays in **Correction history**, labelled as an unpublished draft. The run may legitimately return to operator review where terms/policy are still unavailable; installment execution is not part of this checkpoint.
+4. Expand **Correction history** and inspect the original response, role, feedback, revised response and Reviewer outcome. Refresh/reselect the case: the history must persist. Other businesses/cases must not receive this correction. Existing receipts/balances must stay intact; feedback cannot recognize/replay a payment or undo a committed effect.
+5. In a separate attempt, save feedback, then add a customer message or business evidence before retrying. That input stays saved; the old correction should become stale and its retry disabled until fresh feedback is saved. **Resume automatic replies** also changes the revision, so use the combined correction retry action when you intend to run saved feedback. STOP continues to block correction/resumption.
+6. Check role selection, textarea, save/retry controls, history disclosure and the paused banner by keyboard and at a narrow width. The banner should say automatic replies are paused rather than imply that an already-visible reply was never sent. Saving alone makes no model call; retries use the normal Runtime and limits.
+
+There are at most six saved corrections per case, each with one run attempt; correction retries share the existing six-retry allowance. A failed/interrupted run remains recorded; inspect Runtime and save fresh feedback for another attempt. Ordinary later turns receive no hidden correction instruction. No lessons are activated across cases; evaluated learning remains Phase 4.
 
 ## Check Phase 2B first
 
@@ -16,7 +29,7 @@ Refresh **http://127.0.0.1:3012/v2**. No reset is required. The existing browser
 
 ## Existing Daylight UI checks
 
-The Daylight workspace uses the full V2 page width, with customer chat and the business inbox side by side, operator review below, and an expandable runtime box beside the case status. The shared V1 width limit and the extra outer card do not wrap V2. Customer-facing messages use the business name, with the customer's messages aligned separately. There are now two businesses and twelve clients, plus a business-filtered dashboard. The second source mapping and richer corrections remain pending. No paid model calls were used to implement or verify Phase 2B.
+The Daylight workspace uses the full V2 page width, with customer chat and the business inbox side by side, operator review below, and an expandable runtime box beside the case status. The shared V1 width limit and the extra outer card do not wrap V2. Customer-facing messages use the business name, with the customer's messages aligned separately. There are now two businesses and twelve clients, plus a business-filtered dashboard. Case corrections are available as described above; the second source mapping remains pending. No paid model calls were used to implement or verify Phase 2B or Phase 2C.
 
 If the updated labels appear but the page is a plain vertical stack without pane borders or the workspace background, that is a stylesheet failure, not the intended design. The October 23 fix excludes `.module.css` from the global Tailwind loader so Next.js can export its scoped class names. Refresh with Ctrl+Shift+R after the local server picks up the configuration change; no workspace reset is needed. The asset checks below verify the actual class/stylesheet match without browser interaction or model calls.
 
@@ -79,6 +92,7 @@ Use `npm run v2:dev` for this pass. Its child process disables V1's live endpoin
 | Customer messages | 10 accepted messages per case; duplicate requests count once |
 | Business replies | 10 per case, including retained late replies |
 | Explicit retries | 6 per case; do not consume another customer turn |
+| Operator corrections | 6 saved corrections per case, 1,200 characters each; one run per correction, sharing the 6-retry allowance |
 | Case actions | 60; STOP/history remain available at the limit |
 | Workspace resets | 3, within the original lifetime |
 | Workspace admission | 20 globally per UTC day on this local database |

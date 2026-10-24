@@ -1,7 +1,17 @@
 import { z } from "zod";
 import { localDate } from "../time";
 
-export const ROLE_VERSION = "v2-phase1-13";
+export const ROLE_VERSION = "v2-phase2c-1";
+
+const CommandIdentity = { id: z.uuid(), caseId: z.string().regex(/^[a-z-]{1,60}$/) };
+const Revision = z.number().int().nonnegative();
+export const CorrectionRole = z.enum(["customer", "business_verification", "account_resolution", "reviewer"]);
+export const CaseCommand = z.discriminatedUnion("action", [
+  z.object({ ...CommandIdentity, action: z.enum(["customer", "business", "retry", "takeover", "resume"]), text: z.string().trim().min(1).max(1800).optional(), requestId: z.uuid().optional() }).strict(),
+  z.object({ ...CommandIdentity, action: z.literal("correct"), revision: Revision, targetAuditId: z.uuid(), targetRole: CorrectionRole, text: z.string().trim().min(1).max(1200) }).strict(),
+  z.object({ ...CommandIdentity, action: z.literal("retry_correction"), revision: Revision, correctionId: z.uuid() }).strict(),
+]);
+export type CaseCommand = z.infer<typeof CaseCommand>;
 
 export const DateOnly = z.iso.date();
 const Text = z.string().min(1).max(1200);
@@ -38,7 +48,7 @@ export const Draft = z.object({ reply: Text, needsOperator: z.boolean() }).stric
 export type Draft = z.infer<typeof Draft>;
 export const Review = z.object({ accepted: z.boolean(), reasons: z.array(z.string().max(300)).max(6) }).strict();
 
-export type Message = { id: string; channel: "customer" | "business"; speaker: "customer" | "business" | "agent"; text: string; at: string; requestId?: string; disposition?: "late"; origin?: "synthetic_opening" };
+export type Message = { id: string; channel: "customer" | "business"; speaker: "customer" | "business" | "agent"; text: string; at: string; requestId?: string; disposition?: "late"; origin?: "synthetic_opening" | "operator_revision" };
 export type Payment = { id: string; invoiceId: string; amountCents: number; date: string; status: "settled" | "pending"; includedInBalance: boolean; provenance?: "business_confirmation"; businessMessageId?: string; requestId?: string; reference?: string | null };
 export type CaseFacts = {
   id: string; businessId: string; businessName: string; customer: string; invoiceId: string;
@@ -51,6 +61,7 @@ export type CaseFacts = {
 };
 export type Investigation = {
   facts: CaseFacts; messages: Message[]; now: string; verification: Verification | null; requestId?: string | null; caseUpdates?: CaseUpdate[];
+  operatorFeedback?: { correctionId: string; targetAuditId: string; targetRole: z.infer<typeof CorrectionRole>; text: string; original: InvestigationResult };
 };
 export type Activity = { role: "customer" | "business_verification" | "account_resolution" | "reviewer"; action: string; summary: string };
 export type InvestigationResult = {

@@ -6,9 +6,32 @@ Product direction update: Akshay is developing an independent project and is no 
 
 Current spending policy: Akshay explicitly chose **Remove the $2 cap for local testing** on October 23. The local aggregate dollar ceiling is removed from the app/database and checkpoint fallback. Historical usage and reservations remain; manual/live calls bill the configured OpenAI API account. Earlier $2 figures below are historical, not the current policy. Per-run, turn, workspace, STOP and financial-review guards remain enforced.
 
-**Phase 1 and Phase 2A are accepted and pushed as `bfad078` to `v2-rebuild`. Phase 2B is implemented and authorized for push/continuation.** Akshay tested Sam's options conversation and then requested continuation with Phase 2. This does not establish exhaustive browser acceptance of both businesses or all cases; the remaining manual checklist stays available. Production `main` remains V1. No paid model call by the coding agent, deployment or V1 database change is part of Phase 2B. The second source adapter and richer operator corrections remain pending.
+**Phase 2B is pushed as `5702a3c` to `v2-rebuild`. Phase 2C implementation and the delegated browser pass are complete; Akshay authorized push/continuation.** He explicitly delegated the browser test after implementation, superseding the earlier manual-test ownership for that pass. Production `main` remains V1. The browser pass included one paid correction run; implementation/automated checks made no paid model calls. No deployment or V1 database change occurred. The second source adapter remains pending within Phase 2; new financial operations and evaluated learning remain Phases 3 and 4.
 
-Next proposed checkpoint, Phase 2C: persistent operator corrections linked to the original reviewed response, a bounded reviewed retry using that feedback, retained original/revised evidence, and an accurate paused-reply banner. This is case correction, not reusable lesson activation. Phase 4 still owns evaluated lessons and rollback. At 7:51 PM Mountain on October 23, fresh five-hour/weekly Codex usage and reset times remain unknown; the available rate-limit metadata is stale. Await explicit approval after this usage report before implementing 2C.
+### Delegated Phase 2C browser acceptance
+
+Core browser checks passed on Sam's existing case: save/pause without a model call, one live reviewed correction, retained original/revised replies, unchanged $79 balance and three-turn count during correction, history after reload/reselection, business isolation, stale feedback blocking, keyboard role/disclosure navigation and visible focus. The page did not overflow at a 390-pixel viewport or at desktop size; temporary sizing was restored. No browser console errors were observed. One initial draft was rejected, then a revised draft accepted; the run took **32.9 seconds across eight model calls**. Latency remains an open issue. The conservative usage ledger increased by about $0.0051; actual billing is unknown.
+
+Testing left two saved corrections and one additional held QA customer message on Sam, now at four customer turns. The second correction is stale and was not run. STOP/reset/expiry/payment-replay negatives retain automated coverage; terminal review rejection, all twelve live conversations, full accessibility and reduced-motion behavior were not browser-tested in this pass. Local ignored evidence: `results/v2-phase2c-browser/report.json` and screenshots. These artifacts are not included in Git. No application code changed during the browser pass.
+
+Next proposed checkpoint, Phase 2D: implement a PostgreSQL source adapter over differently shaped synthetic tables in the isolated test database, shared adapter-contract checks and the same investigation path through both sources. Verify scope, freshness/provenance and explicit missing/failure results without editing agent role definitions. No real business connection, paid model call or deployment is included. Fresh Codex usage/reset metadata remains unknown at the 8:41 PM Mountain check on October 23; wait for explicit approval before implementing 2D.
+
+### Phase 2C: case-specific operator corrections
+
+Saving a correction captures the case's latest reviewed attempt, named role, feedback, original result and revision. It pauses automatic replies without a model call, customer turn or financial update. **Retry with correction and resume** is the explicit operator resumption action; the orchestrator chooses useful specialists and Reviewer checks the result. Feedback and prior drafts are proposed corrections, not business evidence, customer consent or policy authority. The role configuration is `v2-phase2c-1`. Feedback enters model inputs in the existing SDK flow; no new orchestration framework or dependency was added. See [official SDK context guidance](https://developers.openai.com/api/docs/guides/agents/define-agents).
+
+Accepted revisions append a labelled customer reply while retaining the original. Rejected drafts, failures and interruptions remain distinct in correction history, with original/revised results linked to audit records. A new input that supersedes a running correction now marks that attempt interrupted before replacing the run. Stale saves/retries, foreign targets, duplicate execution, reset/expiry and STOP are guarded. Saving at most six corrections and sharing the existing six-retry/60-action allowance bounds repeated work. No global or cross-case learning activation is implied; normal subsequent turns have no hidden feedback.
+
+Correction retries cannot recognize/replay a payment or reverse a committed effect. Existing receipts/balances stay intact. Non-financial proposals still require actual customer-message sources, review and current-revision validation. Optional JSONB correction/audit fields preserve legacy workspaces without a schema migration or reset. The updated paused banner correctly describes future automatic replies after an earlier message has already been published.
+
+Two self-review passes: (1) followed API/store/SDK/UI callers; checked strict command contracts, scope/revision/idempotency, original-result snapshots, Reviewer rejection and financial authority. (2) checked interruption/failure history, duplicate/stale correction retry, saved receipt preservation, feedback reaching model-selected specialists and Reviewer, non-inheritance on later turns, and honest UI labels. Fixed the superseded-run outcome and a test assertion that confused a Tailwind disabled-state class with the actual disabled attribute. These are self-reviews, not independent reviews or browser tests.
+
+Source delivery report, with browser acceptance assigned to Akshay:
+
+- Direction/Purpose PASS: approved Daylight/Barlow/blue direction retained, ENERGY 2 / RHYTHM 2 / MOTION 2. New controls live inside operator review; original/revised blocks distinguish evidence, with no decorative motion or new assets.
+- Source behavior PASS: labelled role/feedback controls, real save/retry handlers, explicit resume wording, stale/STOP/busy/limit states, history disclosures, accurate pause notice and labelled reviewed replies. Server-rendered component tests verify those source states; actual keyboard/narrow-width/motion acceptance remains Akshay's.
+- Persistence/authority PASS: 74 isolated PostgreSQL tests and 645 offline tests passed. Dedicated cases cover real transactional save/retry/reconnect, command/request scope, concurrency, stale inputs, STOP/reset/expiry, rejected drafts, safe failure history, payment-replay denial and retained receipts. Scripted SDK tests establish feedback/context plumbing and required review; they do not prove live model quality.
+- Tooling PASS: build/type checks, application/script/test lint, production and served CSS-module checks, and the pinned V1 replay gate pass. Existing V1 tracing warnings remain. This describes implementation verification before the subsequently delegated browser pass recorded above. The checkpoint is now authorized for push; no deployment is included.
 
 ### Phase 2B: business selection and saved-case dashboard
 
@@ -40,7 +63,7 @@ Historical statements below describe earlier local checkpoints; this handoff sup
 ## Implemented
 
 - Four actual model-backed roles using OpenAI Agents SDK `0.21.0`: customer orchestrator, business verification, account resolution and Reviewer. Specialists are SDK agent tools; no separate orchestration framework was introduced.
-- Twelve synthetic clients for two businesses, including partial-payment direct reads, scoped selection and a saved-case dashboard. The second adapter and richer operator corrections remain subsequent Phase 2 checkpoints.
+- Twelve synthetic clients for two businesses, including partial-payment direct reads, scoped selection, a saved-case dashboard and private operator correction/retry history. The second adapter remains a subsequent Phase 2 checkpoint.
 - A typed synthetic account-source contract with dated evidence, separate customer/business threads, claim/request correlation, business follow-up, operator packets and takeover/resume.
 - PostgreSQL-backed private workspaces, raw messages, reviewed case updates, planned events and versioned review/audit links. Prior business replies cannot confirm a new claim. Late known replies are retained without applying conclusions.
 - Atomic case update/reply/audit publication, duplicate protection, stale-run fencing, STOP, expiry/reset isolation and persistent conservative model-usage accounting. The original $2 ceiling was explicitly removed for local testing. The manual-feedback correction adds policy-authorized recognition of existing business-confirmed synthetic payments, with a receipt and balance/audit/reply committed together.
@@ -50,8 +73,8 @@ Historical statements below describe earlier local checkpoints; this handoff sup
 
 | Check | Observation |
 | --- | --- |
-| Offline tests | 638 passed; includes preserved V1 coverage, role/source/usage checks, selected-business context, dashboard/attention/runtime rendering and safe provider-failure classification |
-| V2 PostgreSQL integration | 55 passed in `intervalagent_v2_test`; no model calls |
+| Offline tests | 645 passed; includes preserved V1 coverage, operator feedback/SDK boundaries, role/source/usage checks, dashboard/correction/attention/runtime rendering and safe provider-failure classification |
+| V2 PostgreSQL integration | 74 passed in `intervalagent_v2_test`; no model calls |
 | Type checking | Passed |
 | Application/script/test lint | Passed, using the targeted command in LOCAL-DEMO.md |
 | Repository-wide lint | Blocked by four pre-existing `require()` lint errors in untracked `docs/learn/check.cjs`; that file was left unchanged |
@@ -61,7 +84,7 @@ Historical statements below describe earlier local checkpoints; this handoff sup
 | Live case updates | Passed: promise/call request; dated email request; channel-only preference without an invented date |
 | Live negative checks | Wrong invoice remained conflicting; unsupported bank-verification/zero-balance claim was rejected |
 | Live direct read / STOP | No unnecessary business delegation on the tested fresh record; STOP made no model call and blocked the planned event |
-| Browser/UI/manual testing | Prior checkpoint accepted for continuation; Phase 2B pending Akshay, not performed by the coding agent |
+| Browser/UI/manual testing | Phase 2C core delegated browser pass completed as detailed above; broader live/accessibility/motion coverage remains incomplete |
 
 The successful persistent exchange used role configuration `v2-phase1-5`; subsequent preference/email checks used `v2-phase1-6`. Later deterministic audit, contact-switch and threat-guard changes have dedicated regression checks. These are small development samples, not a holdout score, financial-performance claim or proof that every conversation succeeds.
 

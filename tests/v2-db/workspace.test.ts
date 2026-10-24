@@ -27,6 +27,23 @@ const verification: Verification = { claimMessageId: "placeholder", outcome: "aw
 const c = async (token: string) => (await readWorkspace(token)).cases["late-payment"];
 const requireJob = (job: Job | null): Job => { if (!job) throw new Error("Expected a new job"); return job; };
 
+async function correctionCase() {
+  const { token } = await createWorkspace();
+  const job = requireJob(await beginCommand(token, command()));
+  await commitResult(token, job, approved("What payment option would work for you?"));
+  return { token, original: await c(token) };
+}
+async function saveCorrection(token: string) {
+  const state = await c(token);
+  const value = { id: randomUUID(), caseId: "late-payment", action: "correct" as const, revision: state.revision, targetAuditId: state.audit.at(-1)!.id, targetRole: "customer" as const, text: "Answer the customer's question without inventing payment terms." };
+  await beginCommand(token, value);
+  return value;
+}
+async function retryCorrection(token: string) {
+  const state = await c(token);
+  return requireJob(await beginCommand(token, { id: randomUUID(), caseId: "late-payment", action: "retry_correction", revision: state.revision, correctionId: state.corrections!.at(-1)!.correctionId }));
+}
+
 beforeAll(async () => {
   const database = await v2Pool().query("SELECT current_database() AS name");
   expect(database.rows[0].name).toBe("intervalagent_v2_test");
@@ -44,6 +61,145 @@ test("same-case histories are private across tester workspaces; foreign IDs fail
   expect((await c(b.token)).messages.filter((m) => m.origin !== "synthetic_opening")).toHaveLength(0);
   await expect(readWorkspace("a".repeat(64))).rejects.toMatchObject({ status: 401 });
   await expect(beginCommand(a.token, { ...command(), caseId: "constructor" })).rejects.toMatchObject({ status: 404 });
+});
+
+test("saving an operator correction pauses once, preserves the original and spends no model/turn allowance", async () => {
+  const { token, original } = await correctionCase();
+  const value = await saveCorrection(token);
+  expect(await beginCommand(token, value)).toBeNull();
+  const saved = await c(token);
+  expect(saved).toMatchObject({ takeover: true, status: "taken_over", turns: original.turns, retries: original.retries, revision: original.revision + 1 });
+  expect(saved.messages).toEqual(original.messages); expect(saved.updates).toEqual(original.updates); expect(saved.lastRun).toEqual(original.lastRun);
+  expect(saved.corrections).toHaveLength(1);
+  expect(saved.corrections![0]).toMatchObject({ correctionId: value.id, original: original.lastReview, targetAuditId: original.audit.at(-1)!.id, text: value.text });
+  expect((await budgetUsage()).calls).toBe(0);
+  await expect(beginCommand(token, { ...value, text: "Different feedback with the same ID" })).rejects.toMatchObject({ status: 409 });
+});
+
+test("correction retry resumes explicitly, publishes only after review and keeps linked original/revised history", async () => {
+  const { token, original } = await correctionCase();
+  const correction = await saveCorrection(token), job = await retryCorrection(token);
+  expect(job.input.operatorFeedback).toMatchObject({ correctionId: correction.id, text: correction.text, original: original.lastReview });
+  expect(job.input.messages).toEqual(original.messages);
+  const revised = approved("I can record your preferences, but no installment plan has been approved.");
+  await commitResult(token, job, revised);
+  await closeV2Pool();
+  const saved = await c(token);
+  expect(saved).toMatchObject({ takeover: false, reviewHold: false, status: "ready", retries: 1, turns: 1 });
+  expect(saved.messages.slice(0, original.messages.length)).toEqual(original.messages);
+  expect(saved.messages.at(-1)).toMatchObject({ text: revised.draft.reply, origin: "operator_revision" });
+  expect(saved.corrections![0]).toMatchObject({ outcome: "completed", runId: job.id, result: revised, original: original.lastReview });
+  expect(saved.audit.at(-1)).toMatchObject({ id: job.id, correctionId: correction.id });
+  expect(saved.audit.at(-1)!.sourceMessageIds).not.toContain(correction.id);
+  await expect(commitResult(token, job, revised)).rejects.toMatchObject({ status: 409 });
+  const next = requireJob(await beginCommand(token, command("customer", "Please email me instead")));
+  expect(next.input.operatorFeedback).toBeUndefined();
+});
+
+test("Reviewer rejection retains the revised draft privately without publishing it", async () => {
+  const { token, original } = await correctionCase();
+  await saveCorrection(token); const job = await retryCorrection(token);
+  const rejected = { ...approved("Unapproved installment terms are agreed"), review: { accepted: false, reasons: ["Business policy does not establish these terms"] } };
+  await commitResult(token, job, rejected);
+  const saved = await c(token);
+  expect(saved.messages).toEqual(original.messages); expect(saved.status).toBe("needs_review");
+  expect(saved.corrections![0]).toMatchObject({ outcome: "blocked", result: rejected });
+});
+
+test("a blocked original can be corrected once; concurrent retries start only one reviewed run", async () => {
+  const { token } = await createWorkspace();
+  const original = requireJob(await beginCommand(token, command()));
+  await commitResult(token, original, { ...approved("Unsupported original draft"), review: { accepted: false, reasons: ["Missing facts"] } });
+  await saveCorrection(token);
+  const saved = await c(token);
+  const value = { id: randomUUID(), caseId: "late-payment", action: "retry_correction" as const, revision: saved.revision, correctionId: saved.corrections![0].correctionId };
+  const jobs = await Promise.all([beginCommand(token, value), beginCommand(token, value)]);
+  expect(jobs.filter(Boolean)).toHaveLength(1);
+  const job = requireJob(jobs.find(Boolean)!);
+  const date = localDate(new Date(), "America/Denver", 1);
+  await commitResult(token, job, { ...approved("Your $50 promise was saved; no money has been received."), resolution: { needsOperator: false, summary: "Record the actual customer promise", updates: [{ kind: "promise", amountCents: 5000, date, sourceMessageId: original.id }] } });
+  const after = await c(token);
+  expect(after.retries).toBe(1); expect(after.turns).toBe(1);
+  expect(after.updates).toMatchObject([{ kind: "promise", sourceMessageId: original.id }]);
+  expect(after.facts.balanceCents).toBe(12900);
+  expect(after.corrections![0].original.review.accepted).toBe(false);
+  expect(after.messages.some((m) => m.text === "Unsupported original draft")).toBe(false);
+  expect(after.messages.at(-1)!.origin).toBe("operator_revision");
+});
+
+test.each(["customer", "resume", "stop", "reset", "expiry"])("%s invalidates saved feedback before its correction retry", async (change) => {
+  const { token } = await correctionCase(); await saveCorrection(token);
+  const before = await c(token);
+  const retry = { id: randomUUID(), caseId: "late-payment", action: "retry_correction" as const, revision: before.revision, correctionId: before.corrections![0].correctionId };
+  if (change === "reset") await resetWorkspace(token);
+  else if (change === "expiry") await v2Pool().query("UPDATE rebuild_v2.workspaces SET expires_at=NOW()-INTERVAL '1 second'");
+  else await beginCommand(token, command(change === "resume" ? "resume" : "customer", change === "stop" ? "STOP" : "New customer evidence"));
+  await expect(beginCommand(token, retry)).rejects.toMatchObject({ status: change === "expiry" ? 410 : 409 });
+  expect((await budgetUsage()).calls).toBe(0);
+});
+
+test.each(["customer", "takeover", "stop", "reset"])("%s prevents a running correction from publishing obsolete work", async (change) => {
+  const { token, original } = await correctionCase(); await saveCorrection(token); const job = await retryCorrection(token);
+  if (change === "reset") await resetWorkspace(token);
+  else await beginCommand(token, command(change === "takeover" ? "takeover" : "customer", change === "stop" ? "STOP" : "New customer evidence"));
+  await expect(commitResult(token, job, approved("Obsolete revision"))).rejects.toMatchObject({ status: 409 });
+  const saved = await c(token);
+  expect(saved.messages.some((m) => m.text === "Obsolete revision")).toBe(false);
+  if (change !== "reset") {
+    expect(saved.corrections![0]).toMatchObject({ outcome: "interrupted", original: original.lastReview });
+    expect(saved.corrections![0].result).toBeUndefined();
+  }
+});
+
+test("corrections reject foreign targets, active runs, forged roles, oversized feedback and cross-case IDs", async () => {
+  const a = await correctionCase(), b = await correctionCase();
+  const value = await saveCorrection(a.token), saved = await c(a.token);
+  await expect(beginCommand(b.token, { ...value, id: randomUUID(), revision: b.original.revision })).rejects.toMatchObject({ status: 409 });
+  await expect(beginCommand(a.token, { ...value, id: randomUUID(), caseId: "cedar-late-payment", revision: 0 })).rejects.toMatchObject({ status: 409 });
+  await expect(beginCommand(a.token, { ...value, id: randomUUID(), revision: saved.revision, text: "x".repeat(1201) })).rejects.toMatchObject({ status: 400 });
+  const response = await handleV2(new NextRequest("http://127.0.0.1:3012/api/v2/workspace", { method: "POST", headers: { host: "127.0.0.1:3012", origin: "http://127.0.0.1:3012", cookie: `recovery_v2=${a.token}`, "content-type": "application/json" }, body: JSON.stringify({ ...value, targetRole: "maintainer", revision: saved.revision }) }));
+  expect(response.status).toBe(400);
+  await retryCorrection(a.token);
+  await expect(beginCommand(a.token, { ...value, id: randomUUID(), revision: (await c(a.token)).revision })).rejects.toMatchObject({ status: 409 });
+});
+
+test("correction attempts retain safe failure status and cannot be silently repeated or exceed limits", async () => {
+  const { token } = await correctionCase(); await saveCorrection(token); const job = await retryCorrection(token);
+  await failRun(token, job, { kind: "access", status: 401, code: "invalid_api_key", message: "Check credentials." });
+  const failed = await c(token);
+  expect(failed.corrections![0]).toMatchObject({ outcome: "failed", runId: job.id });
+  await expect(retryCorrection(token)).rejects.toMatchObject({ status: 409 });
+  for (let i = 1; i < 6; i++) await saveCorrection(token);
+  await expect(saveCorrection(token)).rejects.toMatchObject({ status: 429 });
+  await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=jsonb_set(data,'{cases,late-payment,retries}','6'::jsonb)");
+  await expect(retryCorrection(token)).rejects.toMatchObject({ status: 429 });
+  expect((await c(token)).turns).toBe(1); expect((await budgetUsage()).calls).toBe(0);
+});
+
+test("the HTTP correction save is private, idempotent and never calls a model", async () => {
+  const { token, original } = await correctionCase();
+  const value = { id: randomUUID(), caseId: "late-payment", action: "correct", revision: original.revision, targetAuditId: original.audit.at(-1)!.id, targetRole: "reviewer", text: "Check whether the customer asked for information rather than agreeing to terms." };
+  const request = (origin = "http://127.0.0.1:3012") => new NextRequest("http://127.0.0.1:3012/api/v2/workspace", { method: "POST", headers: { host: "127.0.0.1:3012", origin, cookie: `recovery_v2=${token}`, "content-type": "application/json" }, body: JSON.stringify(value) });
+  expect((await handleV2(request("https://foreign.test"))).status).toBe(403);
+  const response = await handleV2(request());
+  expect(response.status).toBe(200);
+  expect((await response.json()).workspace.cases["late-payment"].corrections[0].targetRole).toBe("reviewer");
+  expect((await handleV2(request())).status).toBe(200);
+  expect((await c(token)).corrections).toHaveLength(1);
+  expect((await budgetUsage()).calls).toBe(0);
+});
+
+test("new business evidence invalidates a saved correction, and STOP forbids a new one", async () => {
+  const { token } = await createWorkspace();
+  const job = requireJob(await beginCommand(token, command("customer", "I paid today for INV-101")));
+  await commitResult(token, job, { ...approved(), verification: { ...verification, claimMessageId: job.id } });
+  await saveCorrection(token);
+  const saved = await c(token);
+  await beginCommand(token, { ...command("business", "Only $50 was received"), requestId: saved.requestId! });
+  await expect(retryCorrection(token)).rejects.toMatchObject({ status: 409 });
+  await beginCommand(token, command("customer", "STOP"));
+  await expect(saveCorrection(token)).rejects.toMatchObject({ status: 409 });
+  expect((await c(token)).stopped).toBe(true);
 });
 
 test("existing workspaces gain twelve scoped cases without rewriting saved work, allowance or expiry", async () => {
@@ -276,6 +432,29 @@ async function recognitionJob(amountCents = 5000) {
   const result: InvestigationResult = { ...approved("The business-confirmed payment was recorded in this simulated account."), verification: confirmed, resolution: { summary: "Reconcile the confirmed payment", needsOperator: false, updates: [{ kind: "payment_recognized", amountCents, date, invoiceId: "INV-101", reference: null, sourceMessageId: claim.id, businessMessageId: job.id }] } };
   return { token, job, result, claim };
 }
+
+test("operator feedback cannot recognize a payment, even with a valid reviewed confirmation", async () => {
+  const { token, job, result } = await recognitionJob();
+  await failRun(token, job);
+  await saveCorrection(token); const retry = await retryCorrection(token);
+  await expect(commitResult(token, retry, result)).rejects.toMatchObject({ status: 409 });
+  const saved = await c(token);
+  expect(saved.facts.balanceCents).toBe(12900); expect(saved.facts.payments).toEqual([]);
+  expect(saved.corrections![0].result).toBeUndefined();
+  expect(saved.messages.some((m) => m.id === `${retry.id}-reply`)).toBe(false);
+});
+
+test("correcting a published payment explanation preserves the committed receipt and balance", async () => {
+  const { token, job, result } = await recognitionJob();
+  await commitResult(token, job, result);
+  const original = await c(token);
+  await saveCorrection(token); const retry = await retryCorrection(token);
+  await commitResult(token, retry, { ...approved("The confirmed $50 payment is already included; no additional payment was recorded."), verification: result.verification });
+  const saved = await c(token);
+  expect(saved.facts).toEqual(original.facts); expect(saved.updates).toEqual(original.updates);
+  expect(saved.corrections![0].original).toEqual(result);
+  expect(saved.messages).toHaveLength(original.messages.length + 1);
+});
 
 test.each([5000, 12900])("business-confirmed %i cents commits receipt, balance, reply and audit once", async (amount) => {
   const { token, job, result } = await recognitionJob(amount);

@@ -5,7 +5,7 @@ import { isGlobalStop } from "./contact";
 import { findThreats } from "../patterns";
 import { localDate, localToInstant } from "../time";
 import { openingMessage, startingCases } from "./fixtures";
-import { ROLE_VERSION, validateUpdates, validateVerification, type Activity, type CaseUpdate, type Investigation, type InvestigationResult } from "./contracts";
+import { CaseCommand, ROLE_VERSION, validateUpdates, validateVerification, type Activity, type CaseUpdate, type Investigation, type InvestigationResult } from "./contracts";
 import type { ModelCall } from "./model";
 import type { RunFailure } from "./failures";
 
@@ -13,22 +13,24 @@ export class V2Error extends Error { constructor(public status: number, message:
 export type PlannedEvent = { id: string; sourceMessageId: string; channel: "call" | "email"; date: string; window: string; timezone: string; state: "planned" | "superseded" | "blocked"; beyondExpiry: boolean };
 export type RunStep = { id: string; role: string; state: "started" | "completed"; at: string };
 export type FinishedRun = { id: string; startedAt: string; finishedAt: string; durationMs: number; calls: number; steps: RunStep[]; outcome: "completed" | "blocked" | "failed" | "interrupted"; failure?: RunFailure };
+export type OperatorCorrection = NonNullable<Investigation["operatorFeedback"]> & { at: string; revision: number; runId?: string; outcome?: FinishedRun["outcome"]; result?: InvestigationResult };
 export type CaseState = Investigation & {
   revision: number; turns: number; businessReplies: number; stopped: boolean; takeover: boolean;
   reviewHold?: boolean;
   status: "ready" | "processing" | "awaiting_business" | "needs_review" | "run_failed" | "stopped" | "taken_over";
   requestId: string | null; run: { id: string; revision: number; startedAt: string; calls?: number; lastCompletedRole?: string; activeCallId?: string; activeRole?: string; steps?: RunStep[] } | null;
   lastRun?: FinishedRun;
+  corrections?: OperatorCorrection[];
   updates: CaseUpdate[]; events: PlannedEvent[]; activity: Activity[];
   preferredChannel: "call" | "email" | null;
   commands: { id: string; fingerprint: string }[]; retries: number;
-  audit: { id: string; at: string; before: CaseUpdate[]; after: CaseUpdate[]; balanceBeforeCents?: number; balanceAfterCents?: number; review: InvestigationResult["review"]; roleVersion: string; sourceVersion: string; sourceMessageIds: string[]; replyId: string | null; runtime?: FinishedRun }[];
+  audit: { id: string; at: string; before: CaseUpdate[]; after: CaseUpdate[]; balanceBeforeCents?: number; balanceAfterCents?: number; review: InvestigationResult["review"]; roleVersion: string; sourceVersion: string; sourceMessageIds: string[]; replyId: string | null; runtime?: FinishedRun; correctionId?: string }[];
   lastReview: InvestigationResult | null;
 };
 type Workspace = { cases: Record<string, CaseState>; resets: number };
 export type WorkspaceView = Workspace & { expiresAt: string };
 export type Job = { id: string; revision: number; caseId: string; input: Investigation };
-export type Command = { id: string; caseId: string; action: "customer" | "business" | "retry" | "takeover" | "resume"; text?: string; requestId?: string };
+export type Command = CaseCommand;
 let pool: Pool | undefined;
 
 export function v2Config() {
@@ -120,6 +122,8 @@ function finishRun(c: CaseState, outcome: FinishedRun["outcome"]) {
   if (!c.run) return;
   const finishedAt = new Date();
   c.lastRun = { id: c.run.id, startedAt: c.run.startedAt, finishedAt: finishedAt.toISOString(), durationMs: Math.max(0, finishedAt.getTime() - Date.parse(c.run.startedAt)), calls: c.run.calls ?? 0, steps: c.run.steps ?? [], outcome };
+  const correction = c.corrections?.find((item) => item.runId === c.run?.id);
+  if (correction) correction.outcome = outcome;
   c.run = null;
 }
 
@@ -146,6 +150,7 @@ export async function resetWorkspace(token: string) {
 }
 
 export async function beginCommand(token: string, command: Command): Promise<Job | null> {
+  if (!CaseCommand.safeParse(command).success) throw new V2Error(400, "Invalid case action or correction.");
   return workspaceAction(token, (data) => {
     const c = Object.hasOwn(data.cases, command.caseId) ? data.cases[command.caseId] : undefined;
     if (!c) throw new V2Error(404, "Case is outside this workspace.");
@@ -159,13 +164,34 @@ export async function beginCommand(token: string, command: Command): Promise<Job
     if (!stop && c.commands.length >= 60) throw new V2Error(429, "Case action limit reached. History and STOP remain available.");
     if (c.stopped && stop) return null;
     c.commands.push({ id: command.id, fingerprint });
+    let operatorFeedback: Investigation["operatorFeedback"];
+    if (command.action === "correct" || command.action === "retry_correction") {
+      if (c.stopped) throw new V2Error(409, "Contact is stopped. A correction cannot resume contact.");
+      if (c.run || command.revision !== c.revision) throw new V2Error(409, "Case changed or is running. Refresh before correcting it.");
+      if (command.action === "correct") {
+        if (!c.lastReview || c.audit.at(-1)?.id !== command.targetAuditId) throw new V2Error(409, "Correction must target this case's latest reviewed attempt.");
+        if ((c.corrections?.length ?? 0) >= 6) throw new V2Error(429, "Case correction limit reached.");
+        c.revision++;
+        (c.corrections ??= []).push({ correctionId: command.id, targetAuditId: command.targetAuditId, targetRole: command.targetRole, text: command.text.trim(), original: structuredClone(c.lastReview), at: new Date().toISOString(), revision: c.revision });
+        c.takeover = true; c.status = "taken_over";
+        c.activity.push({ role: command.targetRole, action: "operator_correction_saved", summary: "Operator saved case-specific feedback. No model run or record change was performed." });
+        return null;
+      }
+      const correction = c.corrections?.find((item) => item.correctionId === command.correctionId);
+      if (!correction || correction.runId || correction.revision !== c.revision || correction.targetAuditId !== c.audit.at(-1)?.id) throw new V2Error(409, "Correction is stale or already attempted. Save fresh feedback against the current case.");
+      if (c.retries >= 6) throw new V2Error(429, "Case retry limit reached.");
+      c.retries++; correction.runId = command.id;
+      operatorFeedback = { correctionId: correction.correctionId, targetAuditId: correction.targetAuditId, targetRole: correction.targetRole, text: correction.text, original: structuredClone(correction.original) };
+      // This explicit operator action resumes replies; it does not grant financial or evidence authority.
+      c.takeover = false; c.reviewHold = false;
+    }
     if (command.action === "takeover" || command.action === "resume") {
       if (command.action === "resume") c.reviewHold = false;
       c.takeover = command.action === "takeover"; c.revision++; finishRun(c, "interrupted");
       c.status = c.stopped ? "stopped" : c.reviewHold ? "needs_review" : c.takeover ? "taken_over" : "ready";
       return null;
     }
-    const text = command.text?.trim();
+    const text = command.action === "retry_correction" ? undefined : command.text?.trim();
     if (command.action === "customer" && text && isGlobalStop(text)) {
       if (!c.stopped) c.messages.push({ id: command.id, text, channel: "customer", speaker: "customer", at: new Date().toISOString() });
       c.stopped = true; c.status = "stopped"; c.revision++; finishRun(c, "interrupted");
@@ -192,18 +218,19 @@ export async function beginCommand(token: string, command: Command): Promise<Job
       if (c.businessReplies >= 10) throw new V2Error(429, "Business reply limit reached.");
       if (!text) throw new V2Error(400, "A business reply is required.");
       c.businessReplies++;
-    } else {
+    } else if (command.action !== "retry_correction") {
       if (!c.messages.some((m) => m.speaker !== "agent")) throw new V2Error(409, "There is no message to retry.");
       if (c.retries >= 6) throw new V2Error(429, "Case retry limit reached.");
       c.retries++;
     }
     if (text && command.action !== "retry") c.messages.push({ id: command.id, text, channel: command.action === "business" ? "business" : "customer", speaker: command.action === "business" ? "business" : "customer", at: new Date().toISOString(), ...(command.action === "business" ? { requestId: c.requestId! } : {}) });
+    finishRun(c, "interrupted");
     c.revision++; c.now = new Date().toISOString();
     if (c.takeover || c.reviewHold) { c.status = c.reviewHold ? "needs_review" : "taken_over"; c.run = null; return null; }
     c.status = "processing";
     delete c.lastRun;
     c.run = { id: command.id, revision: c.revision, startedAt: c.now };
-    return { id: command.id, revision: c.revision, caseId: command.caseId, input: structuredClone({ facts: c.facts, messages: c.messages, now: c.now, verification: c.verification, requestId: c.requestId, caseUpdates: c.updates }) };
+    return { id: command.id, revision: c.revision, caseId: command.caseId, input: structuredClone({ facts: c.facts, messages: c.messages, now: c.now, verification: c.verification, requestId: c.requestId, caseUpdates: c.updates, ...(operatorFeedback ? { operatorFeedback } : {}) }) };
   });
 }
 
@@ -215,10 +242,16 @@ export async function commitResult(token: string, job: Job, result: Investigatio
     const audit: CaseState["audit"][number] = { id: job.id, at: new Date().toISOString(), before: [...c.updates], after: [...c.updates], balanceBeforeCents: c.facts.balanceCents, balanceAfterCents: c.facts.balanceCents, review: result.review, roleVersion: ROLE_VERSION, sourceVersion: job.input.facts.sourceVersion, sourceMessageIds: job.input.messages.filter((m) => m.speaker !== "agent").map((m) => m.id), replyId: result.review.accepted ? `${job.id}-reply` : null };
     c.audit.push(audit);
     audit.runtime = c.lastRun;
+    if (job.input.operatorFeedback) {
+      const correction = c.corrections?.find((item) => item.runId === job.id);
+      if (!correction || correction.correctionId !== job.input.operatorFeedback.correctionId) throw new V2Error(409, "Correction run is no longer linked to this case.");
+      correction.result = structuredClone(result); audit.correctionId = correction.correctionId;
+    }
     if (!result.review.accepted) { c.status = "needs_review"; return; }
     if ([result.draft.reply, result.verification?.businessMessage ?? ""].some((text) => findThreats(text).length > 0)) throw new V2Error(409, "Communication failed the preserved threat/false-claim guard.");
     if (result.verification) validateVerification(result.verification, job.input);
     const updates = validateUpdates(result.resolution?.updates ?? [], { ...job.input, verification: result.verification });
+    if (job.input.operatorFeedback && updates.some((u) => u.kind === "payment_recognized")) throw new V2Error(409, "A correction retry cannot record or replay a payment. Use the normal evidence workflow.");
     if (updates.some((u) => u.kind === "payment_recognized") && (result.draft.needsOperator || result.resolution?.needsOperator)) throw new V2Error(409, "Operator approval is required before this payment can be recognized.");
     for (const update of updates) {
       if ("date" in update && update.kind !== "payment_recognized" && update.date < localDate(new Date(c.now), c.facts.timezone)) throw new V2Error(409, "Past dates need clarification before recording a new promise/request.");
@@ -250,7 +283,7 @@ export async function commitResult(token: string, job: Job, result: Investigatio
       if (c.messages.filter((m) => m.channel === "business" && m.speaker === "agent").at(-1)?.text !== result.verification.businessMessage)
         c.messages.push({ id: `${job.id}-business`, channel: "business", speaker: "agent", text: result.verification.businessMessage, at: new Date().toISOString(), requestId: c.requestId });
     }
-    c.messages.push({ id: `${job.id}-reply`, channel: "customer", speaker: "agent", text: result.draft.reply, at: new Date().toISOString() });
+    c.messages.push({ id: `${job.id}-reply`, channel: "customer", speaker: "agent", text: result.draft.reply, at: new Date().toISOString(), ...(job.input.operatorFeedback ? { origin: "operator_revision" as const } : {}) });
     c.reviewHold = result.draft.needsOperator || result.resolution?.needsOperator || false;
     c.status = c.reviewHold ? "needs_review" : c.verification && ["awaiting_business", "needs_facts", "pending", "conflicting"].includes(c.verification.outcome) ? "awaiting_business" : "ready";
   });

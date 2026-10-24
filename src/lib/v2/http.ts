@@ -2,14 +2,10 @@ import { z } from "zod";
 import { investigate } from "./agents";
 import { boundedModel } from "./model";
 import { describeFailure } from "./failures";
+import { CaseCommand } from "./contracts";
 import { beginCommand, budgetUsage, commitResult, createWorkspace, failRun, readWorkspace, recordLive, reserveLive, resetWorkspace, startLive, V2Error, v2Config } from "./store";
 
 const COOKIE = "recovery_v2";
-const CommandSchema = z.object({
-  id: z.uuid(), caseId: z.string().regex(/^[a-z-]{1,60}$/),
-  action: z.enum(["customer", "business", "retry", "takeover", "resume"]),
-  text: z.string().trim().min(1).max(1800).optional(), requestId: z.uuid().optional(),
-}).strict();
 const ControlSchema = z.object({ action: z.enum(["create", "reset"]) }).strict();
 const response = (data: unknown, status = 200, cookie?: string) => Response.json(data, { status, headers: { "Cache-Control": "no-store", ...(cookie ? { "Set-Cookie": cookie } : {}) } });
 
@@ -49,7 +45,7 @@ export async function handleV2(request: Request): Promise<Response> {
       const created = await createWorkspace();
       return response({ workspace: created.view, budget: await budgetUsage() }, 201, `${COOKIE}=${created.token}; Path=/api/v2; Max-Age=86400; HttpOnly; SameSite=Strict`);
     }
-    const command = CommandSchema.safeParse(value);
+    const command = CaseCommand.safeParse(value);
     if (!command.success) throw new V2Error(400, "Invalid case action or message.");
     const job = await beginCommand(token, command.data);
     if (job) {

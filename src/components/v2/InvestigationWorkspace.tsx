@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { formatCents } from "@/lib/format";
-import { caseAttention, scenarioName, statusNames, type Attention } from "@/lib/v2/presentation";
+import { caseAttention, roleNames, scenarioName, statusNames, type Attention } from "@/lib/v2/presentation";
 import type { CaseState, WorkspaceView } from "@/lib/v2/store";
 import BusinessDashboard, { CaseRecords } from "./BusinessDashboard";
+import OperatorCorrections, { PausedReplyNotice } from "./OperatorCorrections";
 import styles from "./workspace.module.css";
 
 type Budget = { capDollars: number | null; conservativeUsedDollars: number; calls: number; unknown_calls: number; input_tokens: number; output_tokens: number };
@@ -12,7 +13,6 @@ type Payload = { workspace?: WorkspaceView; budget?: Budget; error?: string; exp
 const button = "rounded-md border border-line px-3 py-2 text-sm font-medium disabled:opacity-50";
 const primary = `${button} border-accent-ink bg-accent-ink text-white`;
 const field = "min-h-24 w-full rounded-md border border-line bg-white p-3 disabled:opacity-60";
-const roleNames: Record<string, string> = { customer: "Case Orchestrator", business_verification: "Business Verification", account_resolution: "Account Resolution", reviewer: "Reviewer" };
 
 export function RuntimeBox({ c, seconds }: { c: Pick<CaseState, "run" | "lastRun">; seconds: number }) {
   const run = c.run, saved = c.lastRun;
@@ -45,6 +45,7 @@ export function Thread({ c, channel }: { c: Pick<CaseState, "messages" | "facts"
     {messages.length ? messages.map((message) => <li key={message.id} className={channel === "customer" && message.speaker === "customer" ? styles.outgoing : undefined}>
       <p className={styles.speaker}>{message.speaker === "agent" ? (channel === "customer" ? c.facts.businessName : "Business Verification") : message.speaker === "business" ? "Simulated business contact" : c.facts.customer}
         {message.origin === "synthetic_opening" && <span className={styles.openingLabel}>Synthetic opening</span>}
+        {message.origin === "operator_revision" && <span className={styles.openingLabel}>Reviewed correction</span>}
       </p>
       <p className={`${styles.bubble} whitespace-pre-wrap`}>{message.text}</p>
       {message.disposition === "late" && <p className="mt-1 text-xs text-muted">Late evidence retained for operator review; not applied.</p>}
@@ -131,13 +132,13 @@ export default function InvestigationWorkspace() {
     return () => { reducedMotion.removeEventListener("change", cancel); cancel(); };
   }, [attention, caseId]);
 
-  async function act(action: string, text?: string, interrupt = false) {
+  async function act(action: string, text?: string, interrupt = false, correction: { revision?: number; targetAuditId?: string; targetRole?: string; correctionId?: string } = {}) {
     if (running.current && !interrupt) return false;
     if (interrupt) controller.current?.abort();
     running.current = true; setBusy(true); setWaitSeconds(0); setError("");
     const abort = new AbortController(); controller.current = abort;
     const control = action === "create" || action === "reset";
-    const fields = control ? { action } : { caseId, action, ...(text ? { text } : {}), ...(action === "business" ? { requestId: c?.requestId } : {}) };
+    const fields = control ? { action } : { caseId, action, ...(text ? { text } : {}), ...(action === "business" ? { requestId: c?.requestId } : {}), ...correction };
     const serialized = JSON.stringify(fields);
     if (pending.current?.payload !== serialized) pending.current = { payload: serialized, id: crypto.randomUUID() };
     const command = control ? fields : { ...fields, id: pending.current.id };
@@ -196,7 +197,7 @@ export default function InvestigationWorkspace() {
             <div className={styles.paneHead}><div><h3 id="customer-title">Customer conversation</h3><p>{c.facts.businessName} · chatting as {c.facts.customer}</p></div><span className={styles.signal} data-handoff-anchor aria-hidden="true" /></div>
             <Thread c={c} channel="customer" />
             {c.verification?.outcome === "business_reported" && c.verification.amountCents !== null && <div className={styles.notice}><p>Business report: {formatCents(c.verification.amountCents)} paid toward {c.verification.invoiceId}.</p>{!c.reviewHold && !c.stopped && <button type="button" className={`${button} mt-2`} disabled={processing} onClick={() => void act("customer", "I dispute the business report and would like an operator to review it.")}>Dispute business report</button>}</div>}
-            {c.status === "needs_review" && <p className={styles.notice}>Your message is saved. An operator needs to review this case before a reply can be sent.</p>}
+            <PausedReplyNotice c={c} />
             {c.status === "run_failed" && <p className={styles.notice}>{c.lastRun?.failure?.message ?? "Your message is saved, but the agent run failed. The earlier error details were not retained. Use Retry from saved evidence to try again."}</p>}
             <form onSubmit={(event) => void submit(event, "customer")} className="space-y-2">
               <label htmlFor="v2-customer-message" className="block text-sm font-medium">Message as {c.facts.customer}</label>
@@ -217,6 +218,7 @@ export default function InvestigationWorkspace() {
           <div className={styles.paneHead}><div><h3 id="operator-title">Operator review</h3><p>{attention === "operator" ? "Your judgment is needed" : "Inspect saved evidence or take over"}</p></div><span className={styles.signal} data-handoff-anchor aria-hidden="true" /></div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm">Takeover pauses automatic replies. Resume allows a later message or retry. STOP stays in force.</p><button className={button} disabled={c.stopped} onClick={() => void act(c.takeover || c.reviewHold ? "resume" : "takeover", undefined, true)}>{c.takeover || c.reviewHold ? "Resume automatic replies" : "Take over this case"}</button></div>
           {c.lastReview && <details className={styles.technical}><summary>Review and evidence packet: {c.lastReview.review.accepted ? "accepted" : "blocked"}</summary><p className="mt-2">{c.lastReview.verification?.summary || "No business-verification findings were returned. See saved agent history for what was attempted."}</p>{c.lastReview.resolution && <p className="mt-2">{c.lastReview.resolution.summary}</p>}<ul className="mt-2 list-inside list-disc">{c.lastReview.review.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></details>}
+          <OperatorCorrections key={caseId} c={c} busy={processing} onSave={({ text, ...correction }) => act("correct", text, false, correction)} onRetry={(correction) => act("retry_correction", undefined, false, correction)} />
           <div className={styles.savedPanel}>
             <div><h4>Saved commitments and requests</h4><CaseRecords c={c} /></div>
             <details className={styles.technical}><summary>Saved agent history</summary>{c.activity.length ? <ol className="mt-2 space-y-2 text-sm">{c.activity.map((item, index) => <li key={index}><span className="font-medium">{item.role.replaceAll("_", " ")} / {item.action}</span>: {item.summary}</li>)}</ol> : <p className="mt-2 text-sm text-muted">No agent work has run. Opening or refreshing makes no model calls.</p>}</details>
