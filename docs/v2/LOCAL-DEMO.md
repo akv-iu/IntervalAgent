@@ -1,7 +1,19 @@
-# V2 local demo: Phase 2C operator correction checkpoint
+# V2 local demo: Phase 2D source-adapter checkpoint
 
 Worktree: `D:\Projects\IntervalAgent-v1-rebuild`, branch `v2-rebuild`.
 Open **http://127.0.0.1:3012/v2**. Akshay owns browser/UI/manual acceptance.
+
+## Phase 2D: automated source proof
+
+No UI change, workspace reset or app database migration is required. The dashboard still uses its saved synthetic records. There is no source selector to test manually in this checkpoint.
+
+`npm run test:v2:db` creates/seeds only the `v2_source_demo` schema in `intervalagent_v2_test`, alongside the existing isolated workspace tests. Its source reader uses read-only transactions and a three-second statement timeout. It maps organization/account/payment rows to the same evidence as fixtures, including business policy, cents, payment states and snapshot version/date. Source SQL and credentials stay outside prompts.
+
+Shared adapter checks cover both businesses, duplicate case IDs across businesses, missing/injection-shaped scopes and mutation isolation. PostgreSQL negatives cover invalid money/policy/state, oversized payment sets and unavailable tables. Direct-read and business-verification SDK journeys use scripted responses with both adapters; they make no paid model calls. The application error-path test verifies a saved source error and zero model reservations/calls.
+
+Changed source facts cannot replace locally committed receipt evidence automatically: the loader stops for reconciliation. It does not claim an external database was updated or silently fall back to fixtures. Supporting a new database schema needs an explicit mapping. No production database or source-selection UI is connected.
+
+Latest verification: **659 offline tests and 89 isolated PostgreSQL tests passed**, plus build/type checking, targeted lint, stylesheet checks and the pinned V1 replay gate. Implementation is local and stopped for review; Phase 3 has not started.
 
 ## Check Phase 2C first
 
@@ -29,7 +41,7 @@ Refresh **http://127.0.0.1:3012/v2**. No reset is required. The existing browser
 
 ## Existing Daylight UI checks
 
-The Daylight workspace uses the full V2 page width, with customer chat and the business inbox side by side, operator review below, and an expandable runtime box beside the case status. The shared V1 width limit and the extra outer card do not wrap V2. Customer-facing messages use the business name, with the customer's messages aligned separately. There are now two businesses and twelve clients, plus a business-filtered dashboard. Case corrections are available as described above; the second source mapping remains pending. No paid model calls were used to implement or verify Phase 2B or Phase 2C.
+The Daylight workspace uses the full V2 page width, with customer chat and the business inbox side by side, operator review below, and an expandable runtime box beside the case status. The shared V1 width limit and the extra outer card do not wrap V2. Customer-facing messages use the business name, with the customer's messages aligned separately. There are now two businesses and twelve clients, plus a business-filtered dashboard. Case corrections are available as described above; the second source mapping is verified as described above. Phase 2B/2C implementation and automated checks used no paid model calls; the separately delegated Phase 2C browser pass used one live correction run. Phase 2D used no paid model calls.
 
 If the updated labels appear but the page is a plain vertical stack without pane borders or the workspace background, that is a stylesheet failure, not the intended design. The October 23 fix excludes `.module.css` from the global Tailwind loader so Next.js can export its scoped class names. Refresh with Ctrl+Shift+R after the local server picks up the configuration change; no workspace reset is needed. The asset checks below verify the actual class/stylesheet match without browser interaction or model calls.
 

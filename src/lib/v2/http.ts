@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { investigate } from "./agents";
+import { investigateFromSource } from "./agents";
+import { AccountSourceError, syntheticSource } from "./source";
 import { boundedModel } from "./model";
 import { describeFailure } from "./failures";
 import { CaseCommand } from "./contracts";
@@ -54,10 +55,10 @@ export async function handleV2(request: Request): Promise<Response> {
         if (!config.apiKey) throw new V2Error(503, "Live model key is missing. Set V2_OPENAI_API_KEY in ignored .env.v2.");
         const signal = AbortSignal.any([request.signal, AbortSignal.timeout(90_000)]);
         const model = boundedModel({ apiKey: config.apiKey, reserve: (id) => reserveLive(id, { token, job }), start: (call) => startLive(call, { token, job }), record: (call) => recordLive(call, { token, job }), signal });
-        const result = await investigate(job.input, model, signal);
-        await commitResult(token, job, result);
+        const investigated = await investigateFromSource(job.input, syntheticSource([job.input.facts]), model, signal);
+        await commitResult(token, { ...job, input: investigated.input }, investigated.result);
       } catch (error) {
-        const failure = error instanceof V2Error ? { kind: "configuration", status: error.status, message: error.message } : describeFailure(error);
+        const failure = error instanceof AccountSourceError ? { kind: "source", message: error.message, code: error.reason } : error instanceof V2Error ? { kind: "configuration", status: error.status, message: error.message } : describeFailure(error);
         await failRun(token, job, failure).catch(() => {});
         if (error instanceof V2Error) throw error;
         throw new V2Error(503, failure.message);

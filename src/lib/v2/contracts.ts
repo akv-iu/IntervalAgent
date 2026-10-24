@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { localDate } from "../time";
 
-export const ROLE_VERSION = "v2-phase2c-1";
+export const ROLE_VERSION = "v2-phase2d-1";
 
 const CommandIdentity = { id: z.uuid(), caseId: z.string().regex(/^[a-z-]{1,60}$/) };
 const Revision = z.number().int().nonnegative();

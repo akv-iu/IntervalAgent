@@ -6,7 +6,23 @@ Product direction update: Akshay is developing an independent project and is no 
 
 Current spending policy: Akshay explicitly chose **Remove the $2 cap for local testing** on October 23. The local aggregate dollar ceiling is removed from the app/database and checkpoint fallback. Historical usage and reservations remain; manual/live calls bill the configured OpenAI API account. Earlier $2 figures below are historical, not the current policy. Per-run, turn, workspace, STOP and financial-review guards remain enforced.
 
-**Phase 2B is pushed as `5702a3c` to `v2-rebuild`. Phase 2C implementation and the delegated browser pass are complete; Akshay authorized push/continuation.** He explicitly delegated the browser test after implementation, superseding the earlier manual-test ownership for that pass. Production `main` remains V1. The browser pass included one paid correction run; implementation/automated checks made no paid model calls. No deployment or V1 database change occurred. The second source adapter remains pending within Phase 2; new financial operations and evaluated learning remain Phases 3 and 4.
+**Phase 2C is pushed as `6138a32` to `v2-rebuild`; production `main` remains V1. Phase 2D passed automated checks; Akshay authorized its push/continuation on October 23. The next implementation checkpoint still requires usage reporting and approval.** Akshay approved 2D with fresh Codex usage/reset times unknown at the 8:41 PM Mountain check. This phase used only the isolated test database and scripted model responses: no paid model call, browser pass, deployment or V1 database change. No new source-selection UI was added. Phase 3 financial operations and Phase 4 evaluated learning have not started.
+
+### Phase 2D: reusable account-source mapping
+
+The fixture adapter and a new PostgreSQL adapter return the same strictly validated account evidence. The latter maps differently shaped organization/account/payment tables in the `v2_source_demo` schema of `intervalagent_v2_test`. It uses one parameterized SELECT, scoped by business and account; the test reader enforces read-only transactions and a three-second statement timeout. Money remains safe integer cents; raw payment/policy states are explicitly mapped. Both sources remain synthetic, with adapter identity separate from provenance.
+
+The shared investigation entry point validates scope, invoice, dated versioned facts and explicit availability before starting the SDK workflow. Invalid/future snapshots, malformed amounts/states, oversized payment sets and unavailable mappings fail explicitly without fabricated balances or fixture fallback. The app records a safe source error and zero model reservations/calls on the tested invalid-source path. Agent instructions and delegation tools are unchanged; the harness version is `v2-phase2d-1`.
+
+Shared contract tests cover normalized facts for both businesses, duplicate case IDs across businesses, missing/injection-shaped scopes and isolated returned objects. Direct-read and business-verification journeys produce equivalent results through both adapters using the actual SDK loop with scripted responses. These establish mapping/workflow compatibility, not live model quality or a financial-performance claim.
+
+The live dashboard retains its saved synthetic source and local ledger. A different source snapshot cannot replace locally committed receipt evidence: the loader blocks with `reconciliation_required`. Automatic external-snapshot reconciliation is not implemented; a new source still requires an explicit server-side mapping. Existing workspaces need no reset or migration. No external database writes or universal connector support are claimed.
+
+Two self-review passes: (1) followed source/SDK/HTTP callers, checked parameterized scope, read-only access, strict money/status mapping, bounded results and shared contract parity. (2) checked failure before model calls, safe persisted HTTP errors, metadata/date validation, cancellation, unchanged role definitions, preservation of local receipts and versioned audit context. Added future-snapshot/envelope and app failure-path regressions. These are self-reviews, not independent or browser reviews.
+
+Final verification: **659 offline tests and 89 isolated PostgreSQL tests passed**. Production build/type checking, targeted application/script/test lint, served/built stylesheet checks and the pinned V1 replay gate passed. Existing V1 dynamic-filesystem tracing warnings remain. Akshay authorized pushing this completed checkpoint to `v2-rebuild`; unrelated local notes and secrets are excluded. No browser pass is needed to inspect a new UI because none was added; live-model behavior and latency were not remeasured. The earlier 32.9-second correction latency remains open.
+
+Next proposed phase after review and a fresh usage/approval checkpoint: Phase 3 simulated operations and supervision, beginning with eligible options and guarded proposals. No implementation of that phase is authorized by this status file.
 
 ### Delegated Phase 2C browser acceptance
 
@@ -14,7 +30,7 @@ Core browser checks passed on Sam's existing case: save/pause without a model ca
 
 Testing left two saved corrections and one additional held QA customer message on Sam, now at four customer turns. The second correction is stale and was not run. STOP/reset/expiry/payment-replay negatives retain automated coverage; terminal review rejection, all twelve live conversations, full accessibility and reduced-motion behavior were not browser-tested in this pass. Local ignored evidence: `results/v2-phase2c-browser/report.json` and screenshots. These artifacts are not included in Git. No application code changed during the browser pass.
 
-Next proposed checkpoint, Phase 2D: implement a PostgreSQL source adapter over differently shaped synthetic tables in the isolated test database, shared adapter-contract checks and the same investigation path through both sources. Verify scope, freshness/provenance and explicit missing/failure results without editing agent role definitions. No real business connection, paid model call or deployment is included. Fresh Codex usage/reset metadata remains unknown at the 8:41 PM Mountain check on October 23; wait for explicit approval before implementing 2D.
+The Phase 2C browser results below are historical acceptance evidence; Phase 2D delivery is recorded above. Phase 2C push completed as `6138a32` before the approved 2D work.
 
 ### Phase 2C: case-specific operator corrections
 
@@ -63,7 +79,7 @@ Historical statements below describe earlier local checkpoints; this handoff sup
 ## Implemented
 
 - Four actual model-backed roles using OpenAI Agents SDK `0.21.0`: customer orchestrator, business verification, account resolution and Reviewer. Specialists are SDK agent tools; no separate orchestration framework was introduced.
-- Twelve synthetic clients for two businesses, including partial-payment direct reads, scoped selection, a saved-case dashboard and private operator correction/retry history. The second adapter remains a subsequent Phase 2 checkpoint.
+- Twelve synthetic clients for two businesses, including partial-payment direct reads, scoped selection, a saved-case dashboard and private operator correction/retry history. The second adapter is implemented and verified in Phase 2D above.
 - A typed synthetic account-source contract with dated evidence, separate customer/business threads, claim/request correlation, business follow-up, operator packets and takeover/resume.
 - PostgreSQL-backed private workspaces, raw messages, reviewed case updates, planned events and versioned review/audit links. Prior business replies cannot confirm a new claim. Late known replies are retained without applying conclusions.
 - Atomic case update/reply/audit publication, duplicate protection, stale-run fencing, STOP, expiry/reset isolation and persistent conservative model-usage accounting. The original $2 ceiling was explicitly removed for local testing. The manual-feedback correction adds policy-authorized recognition of existing business-confirmed synthetic payments, with a receipt and balance/audit/reply committed together.
@@ -73,8 +89,8 @@ Historical statements below describe earlier local checkpoints; this handoff sup
 
 | Check | Observation |
 | --- | --- |
-| Offline tests | 645 passed; includes preserved V1 coverage, operator feedback/SDK boundaries, role/source/usage checks, dashboard/correction/attention/runtime rendering and safe provider-failure classification |
-| V2 PostgreSQL integration | 74 passed in `intervalagent_v2_test`; no model calls |
+| Offline tests | 659 passed; includes preserved V1 coverage, operator feedback/SDK boundaries, shared source contracts/validation, dashboard/correction/attention/runtime rendering and safe failures |
+| V2 PostgreSQL integration | 89 passed in `intervalagent_v2_test`; PostgreSQL source contract/mapping, scripted SDK journeys and existing workspace checks; no paid model calls |
 | Type checking | Passed |
 | Application/script/test lint | Passed, using the targeted command in LOCAL-DEMO.md |
 | Repository-wide lint | Blocked by four pre-existing `require()` lint errors in untracked `docs/learn/check.cjs`; that file was left unchanged |

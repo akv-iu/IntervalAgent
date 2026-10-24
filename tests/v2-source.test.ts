@@ -1,7 +1,59 @@
-import { syntheticSource } from "../src/lib/v2/source";
+import { loadSourceInput, sourceRecord, syntheticSource, type AccountSource } from "../src/lib/v2/source";
+import { sourceContract } from "./helpers/v2-source-contract";
 import { startingCases } from "../src/lib/v2/fixtures";
 import { isGlobalStop } from "../src/lib/v2/contact";
 import { validateUpdates, type Investigation } from "../src/lib/v2/contracts";
+
+const contractRecords = startingCases(new Date("2026-10-23T12:00:00Z"));
+contractRecords.push({ ...structuredClone(contractRecords[6]), id: "late-payment" });
+sourceContract("fixture", () => syntheticSource(contractRecords), contractRecords);
+
+test.each(["negative", "unsafe", "fractional", "invalid-date", "unknown-payment", "duplicate-payment", "extra-field"])("%s source data stays unavailable instead of becoming agent facts", async (kind) => {
+  const facts = structuredClone(contractRecords[1]);
+  if (kind === "negative") facts.balanceCents = -1;
+  if (kind === "unsafe") facts.balanceCents = Number.MAX_SAFE_INTEGER + 1;
+  if (kind === "fractional") facts.balanceCents = 1.5;
+  if (kind === "invalid-date") facts.balanceAsOf = "not-a-timestamp";
+  if (kind === "unknown-payment") Object.assign(facts.payments[0], { status: "mystery" });
+  if (kind === "duplicate-payment") facts.payments.push({ ...facts.payments[0] });
+  if (kind === "extra-field") Object.assign(facts, { databasePassword: "never publish source credentials" });
+  const result = await syntheticSource([facts]).readAccount({ businessId: facts.businessId, caseId: facts.id });
+  expect(result).toMatchObject({ status: "unavailable", reason: "invalid_record" });
+  expect(result).not.toHaveProperty("facts");
+});
+
+test("source loading preserves conversation/feedback and requires reconciliation before replacing a local receipt", async () => {
+  const facts = structuredClone(contractRecords[0]);
+  const input: Investigation = { facts, messages: [{ id: "customer", channel: "customer", speaker: "customer", text: "I paid", at: "2026-10-23T12:00:00Z" }], now: "2026-10-23T12:00:00Z", verification: null, caseUpdates: [] };
+  const loaded = await loadSourceInput(input, syntheticSource([facts]));
+  expect(loaded.input).toEqual(input); expect(loaded.input).not.toBe(input);
+  facts.payments.push({ id: "local-receipt", invoiceId: facts.invoiceId, amountCents: 5000, date: "2026-10-23", status: "settled", includedInBalance: true, provenance: "business_confirmation" });
+  facts.balanceCents = 7900;
+  const before = structuredClone(input);
+  await expect(loadSourceInput(input, syntheticSource(contractRecords))).rejects.toMatchObject({ reason: "reconciliation_required" });
+  expect(input).toEqual(before);
+  expect((await loadSourceInput(input, syntheticSource([facts]))).input.facts.payments).toEqual(facts.payments);
+});
+
+test("missing, unavailable, malformed and foreign source results stop before the workflow", async () => {
+  const facts = contractRecords[0], input: Investigation = { facts, messages: [], now: facts.balanceAsOf, verification: null };
+  await expect(loadSourceInput(input, syntheticSource([]))).rejects.toMatchObject({ reason: "missing" });
+  await expect(loadSourceInput(input, { readAccount: async () => { throw new Error("private connection details"); } })).rejects.toMatchObject({ reason: "unavailable", message: "The account source is unavailable. No fallback account was substituted." });
+  const foreign: AccountSource = { readAccount: async () => sourceRecord({ businessId: "cedar", caseId: "late-payment" }, "fixture", contractRecords.at(-1)) };
+  await expect(loadSourceInput(input, foreign)).rejects.toMatchObject({ reason: "scope_mismatch" });
+  const mismatch: AccountSource = { readAccount: async (scope) => sourceRecord(scope, "fixture", { ...facts, invoiceId: "OTHER-INVOICE" }) };
+  await expect(loadSourceInput(input, mismatch)).rejects.toMatchObject({ reason: "scope_mismatch" });
+});
+
+test("forged metadata, malformed envelopes and a snapshot from after the case clock are rejected", async () => {
+  const facts = contractRecords[0], input: Investigation = { facts, messages: [], now: "2026-10-23T12:00:00Z", verification: null };
+  const snapshot = sourceRecord({ businessId: facts.businessId, caseId: facts.id }, "fixture", facts);
+  if (snapshot.status !== "available") throw new Error("Expected source fixture");
+  await expect(loadSourceInput(input, { readAccount: async () => ({ ...snapshot, version: "invented-version" }) })).rejects.toMatchObject({ reason: "invalid_record" });
+  await expect(loadSourceInput(input, { readAccount: async () => ({ ...snapshot, references: ["x".repeat(101)] }) })).rejects.toMatchObject({ reason: "invalid_record" });
+  await expect(loadSourceInput(input, syntheticSource([{ ...facts, balanceAsOf: "2026-10-24T12:00:00Z" }]))).rejects.toMatchObject({ reason: "invalid_record" });
+  await expect(loadSourceInput(input, syntheticSource([facts]), AbortSignal.abort())).rejects.toThrow();
+});
 
 test("two businesses have six factual starting situations each, unique identities and independent records", async () => {
   const records = startingCases(new Date("2026-10-24T01:00:00Z"));
@@ -51,7 +103,7 @@ test("adapter scopes duplicate case identifiers by business and retains dated pr
 
 test("unavailable account identity stays missing, never a fabricated zero balance", async () => {
   const source = syntheticSource(startingCases(new Date()));
-  expect(await source.readAccount({ businessId: "foreign", caseId: "late-payment" })).toEqual({ status: "missing", scope: { businessId: "foreign", caseId: "late-payment" }, provenance: "synthetic" });
+  expect(await source.readAccount({ businessId: "foreign", caseId: "late-payment" })).toEqual({ status: "missing", scope: { businessId: "foreign", caseId: "late-payment" }, provenance: "synthetic", adapter: "fixture" });
 });
 
 test("explicit alternative channels remain preferences while global STOP wins", () => {

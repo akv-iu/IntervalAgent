@@ -189,6 +189,19 @@ test("the HTTP correction save is private, idempotent and never calls a model", 
   expect((await budgetUsage()).calls).toBe(0);
 });
 
+test("invalid source data reaches the app as a safe source failure before reserving or calling a model", async () => {
+  const { token } = await createWorkspace();
+  await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=jsonb_set(data,'{cases,late-payment,facts,balanceCents}','-1'::jsonb)");
+  vi.stubEnv("OPENAI_API_KEY", "test-key-never-transmitted");
+  try {
+    const response = await handleV2(new NextRequest("http://127.0.0.1:3012/api/v2/workspace", { method: "POST", headers: { host: "127.0.0.1:3012", origin: "http://127.0.0.1:3012", cookie: `recovery_v2=${token}`, "content-type": "application/json" }, body: JSON.stringify(command()) }));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: "The account source returned an invalid record." });
+    expect((await c(token)).lastRun?.failure).toMatchObject({ kind: "source", code: "invalid_record" });
+    expect((await budgetUsage()).calls).toBe(0);
+  } finally { vi.unstubAllEnvs(); }
+});
+
 test("new business evidence invalidates a saved correction, and STOP forbids a new one", async () => {
   const { token } = await createWorkspace();
   const job = requireJob(await beginCommand(token, command("customer", "I paid today for INV-101")));
