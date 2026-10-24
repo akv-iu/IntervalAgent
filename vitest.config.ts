@@ -7,7 +7,7 @@ export default defineConfig({
   test: {
     globals: true,
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
-    exclude: [...configDefaults.exclude, "tests/db/**"],
+    exclude: [...configDefaults.exclude, "tests/db/**", "tests/v2-db/**"],
     setupFiles: ["tests/setup.ts"],
   },
 });

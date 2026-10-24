@@ -17,9 +17,15 @@
     "test:db": "vitest run --config vitest.db.config.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
-    "db:import": "tsx scripts/import.ts"
+    "db:import": "tsx scripts/import.ts",
+    "v2:local-db": "tsx scripts/v2-local-db.ts",
+    "v2:migrate": "tsx scripts/v2-migrate.ts",
+    "v2:dev": "tsx scripts/v2-dev.ts",
+    "v2:checkpoint": "tsx scripts/v2-checkpoint.ts",
+    "test:v2:db": "vitest run --config vitest.v2-db.config.ts"
   },
   "dependencies": {
+    "@openai/agents": "0.21.0",
     "@vercel/analytics": "2.0.1",
     "dotenv": "18.0.8",
     "next": "16.4.2",

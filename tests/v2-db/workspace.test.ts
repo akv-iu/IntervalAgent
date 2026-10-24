@@ -1,0 +1,467 @@
+import { randomUUID } from "node:crypto";
+import { NextRequest } from "next/server";
+import { localDate } from "../../src/lib/time";
+import { projectEnv } from "../../src/lib/project-env";
+import { beginCommand, budgetUsage, closeV2Pool, commitResult, createWorkspace, failRun, initializeV2, readWorkspace, recordLive, reserveLive, resetWorkspace, startLive, v2Pool, type Job } from "../../src/lib/v2/store";
+import { handleV2 } from "../../src/lib/v2/http";
+import type { InvestigationResult, Verification } from "../../src/lib/v2/contracts";
+
+// All storage/API paths run unchanged; only the connection targets a dedicated test database.
+vi.mock("pg", async (importOriginal) => {
+  const original = await importOriginal<typeof import("pg")>();
+  return { ...original, Pool: class extends original.Pool {
+    constructor() {
+      const configured = projectEnv(".env.v2").V2_DATABASE_URL;
+      if (!configured) throw new Error("V2 DB tests require the isolated local setup");
+      const url = new URL(configured);
+      if (url.hostname !== "127.0.0.1" || url.port !== "55442") throw new Error("Tests refuse nonlocal connections");
+      url.pathname = "/intervalagent_v2_test";
+      super({ connectionString: url.toString(), max: 4 });
+    }
+  } };
+});
+
+const command = (action: "customer" | "business" | "retry" | "takeover" | "resume" = "customer", text = "I promise to pay $50 tomorrow") => ({ id: randomUUID(), caseId: "late-payment", action, text });
+const approved = (reply = "Your promise was recorded. No payment was received."): InvestigationResult => ({ draft: { reply, needsOperator: false }, verification: null, resolution: null, review: { accepted: true, reasons: [] }, activity: [] });
+const verification: Verification = { claimMessageId: "placeholder", outcome: "awaiting_business", businessMessage: "Please confirm payment amount, effective date, invoice and settlement status.", summary: "Awaiting the business", amountCents: null, paymentDate: null, invoiceId: null, reference: null, settlementStatus: "unknown", missingFacts: ["amount", "date", "invoice", "status"] };
+const c = async (token: string) => (await readWorkspace(token)).cases["late-payment"];
+const requireJob = (job: Job | null): Job => { if (!job) throw new Error("Expected a new job"); return job; };
+
+beforeAll(async () => {
+  const database = await v2Pool().query("SELECT current_database() AS name");
+  expect(database.rows[0].name).toBe("intervalagent_v2_test");
+  await initializeV2(0);
+});
+beforeEach(async () => {
+  await v2Pool().query("TRUNCATE rebuild_v2.workspaces,rebuild_v2.admission,rebuild_v2.reservations; UPDATE rebuild_v2.budget SET used_micros=0 WHERE id=1");
+});
+afterAll(closeV2Pool);
+
+test("same-case histories are private across tester workspaces; foreign IDs fail", async () => {
+  const a = await createWorkspace(), b = await createWorkspace();
+  await beginCommand(a.token, command());
+  expect((await c(a.token)).messages.filter((m) => m.origin !== "synthetic_opening")).toHaveLength(1);
+  expect((await c(b.token)).messages.filter((m) => m.origin !== "synthetic_opening")).toHaveLength(0);
+  await expect(readWorkspace("a".repeat(64))).rejects.toMatchObject({ status: 401 });
+  await expect(beginCommand(a.token, { ...command(), caseId: "constructor" })).rejects.toMatchObject({ status: 404 });
+});
+
+test("concurrent duplicate submissions/retries do not double-count or start duplicate jobs", async () => {
+  const { token } = await createWorkspace(); const request = command();
+  const jobs = await Promise.all([beginCommand(token, request), beginCommand(token, request)]);
+  expect(jobs.filter(Boolean)).toHaveLength(1);
+  expect((await c(token)).turns).toBe(1);
+  await expect(beginCommand(token, { ...request, text: "Changed content" })).rejects.toMatchObject({ status: 409 });
+  const retry = command("retry");
+  const retried = await Promise.all([beginCommand(token, retry), beginCommand(token, retry)]);
+  expect(retried.filter(Boolean)).toHaveLength(1);
+  expect((await c(token)).turns).toBe(1);
+});
+
+test("turn exhaustion still permits STOP and history without any model reservation", async () => {
+  const { token } = await createWorkspace();
+  for (let n = 0; n < 10; n++) await beginCommand(token, command());
+  await expect(beginCommand(token, command())).rejects.toMatchObject({ status: 429 });
+  await beginCommand(token, command("customer", "STOP"));
+  expect((await c(token)).status).toBe("stopped");
+  expect((await budgetUsage()).calls).toBe(0);
+  await beginCommand(token, command("resume"));
+  expect((await c(token)).stopped).toBe(true);
+  await expect(beginCommand(token, command("retry"))).rejects.toMatchObject({ status: 409 });
+});
+
+test.each(["new-input", "reset", "takeover", "stop"])("%s fences stale publication and case writes", async (change) => {
+  const { token } = await createWorkspace(); const job = requireJob(await beginCommand(token, command()));
+  if (change === "reset") await resetWorkspace(token);
+  else await beginCommand(token, command(change === "takeover" ? "takeover" : "customer", change === "stop" ? "STOP" : "My claim changed"));
+  await expect(commitResult(token, job, approved())).rejects.toMatchObject({ status: 409 });
+  expect((await c(token)).messages.some((m) => m.id === `${job.id}-reply`)).toBe(false);
+});
+
+test("case update, saved reply and audit commit together; balance never changes", async () => {
+  const { token } = await createWorkspace(); const job = requireJob(await beginCommand(token, command()));
+  const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  const result = approved();
+  result.resolution = { needsOperator: false, summary: "Promise and call request", updates: [
+    { kind: "promise", amountCents: 5000, date: tomorrow, sourceMessageId: job.id },
+    { kind: "contact_requested", channel: "call", date: tomorrow, window: "afternoon", sourceMessageId: job.id },
+  ] };
+  await commitResult(token, job, result);
+  const saved = await c(token);
+  expect(saved.updates).toHaveLength(2); expect(saved.audit).toHaveLength(1);
+  expect(saved.audit[0]).toMatchObject({ review: { accepted: true }, sourceVersion: job.input.facts.sourceVersion, replyId: `${job.id}-reply` });
+  expect(saved.audit[0].sourceMessageIds).toContain(job.id);
+  expect(saved.events[0].state).toBe("planned"); expect(saved.facts.balanceCents).toBe(12900);
+  expect(saved.messages.at(-1)?.id).toBe(`${job.id}-reply`);
+  await expect(commitResult(token, job, result)).rejects.toMatchObject({ status: 409 });
+  await beginCommand(token, command("customer", "STOP"));
+  expect((await c(token)).events[0].state).toBe("blocked");
+});
+
+test("rejected/invalid proposals cannot leave a saved success reply", async () => {
+  const { token } = await createWorkspace(); const job = requireJob(await beginCommand(token, command()));
+  const result = approved();
+  result.resolution = { needsOperator: false, summary: "Unsupported", updates: [{ kind: "promise", amountCents: 1, date: "2020-01-01", sourceMessageId: "foreign" }] };
+  await expect(commitResult(token, job, result)).rejects.toThrow("customer source");
+  expect((await c(token)).updates).toHaveLength(0);
+  expect((await c(token)).messages.filter((m) => m.origin !== "synthetic_opening")).toHaveLength(1);
+  result.review = { accepted: false, reasons: ["Unsupported"] };
+  await commitResult(token, job, result);
+  expect((await c(token)).status).toBe("needs_review");
+  expect((await c(token)).messages.filter((m) => m.origin !== "synthetic_opening")).toHaveLength(1);
+});
+
+test("a Reviewer acceptance cannot override the code threat guard", async () => {
+  const { token } = await createWorkspace(); const job = requireJob(await beginCommand(token, command()));
+  await expect(commitResult(token, job, approved("Pay now or we will sue you."))).rejects.toMatchObject({ status: 409 });
+  expect((await c(token)).messages.some((m) => m.speaker === "agent" && m.origin !== "synthetic_opening")).toBe(false);
+});
+
+test("channel-only preferences supersede incompatible events without inventing a date", async () => {
+  const { token } = await createWorkspace(); const first = requireJob(await beginCommand(token, command("customer", "Please call tomorrow afternoon")));
+  const date = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  await commitResult(token, first, { ...approved("Call planned"), resolution: { summary: "Call request", needsOperator: false, updates: [{ kind: "contact_requested", channel: "call", date, window: "afternoon", sourceMessageId: first.id }] } });
+  const next = requireJob(await beginCommand(token, command("customer", "Don't call me. Email me instead. No day chosen yet.")));
+  await commitResult(token, next, { ...approved("Email preference saved; what day works?"), resolution: { summary: "Email preference without date", needsOperator: false, updates: [{ kind: "contact_preference", channel: "email", sourceMessageId: next.id }] } });
+  const saved = await c(token);
+  expect(saved.preferredChannel).toBe("email");
+  expect(saved.events).toHaveLength(1);
+  expect(saved.events[0].state).toBe("superseded");
+  expect(saved.audit[0].review.accepted).toBe(true);
+  expect(saved.audit[1].sourceMessageIds).toContain(next.id);
+  expect(saved.stopped).toBe(false);
+});
+
+test("business replies require a current linked request and remain durable", async () => {
+  const { token } = await createWorkspace();
+  await expect(beginCommand(token, { ...command("business", "Yes"), requestId: randomUUID() })).rejects.toMatchObject({ status: 409 });
+  const job = requireJob(await beginCommand(token, command("customer", "I paid today for INV-101")));
+  await commitResult(token, job, { ...approved("Verification is pending"), verification: { ...verification, claimMessageId: job.id } });
+  const requestId = (await c(token)).requestId!;
+  expect((await c(token)).status).toBe("awaiting_business");
+  await expect(beginCommand(token, { ...command("business", "Yes"), requestId: randomUUID() })).rejects.toMatchObject({ status: 409 });
+  const reply = { ...command("business", "Yes"), requestId };
+  const businessJob = requireJob(await beginCommand(token, reply));
+  await commitResult(token, businessJob, { ...approved("More business facts are needed"), verification: { ...verification, claimMessageId: job.id, outcome: "needs_facts" } });
+  expect((await c(token)).requestId).toBe(requestId);
+  expect(await beginCommand(token, reply)).toBeNull();
+  expect((await c(token)).businessReplies).toBe(1);
+});
+
+test("expiry and reset do not revive access, late replies or API allowance", async () => {
+  const { token } = await createWorkspace(); const original = await readWorkspace(token);
+  await reserveLive(randomUUID()); const usage = await budgetUsage();
+  const reset = await resetWorkspace(token);
+  expect(reset.expiresAt).toBe(original.expiresAt);
+  expect((await budgetUsage()).conservativeUsedDollars).toBe(usage.conservativeUsedDollars);
+  await v2Pool().query("UPDATE rebuild_v2.workspaces SET expires_at=NOW()-INTERVAL '1 second'");
+  await expect(readWorkspace(token)).rejects.toMatchObject({ status: 410 });
+  await expect(beginCommand(token, command("business", "Paid"))).rejects.toMatchObject({ status: 410 });
+});
+
+test("shared reservations are atomic; known usage settles once and unknown calls remain charged", async () => {
+  await v2Pool().query("UPDATE rebuild_v2.budget SET used_micros=1980000 WHERE id=1");
+  const ids = [randomUUID(), randomUUID()];
+  const attempts = await Promise.allSettled(ids.map((id) => reserveLive(id)));
+  expect(attempts.filter((a) => a.status === "fulfilled")).toHaveLength(2);
+  const id = ids[0];
+  expect((await budgetUsage()).capDollars).toBeNull();
+  expect((await budgetUsage()).conservativeUsedDollars).toBe(2.02);
+  expect((await budgetUsage()).unknown_calls).toBe(2);
+  const call = { id, inputTokens: 1000, outputTokens: 100, usageKnown: true, latencyMs: 1, tools: [] };
+  await recordLive(call); await recordLive(call);
+  expect((await budgetUsage()).conservativeUsedDollars).toBe(2.00035);
+  expect((await budgetUsage()).unknown_calls).toBe(1);
+  await initializeV2(0);
+  expect((await budgetUsage()).conservativeUsedDollars).toBe(2.00035);
+});
+
+test("missing usage keeps its reservation even when the SDK supplies normalized zero counts", async () => {
+  const id = randomUUID(); await reserveLive(id);
+  await recordLive({ id, inputTokens: 0, outputTokens: 0, usageKnown: false, latencyMs: 1, tools: [] });
+  expect((await budgetUsage()).conservativeUsedDollars).toBe(0.02);
+  expect((await budgetUsage()).unknown_calls).toBe(1);
+});
+
+test("business evidence received during takeover keeps its request linkage for explicit resumption", async () => {
+  const { token } = await createWorkspace(); const job = requireJob(await beginCommand(token, command("customer", "I paid today for INV-101")));
+  await commitResult(token, job, { ...approved("Verification pending"), verification: { ...verification, claimMessageId: job.id } });
+  const requestId = (await c(token)).requestId!;
+  await beginCommand(token, command("takeover"));
+  expect((await c(token)).lastRun).toMatchObject({ id: job.id, outcome: "completed", calls: 0 });
+  expect(await beginCommand(token, { ...command("business", "Yes"), requestId })).toBeNull();
+  expect((await c(token)).messages.at(-1)?.requestId).toBe(requestId);
+  await beginCommand(token, command("resume"));
+  const retry = requireJob(await beginCommand(token, command("retry")));
+  expect(retry.input.messages.some((m) => m.speaker === "business" && m.requestId === requestId)).toBe(true);
+});
+
+test("new claims receive a new business request; old request replies cannot attach", async () => {
+  const { token } = await createWorkspace(); const first = requireJob(await beginCommand(token, command("customer", "I paid $50 yesterday for INV-101")));
+  await commitResult(token, first, { ...approved("Verification pending"), verification: { ...verification, claimMessageId: first.id } });
+  const oldRequest = (await c(token)).requestId!;
+  const next = requireJob(await beginCommand(token, command("customer", "I made another payment today for INV-101")));
+  await commitResult(token, next, { ...approved("Checking the new payment"), verification: { ...verification, claimMessageId: next.id, businessMessage: "Please check the new payment" } });
+  expect((await c(token)).requestId).not.toBe(oldRequest);
+  expect(await beginCommand(token, { ...command("business", "Yes"), requestId: oldRequest })).toBeNull();
+  const saved = await c(token);
+  expect(saved.messages.at(-1)?.disposition).toBe("late");
+  expect(saved.verification?.claimMessageId).toBe(next.id);
+  expect(saved.facts.balanceCents).toBe(12900);
+});
+
+test("a superseded run cannot reserve more model spending", async () => {
+  const { token } = await createWorkspace(); const job = requireJob(await beginCommand(token, command()));
+  await beginCommand(token, command("takeover"));
+  await expect(reserveLive(randomUUID(), { token, job })).rejects.toMatchObject({ status: 409 });
+  expect((await budgetUsage()).calls).toBe(0);
+});
+
+async function recognitionJob(amountCents = 5000) {
+  const { token } = await createWorkspace();
+  const claim = requireJob(await beginCommand(token, command("customer", "I paid $129 today for INV-101")));
+  const date = localDate(new Date(claim.input.now), claim.input.facts.timezone);
+  const pending: Verification = { ...verification, claimMessageId: claim.id, amountCents: 12900, invoiceId: "INV-101", paymentDate: date, businessMessage: `Was $129 received and settled today, ${date}, for INV-101?` };
+  await commitResult(token, claim, { ...approved("Checking with the business"), verification: pending });
+  const requestId = (await c(token)).requestId!;
+  const job = requireJob(await beginCommand(token, { ...command("business", `Only $${amountCents / 100}; other details are correct.`), requestId }));
+  const confirmed: Verification = { ...pending, outcome: "business_confirmed", amountCents, settlementStatus: "settled", missingFacts: [], businessMessage: null };
+  const result: InvestigationResult = { ...approved("The business-confirmed payment was recorded in this simulated account."), verification: confirmed, resolution: { summary: "Reconcile the confirmed payment", needsOperator: false, updates: [{ kind: "payment_recognized", amountCents, date, invoiceId: "INV-101", reference: null, sourceMessageId: claim.id, businessMessageId: job.id }] } };
+  return { token, job, result, claim };
+}
+
+test.each([5000, 12900])("business-confirmed %i cents commits receipt, balance, reply and audit once", async (amount) => {
+  const { token, job, result } = await recognitionJob(amount);
+  await commitResult(token, job, result);
+  await closeV2Pool();
+  const saved = await c(token);
+  expect(saved.facts.balanceCents).toBe(12900 - amount);
+  expect(saved.facts.payments).toHaveLength(1);
+  expect(saved.facts.payments[0]).toMatchObject({ amountCents: amount, includedInBalance: true, provenance: "business_confirmation", businessMessageId: job.id });
+  expect(saved.messages.at(-1)?.id).toBe(`${job.id}-reply`);
+  expect(saved.audit.at(-1)).toMatchObject({ balanceBeforeCents: 12900, balanceAfterCents: 12900 - amount });
+  await expect(commitResult(token, job, result)).rejects.toMatchObject({ status: 409 });
+  const retry = requireJob(await beginCommand(token, command("retry")));
+  await expect(commitResult(token, retry, result)).rejects.toThrow();
+  expect((await c(token)).facts.payments).toHaveLength(1);
+});
+
+test.each(["pending", "wrong-invoice", "foreign-source", "overpayment", "future-date", "old-date", "no-policy", "duplicate", "operator-required"])("%s cannot change a balance or publish a recognition reply", async (kind) => {
+  const { token, job, result } = await recognitionJob();
+  const update = result.resolution!.updates[0];
+  if (update.kind !== "payment_recognized") throw new Error("Expected recognition proposal");
+  if (kind === "pending") result.verification!.outcome = "pending";
+  if (kind === "wrong-invoice") result.verification!.invoiceId = update.invoiceId = "INV-OTHER";
+  if (kind === "foreign-source") update.businessMessageId = randomUUID();
+  if (kind === "overpayment") result.verification!.amountCents = update.amountCents = 20000;
+  if (kind === "future-date") result.verification!.paymentDate = update.date = "2099-01-01";
+  if (kind === "old-date") result.verification!.paymentDate = update.date = "2020-01-01";
+  if (kind === "operator-required") result.resolution!.needsOperator = true;
+  if (kind === "no-policy" || kind === "duplicate") {
+    await v2Pool().query(kind === "no-policy"
+      ? "UPDATE rebuild_v2.workspaces SET data=data #- '{cases,late-payment,facts,recognitionPolicy}'"
+      : "UPDATE rebuild_v2.workspaces SET data=jsonb_set(data,'{cases,late-payment,facts,payments}',$1::jsonb)", kind === "duplicate" ? [JSON.stringify([{ id: "existing", invoiceId: "INV-101", amountCents: 5000, date: update.date, status: "settled", includedInBalance: true }])] : []);
+    job.input.facts = (await c(token)).facts;
+  }
+  await expect(commitResult(token, job, result)).rejects.toThrow();
+  const saved = await c(token);
+  expect(saved.facts.balanceCents).toBe(12900);
+  expect(saved.messages.some((m) => m.id === `${job.id}-reply`)).toBe(false);
+  expect(saved.audit).toHaveLength(1);
+});
+
+test("Reviewer rejection blocks recognition; supersession blocks its publication", async () => {
+  const { token, job, result } = await recognitionJob();
+  await commitResult(token, job, { ...result, review: { accepted: false, reasons: ["Unclear evidence"] } });
+  expect((await c(token)).facts.balanceCents).toBe(12900);
+  expect((await c(token)).status).toBe("needs_review");
+  const retry = requireJob(await beginCommand(token, command("retry")));
+  await beginCommand(token, command("takeover"));
+  await expect(commitResult(token, retry, result)).rejects.toMatchObject({ status: 409 });
+  expect((await c(token)).facts.payments).toHaveLength(0);
+});
+
+test("model progress is saved without advancing a superseding run", async () => {
+  const { token } = await createWorkspace(); const job = requireJob(await beginCommand(token, command()));
+  const id = randomUUID(); await reserveLive(id, { token, job });
+  const call = { id, inputTokens: 100, outputTokens: 10, usageKnown: true, latencyMs: 1, tools: [], role: "customer" };
+  await startLive(call, { token, job });
+  expect((await c(token)).run).toMatchObject({ activeCallId: id, activeRole: "customer", steps: [{ id, role: "customer", state: "started" }] });
+  await recordLive(call, { token, job });
+  expect((await c(token)).run).toMatchObject({ calls: 1, lastCompletedRole: "customer" });
+  expect((await c(token)).run?.activeRole).toBeUndefined();
+  await recordLive(call, { token, job });
+  expect((await c(token)).run?.calls).toBe(1);
+  await beginCommand(token, command("takeover"));
+  expect((await c(token)).lastRun).toMatchObject({ id: job.id, outcome: "interrupted", calls: 1 });
+  await expect(startLive(call, { token, job })).rejects.toMatchObject({ status: 409 });
+  await recordLive(call, { token, job });
+  expect((await c(token)).run).toBeNull();
+});
+
+test("fresh cases seed one persisted opening without spending, customer turns or retryable work", async () => {
+  const { token, view } = await createWorkspace();
+  for (const state of Object.values(view.cases)) {
+    expect(state.messages).toHaveLength(1);
+    expect(state.messages[0]).toMatchObject({ origin: "synthetic_opening", speaker: "agent", channel: "customer" });
+    expect(state.messages[0].text).toContain(state.facts.invoiceId);
+    expect(state.turns).toBe(0); expect(state.run).toBeNull();
+  }
+  await expect(beginCommand(token, command("retry"))).rejects.toMatchObject({ status: 409 });
+  await closeV2Pool();
+  expect((await c(token)).messages).toEqual(view.cases["late-payment"].messages);
+  await readWorkspace(token);
+  expect((await c(token)).messages).toHaveLength(1);
+  expect((await budgetUsage()).calls).toBe(0);
+  const reset = await resetWorkspace(token);
+  expect(reset.cases["late-payment"].messages).toHaveLength(1);
+  expect(reset.cases["late-payment"].revision).toBeGreaterThan(view.cases["late-payment"].revision);
+});
+
+test("untouched empty legacy cases receive one opener while started and stopped cases stay unchanged", async () => {
+  const { token, view } = await createWorkspace();
+  const empty = view.cases["late-payment"], started = view.cases["fresh-record"], stopped = view.cases["conflicting-payment"];
+  empty.messages = [];
+  started.turns = 1;
+  started.messages = [{ id: "existing-message", channel: "customer", speaker: "customer", text: "Existing conversation", at: started.now }];
+  stopped.messages = []; stopped.stopped = true; stopped.status = "stopped";
+  await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=jsonb_set(data,'{cases}',$1::jsonb)", [JSON.stringify(view.cases)]);
+  const [a, b] = await Promise.all([readWorkspace(token), readWorkspace(token)]);
+  expect(a.cases["late-payment"].messages).toHaveLength(1);
+  expect(a.cases["late-payment"].messages[0]).toMatchObject({ origin: "synthetic_opening", speaker: "agent" });
+  expect(b.cases["late-payment"].messages).toEqual(a.cases["late-payment"].messages);
+  expect(a.cases["late-payment"].turns).toBe(0);
+  expect(a.cases["fresh-record"].messages).toEqual(started.messages);
+  expect(a.cases["conflicting-payment"].messages).toEqual([]);
+  expect(a.expiresAt).toBe(view.expiresAt);
+  expect((await budgetUsage()).calls).toBe(0);
+});
+
+test("latest runtime survives refresh, duplicates, rejected input and no-run controls until the next real run", async () => {
+  const { token } = await createWorkspace(); const request = command();
+  const job = requireJob(await beginCommand(token, request));
+  const call = { id: randomUUID(), role: "reviewer", inputTokens: 10, outputTokens: 2, usageKnown: true, latencyMs: 1, tools: [] };
+  await reserveLive(call.id, { token, job }); await startLive(call, { token, job }); await recordLive(call, { token, job });
+  await commitResult(token, job, approved());
+  await closeV2Pool();
+  const saved = await c(token), runtime = saved.lastRun;
+  expect(runtime).toMatchObject({ id: job.id, calls: 1, outcome: "completed", steps: [{ state: "started", role: "reviewer" }, { state: "completed", role: "reviewer" }] });
+  expect(runtime?.durationMs).toBeGreaterThanOrEqual(0);
+  expect(saved.audit.at(-1)?.runtime).toEqual(runtime);
+  expect(await beginCommand(token, request)).toBeNull();
+  await expect(beginCommand(token, command("customer", " "))).rejects.toMatchObject({ status: 400 });
+  await beginCommand(token, command("takeover"));
+  expect(await beginCommand(token, command("customer", "Save this for the operator"))).toBeNull();
+  expect((await c(token)).lastRun).toEqual(runtime);
+  await beginCommand(token, command("resume"));
+  expect((await c(token)).lastRun).toEqual(runtime);
+  const next = requireJob(await beginCommand(token, command("retry")));
+  expect((await c(token)).lastRun).toBeUndefined();
+  expect((await c(token)).audit.at(-1)?.runtime).toEqual(runtime);
+  await failRun(token, job);
+  expect((await c(token)).run?.id).toBe(next.id);
+  await commitResult(token, next, { ...approved(), review: { accepted: false, reasons: ["Needs correction"] } });
+  expect((await c(token)).lastRun).toMatchObject({ id: next.id, outcome: "blocked" });
+});
+
+test("business report persists without financial effects; a disputed report pauses replies until operator resume", async () => {
+  const { token, job, result } = await recognitionJob();
+  result.verification = { ...result.verification!, outcome: "business_reported", paymentDate: null, settlementStatus: "unknown", missingFacts: ["date", "settlement"] };
+  result.resolution = null;
+  result.draft = { reply: "The business reports $50 for INV-101. You may dispute this report.", needsOperator: false };
+  await commitResult(token, job, result);
+  expect((await c(token)).verification?.outcome).toBe("business_reported");
+  expect((await c(token)).facts.balanceCents).toBe(12900);
+  expect((await c(token)).facts.payments).toHaveLength(0);
+  const dispute = requireJob(await beginCommand(token, command("customer", "I dispute the business report; I paid $129.")));
+  await commitResult(token, dispute, { ...result, draft: { reply: "Your dispute is saved for operator review.", needsOperator: true } });
+  expect((await c(token)).reviewHold).toBe(true);
+  expect((await c(token)).status).toBe("needs_review");
+  const before = await budgetUsage();
+  expect(await beginCommand(token, command("customer", "Please review my receipt"))).toBeNull();
+  expect(await beginCommand(token, command("retry"))).toBeNull();
+  expect((await c(token)).messages.at(-1)?.text).toBe("Please review my receipt");
+  expect((await c(token)).run).toBeNull();
+  expect((await budgetUsage()).calls).toBe(before.calls);
+  await beginCommand(token, command("resume"));
+  expect((await c(token)).reviewHold).toBe(false);
+  expect(await beginCommand(token, command("customer", "What did the operator decide?"))).not.toBeNull();
+});
+
+test("a conflicting amount keeps the business reply path open for clarification", async () => {
+  const { token, job, result } = await recognitionJob();
+  result.resolution = null;
+  result.verification = { ...result.verification!, outcome: "conflicting", businessMessage: "Do the other original details apply to the $50?", settlementStatus: "unknown" };
+  await commitResult(token, job, result);
+  expect((await c(token)).status).toBe("awaiting_business");
+  const followup = requireJob(await beginCommand(token, { ...command("business", "Yes, the other details are correct"), requestId: (await c(token)).requestId! }));
+  expect(followup.input.messages.at(-1)?.disposition).toBeUndefined();
+  expect((await c(token)).facts.balanceCents).toBe(12900);
+});
+
+test("interrupted runs become visible and failed runs retain raw input", async () => {
+  const { token } = await createWorkspace(); const job = requireJob(await beginCommand(token, command()));
+  await failRun(token, job);
+  expect((await c(token)).status).toBe("run_failed");
+  expect((await c(token)).messages.filter((m) => m.origin !== "synthetic_opening")).toHaveLength(1);
+  expect((await c(token)).lastRun).toMatchObject({ id: job.id, outcome: "failed" });
+  const retry = requireJob(await beginCommand(token, command("retry")));
+  await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=jsonb_set(data,'{cases,late-payment,run,startedAt}',to_jsonb((NOW()-INTERVAL '100 seconds')::text))");
+  expect((await c(token)).status).toBe("run_failed");
+  expect((await c(token)).lastRun).toMatchObject({ id: retry.id, outcome: "interrupted" });
+  await expect(commitResult(token, retry, approved())).rejects.toMatchObject({ status: 409 });
+});
+
+test("provider failure details persist; legacy technical failures are recoverable without clearing real review holds", async () => {
+  const { token } = await createWorkspace(); const job = requireJob(await beginCommand(token, command()));
+  const failure = { kind: "quota", status: 429, code: "credit_balance_exhausted", message: "OpenAI account credits are exhausted." };
+  await failRun(token, job, failure);
+  expect((await c(token)).lastRun?.failure).toEqual(failure);
+  expect((await c(token)).status).toBe("run_failed");
+  await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=jsonb_set(data,'{cases,late-payment,status}',$1::jsonb)", [JSON.stringify("needs_review")]);
+  expect((await c(token)).status).toBe("run_failed");
+  await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=jsonb_set(jsonb_set(data,'{cases,late-payment,status}',$1::jsonb),'{cases,late-payment,reviewHold}','true'::jsonb)", [JSON.stringify("needs_review")]);
+  expect((await c(token)).status).toBe("needs_review");
+  expect((await c(token)).reviewHold).toBe(true);
+  expect(await beginCommand(token, command("retry"))).toBeNull();
+});
+
+test("HTTP boundary rejects foreign origins, role injection, missing sessions and oversized bodies", async () => {
+  const url = "http://localhost:3012/api/v2/workspace";
+  const post = (value: unknown, origin = "http://localhost:3012") => handleV2(new Request(url, { method: "POST", headers: { host: "localhost:3012", origin, "Content-Type": "application/json" }, body: JSON.stringify(value) }));
+  expect((await handleV2(new Request(url, { headers: { host: "localhost:3012" } }))).status).toBe(401);
+  expect((await post({ action: "create" }, "https://foreign.test")).status).toBe(403);
+  expect((await post({ ...command(), role: "maintainer" })).status).toBe(400);
+  expect((await post({ action: "customer", text: "x".repeat(20_000) })).status).toBe(413);
+  const created = await post({ action: "create" });
+  expect(created.status).toBe(201);
+  expect(created.headers.get("set-cookie")).toContain("HttpOnly; SameSite=Strict");
+  const cookie = created.headers.get("set-cookie")!.split(";")[0];
+  expect((await handleV2(new Request(url, { headers: { host: "localhost:3012", cookie } }))).status).toBe(200);
+});
+
+test.each(["localhost:3012", "127.0.0.1:3012", "[::1]:3012"])("same-origin %s survives Next.js loopback URL normalization", async (host) => {
+  const request = new NextRequest(`http://${host}/api/v2/workspace`, {
+    method: "POST", headers: { host, origin: `http://${host}`, "Content-Type": "application/json" }, body: "{}",
+  });
+  expect(new URL(request.url).hostname).toBe("localhost");
+  expect((await handleV2(request)).status).toBe(400);
+});
+
+test.each([
+  { host: "127.0.0.1:3012", origin: "http://localhost:3012" },
+  { host: "127.0.0.1:3012", origin: "http://127.0.0.1:3013" },
+  { host: "127.0.0.1:3012", origin: "https://127.0.0.1:3012" },
+  { host: "127.0.0.1:3012", origin: "null" },
+  { host: "127.0.0.1:3012" },
+  { origin: "http://localhost:3012" },
+  { host: "foreign.test", origin: "http://foreign.test" },
+  { host: "localhost.foreign.test:3012", origin: "http://localhost.foreign.test:3012" },
+  { host: "localhost:3012@foreign.test", origin: "http://foreign.test" },
+  { host: "foreign.test", origin: "http://localhost:3012", "x-forwarded-host": "localhost:3012" },
+])("HTTP boundary rejects mismatched or untrusted authority $host / $origin", async (headers) => {
+  const request = new NextRequest("http://localhost:3012/api/v2/workspace", {
+    method: "POST", headers: { ...headers, "Content-Type": "application/json" } as Record<string, string>, body: "{}",
+  });
+  expect((await handleV2(request)).status).toBe(403);
+});
