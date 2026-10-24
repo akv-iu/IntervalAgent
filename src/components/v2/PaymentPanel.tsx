@@ -12,10 +12,10 @@ export default function PaymentPanel({ c, busy, onConfirm, onPay, now = c.now }:
   const [outcome, setOutcome] = useState<SimulationOutcome>("succeeded");
   const proposal = c.updates.filter((u) => u.kind === "payment_proposed").at(-1), agreement = c.agreements?.at(-1);
   const confirmed = proposal && c.agreements?.some((a) => sameProposal(a.proposal, proposal));
-  const hold = paymentHold(c.facts, c.operations, c.verification, c.requestId);
+  const hold = paymentHold(c.facts, c.operations, c.verification, c.requestId, c.financialDecisions);
   const blocked = busy || !!c.run || c.stopped || c.takeover || !!c.reviewHold || c.status === "needs_review" || !!hold;
   let due: ReturnType<typeof nextPayment> | undefined, reason = "";
-  if (agreement) { try { due = nextPayment(agreement, c.facts, c.operations ?? [], now); } catch (error) { reason = error instanceof Error ? error.message : "Inspect this plan before attempting a payment."; } }
+  if (agreement) { try { due = nextPayment(agreement, c.facts, c.operations ?? [], now, c.financialDecisions); } catch (error) { reason = error instanceof Error ? error.message : "Inspect this plan before attempting a payment."; } }
   if (!proposal && !agreement) return null;
   return <section className="mt-4 border-t border-line pt-4" aria-label="Simulated plan and payment">
     <h4 className="font-medium">Simulated plan and payment</h4>

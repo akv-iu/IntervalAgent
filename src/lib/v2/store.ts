@@ -7,9 +7,12 @@ import { findThreats } from "../patterns";
 import { localDate, localToInstant } from "../time";
 import { openingMessage, startingCases } from "./fixtures";
 import { CaseCommand, ROLE_VERSION, validateUpdates, validateVerification, type Activity, type CaseUpdate, type Investigation, type InvestigationResult } from "./contracts";
-import type { ModelCall } from "./model";
+import { MODEL, type ModelCall } from "./model";
 import type { RunFailure } from "./failures";
-import { confirmPlan, paymentHold, simulatePayment } from "./payments";
+import { confirmPlan, effectiveOperations, paymentHold, simulatePayment } from "./payments";
+import { decideFinancial, type FinancialCommand } from "./financial";
+import { EVALUATION_VERSION, LearningCommand, ProposedLesson, LearningEvaluationSchema, assessEvaluation, activeLessons, baselineCandidate, emptyLearning, sameScope, unsafeLesson, type LearningJob, type LearningState, type LearningEvaluation } from "./learning";
+const isFinancial = (command: Command): command is FinancialCommand => ["approve_recognition", "reconcile_payment", "approve_credit", "approve_extension", "reverse_receipt", "reconcile_record"].includes(command.action);
 
 export class V2Error extends Error { constructor(public status: number, message: string) { super(message); } }
 export type PlannedEvent = { id: string; sourceMessageId: string; channel: "call" | "email"; date: string; window: string; timezone: string; state: "planned" | "superseded" | "blocked"; beyondExpiry: boolean };
@@ -26,10 +29,10 @@ export type CaseState = Investigation & {
   updates: CaseUpdate[]; events: PlannedEvent[]; activity: Activity[];
   preferredChannel: "call" | "email" | null;
   commands: { id: string; fingerprint: string }[]; retries: number;
-  audit: { id: string; at: string; before: CaseUpdate[]; after: CaseUpdate[]; balanceBeforeCents?: number; balanceAfterCents?: number; review: InvestigationResult["review"]; roleVersion: string; sourceVersion: string; sourceMessageIds: string[]; replyId: string | null; runtime?: FinishedRun; correctionId?: string; paymentAction?: Investigation["paymentAction"] }[];
+  audit: { id: string; at: string; before: CaseUpdate[]; after: CaseUpdate[]; balanceBeforeCents?: number; balanceAfterCents?: number; review: InvestigationResult["review"]; roleVersion: string; sourceVersion: string; sourceMessageIds: string[]; replyId: string | null; runtime?: FinishedRun; correctionId?: string; paymentAction?: Investigation["paymentAction"]; lessonVersions?: string[] }[];
   lastReview: InvestigationResult | null;
 };
-type Workspace = { cases: Record<string, CaseState>; resets: number };
+type Workspace = { cases: Record<string, CaseState>; resets: number; learning?: LearningState };
 export type WorkspaceView = Workspace & { expiresAt: string; observedAt?: string };
 export type Job = { id: string; revision: number; caseId: string; input: Investigation };
 export type Command = CaseCommand;
@@ -136,6 +139,7 @@ export async function readWorkspace(token: string): Promise<WorkspaceView> {
       c.revision++; finishRun(c, "interrupted"); c.status = c.stopped ? "stopped" : c.takeover ? "taken_over" : "run_failed";
       c.activity.push({ role: "reviewer", action: "interrupted", summary: "Run interrupted. Read saved state before an explicit retry." });
     }
+    if (data.learning) for (const candidate of data.learning.candidates) if (["proposing", "evaluating"].includes(candidate.status) && Date.now() - Date.parse(candidate.updatedAt) > 180_000) { candidate.status = "failed"; candidate.error = "Learning run interrupted. No lesson was activated."; data.learning.revision++; }
     return { ...data, expiresAt, observedAt: new Date().toISOString() };
   });
 }
@@ -147,13 +151,14 @@ export async function resetWorkspace(token: string) {
     // A new revision range fences any old run even if a case ID is reused.
     for (const [id, c] of Object.entries(fresh.cases)) c.revision = (data.cases[id]?.revision ?? 0) + 1;
     data.cases = fresh.cases; data.resets++;
+    if (data.learning) { for (const candidate of data.learning.candidates) if (["proposing", "evaluating"].includes(candidate.status)) { candidate.status = "failed"; candidate.error = "Workspace reset interrupted the learning run."; } data.learning.revision++; }
     return { ...data, expiresAt };
   });
 }
 
-function investigationInput(c: CaseState, operatorFeedback?: Investigation["operatorFeedback"]): Investigation {
+function investigationInput(c: CaseState, operatorFeedback?: Investigation["operatorFeedback"], learning?: LearningState): Investigation {
   return structuredClone({ facts: c.facts, messages: c.messages, now: c.now, verification: c.verification, requestId: c.requestId, caseUpdates: c.updates,
-    ...(c.agreements ? { agreements: c.agreements } : {}), ...(c.operations ? { operations: c.operations } : {}), ...(c.paymentAction ? { paymentAction: c.paymentAction } : {}), ...(operatorFeedback ? { operatorFeedback } : {}) });
+    ...(c.agreements ? { agreements: c.agreements } : {}), ...(c.operations ? { operations: c.operations } : {}), ...(c.financialDecisions ? { financialDecisions: c.financialDecisions } : {}), ...(c.paymentAction ? { paymentAction: c.paymentAction } : {}), ...(operatorFeedback ? { operatorFeedback } : {}), ...(learning ? { lessons: activeLessons(learning, c.facts) } : {}) });
 }
 
 export async function beginCommand(token: string, command: Command): Promise<Job | null> {
@@ -171,9 +176,25 @@ export async function beginCommand(token: string, command: Command): Promise<Job
     if (!stop && c.commands.length >= 60) throw new V2Error(429, "Case action limit reached. History and STOP remain available.");
     if (c.stopped && stop) return null;
     c.commands.push({ id: command.id, fingerprint });
+    if (isFinancial(command)) {
+      if (c.run || c.stopped || !c.takeover || command.revision !== c.revision) throw new V2Error(409, "Take over the current case before a financial decision; running, stopped or stale actions are refused.");
+      if ((c.financialDecisions?.length ?? 0) >= 12) throw new V2Error(429, "Case financial-decision limit reached.");
+      if (command.action === "approve_recognition" || command.action === "approve_credit") {
+        const audit = c.audit.at(-1), latestEvidence = c.messages.filter((m) => m.speaker !== "agent").at(-1);
+        if (!audit || audit.id !== command.targetAuditId || latestEvidence?.id !== audit.sourceMessageIds.at(-1) || audit.sourceVersion !== c.facts.sourceVersion) throw new V2Error(409, "Approval must target the latest reviewed evidence and source; review newer messages or financial changes first.");
+      }
+      const now = new Date().toISOString();
+      try {
+        const saved = decideFinancial(investigationInput(c), c.lastReview, command, now);
+        c.facts = saved.facts; (c.financialDecisions ??= []).push(saved.decision);
+      } catch (error) { throw new V2Error(409, error instanceof Error ? error.message : "Financial evidence could not be validated."); }
+      c.revision++; c.now = now; c.status = "taken_over"; c.paymentAction = { kind: "financial_decided", id: command.id };
+      c.activity.push({ role: "reviewer", action: "operator_financial_decision", summary: "Operator saved a scoped simulated financial decision and evidence. Original history retained; no agent reply or real payment executed." });
+      return null;
+    }
     if (command.action === "confirm_plan" || command.action === "simulate_payment") {
       if (c.run || c.stopped || c.takeover || c.reviewHold || c.status === "needs_review" || command.revision !== c.revision) throw new V2Error(409, "Case changed, is running, stopped or held. Refresh and resolve the hold before confirming or paying.");
-      const hold = paymentHold(c.facts, c.operations, c.verification, c.requestId);
+      const hold = paymentHold(c.facts, c.operations, c.verification, c.requestId, c.financialDecisions);
       if (hold) throw new V2Error(409, hold);
       const now = new Date().toISOString();
       try {
@@ -189,7 +210,7 @@ export async function beginCommand(token: string, command: Command): Promise<Job
           const agreement = c.agreements?.at(-1);
           if (!agreement || agreement.id !== command.agreementId) throw new Error("Only the latest confirmed plan in this case can receive a payment.");
           if ((c.operations?.length ?? 0) >= 12) throw new Error("Case payment-attempt limit reached.");
-          const saved = simulatePayment(command.id, agreement, c.facts, c.operations ?? [], now, command.outcome);
+          const saved = simulatePayment(command.id, agreement, c.facts, c.operations ?? [], now, command.outcome, c.financialDecisions);
           (c.operations ??= []).push(saved.operation); c.facts = saved.facts;
           c.paymentAction = { kind: "payment_attempted", id: command.id };
         }
@@ -198,7 +219,7 @@ export async function beginCommand(token: string, command: Command): Promise<Job
       c.revision++; c.now = now; c.status = "processing"; delete c.lastRun;
       c.run = { id: command.id, revision: c.revision, startedAt: now };
       c.activity.push({ role: "customer", action: c.paymentAction.kind, summary: "Application saved the explicit simulation action before agent assessment. No real payment was made." });
-      return { id: command.id, revision: c.revision, caseId: command.caseId, input: investigationInput(c) };
+      return { id: command.id, revision: c.revision, caseId: command.caseId, input: investigationInput(c, undefined, data.learning) };
     }
     let operatorFeedback: Investigation["operatorFeedback"];
     if (command.action === "correct" || command.action === "retry_correction") {
@@ -267,7 +288,7 @@ export async function beginCommand(token: string, command: Command): Promise<Job
     c.status = "processing";
     delete c.lastRun;
     c.run = { id: command.id, revision: c.revision, startedAt: c.now };
-    return { id: command.id, revision: c.revision, caseId: command.caseId, input: investigationInput(c, operatorFeedback) };
+    return { id: command.id, revision: c.revision, caseId: command.caseId, input: investigationInput(c, operatorFeedback, data.learning) };
   });
 }
 
@@ -279,6 +300,7 @@ export async function commitResult(token: string, job: Job, result: Investigatio
     const audit: CaseState["audit"][number] = { id: job.id, at: new Date().toISOString(), before: [...c.updates], after: [...c.updates], balanceBeforeCents: c.facts.balanceCents, balanceAfterCents: c.facts.balanceCents, review: result.review, roleVersion: ROLE_VERSION, sourceVersion: job.input.facts.sourceVersion, sourceMessageIds: job.input.messages.filter((m) => m.speaker !== "agent").map((m) => m.id), replyId: result.review.accepted ? `${job.id}-reply` : null };
     c.audit.push(audit);
     if (job.input.paymentAction) audit.paymentAction = job.input.paymentAction;
+    audit.lessonVersions = (job.input.lessons ?? []).map((lesson) => lesson.id);
     audit.runtime = c.lastRun;
     if (job.input.operatorFeedback) {
       const correction = c.corrections?.find((item) => item.runId === job.id);
@@ -322,7 +344,7 @@ export async function commitResult(token: string, job: Job, result: Investigatio
         c.messages.push({ id: `${job.id}-business`, channel: "business", speaker: "agent", text: result.verification.businessMessage, at: new Date().toISOString(), requestId: c.requestId });
     }
     c.messages.push({ id: `${job.id}-reply`, channel: "customer", speaker: "agent", text: result.draft.reply, at: new Date().toISOString(), ...(job.input.operatorFeedback ? { origin: "operator_revision" as const } : {}) });
-    c.reviewHold = result.draft.needsOperator || result.resolution?.needsOperator || c.operations?.some((op) => op.outcome === "pending" || op.outcome === "unknown") || false;
+    c.reviewHold = result.draft.needsOperator || result.resolution?.needsOperator || effectiveOperations(c.operations, c.financialDecisions).some((op) => op.outcome === "pending" || op.outcome === "unknown") || false;
     c.status = c.reviewHold ? "needs_review" : c.verification && ["awaiting_business", "needs_facts", "pending", "conflicting"].includes(c.verification.outcome) ? "awaiting_business" : "ready";
   });
 }
@@ -387,4 +409,99 @@ export async function budgetUsage() {
   if (!r.rows[0]) throw new V2Error(503, "V2 usage accounting is not initialized.");
   const usage = await v2Pool().query("SELECT COUNT(*)::int AS calls,COUNT(*) FILTER (WHERE input_tokens IS NULL)::int AS unknown_calls,COALESCE(SUM(input_tokens),0)::int AS input_tokens,COALESCE(SUM(output_tokens),0)::int AS output_tokens FROM rebuild_v2.reservations");
   return { capDollars: null, conservativeUsedDollars: r.rows[0].used_micros / 1_000_000, ...usage.rows[0] as { calls: number; unknown_calls: number; input_tokens: number; output_tokens: number } };
+}
+
+export async function beginLearning(token: string, command: LearningCommand): Promise<LearningJob | null> {
+  const checked = LearningCommand.safeParse(command);
+  if (!checked.success) throw new V2Error(400, "Invalid learning action.");
+  command = checked.data;
+  return workspaceAction(token, (data) => {
+    const state = data.learning ??= emptyLearning();
+    const fingerprint = createHash("sha256").update(JSON.stringify(command)).digest("hex"), prior = state.commands.find((c) => c.id === command.id);
+    if (prior) { if (prior.fingerprint !== fingerprint) throw new V2Error(409, "Learning command ID has different content."); return null; }
+    if (state.commands.length >= 40 && command.action !== "rollback_lesson") throw new V2Error(429, "Workspace learning action limit reached; an active version can still be rolled back.");
+    if (state.candidates.some((c) => ["proposing", "evaluating"].includes(c.status) && Date.now() - Date.parse(c.updatedAt) > 180_000)) {
+      for (const c of state.candidates) if (["proposing", "evaluating"].includes(c.status) && Date.now() - Date.parse(c.updatedAt) > 180_000) { c.status = "failed"; c.error = "Learning run interrupted. No lesson was activated."; }
+    }
+    state.commands.push({ id: command.id, fingerprint });
+    if (command.action === "propose_lesson") {
+      const c = data.cases[command.caseId], audit = c?.audit.find((a) => a.id === command.targetAuditId);
+      if (!c || !audit || c.run || c.stopped || c.revision !== command.revision) throw new V2Error(409, "Select current saved review evidence in this workspace.");
+      if (state.candidates.length >= 8) throw new V2Error(429, "Workspace candidate limit reached.");
+      if (command.scope === "scenario" && !c.facts.scenario) throw new V2Error(409, "This legacy case has no scenario family; choose business scope explicitly.");
+      const correction = command.correctionId ? c.corrections?.find((x) => x.correctionId === command.correctionId && x.targetAuditId === audit.id && x.targetRole === command.targetRole) : undefined;
+      if (!correction && (command.correctionId || audit.review.accepted || audit.id !== c.audit.at(-1)?.id)) throw new V2Error(409, "A saved role correction or current rejected Reviewer finding is required.");
+      const scope = { businessId: c.facts.businessId, role: command.targetRole, scenario: command.scope === "scenario" ? c.facts.scenario ?? null : null };
+      const candidate = { id: command.id, scope, sourceCaseId: command.caseId, sourceAuditId: audit.id, sourceRevision: c.revision, ...(correction ? { correctionId: correction.correctionId } : {}), baseVersion: ROLE_VERSION, sourceRoleVersion: audit.roleVersion, baseCandidateId: baselineCandidate(state, scope), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), status: "proposing" as const,
+        evidence: { facts: structuredClone(c.facts), messages: c.messages.filter((m) => audit.sourceMessageIds.includes(m.id)).slice(-6).map((m) => ({ ...m, text: m.text.slice(0, 400) })), result: structuredClone(correction?.original ?? c.lastReview!), feedback: correction?.text ?? audit.review.reasons.join("; "), targetRole: command.targetRole } };
+      if (!candidate.evidence.result) throw new V2Error(409, "Reviewed source result is unavailable.");
+      state.candidates.push(candidate); state.revision++;
+      return { id: command.id, kind: "propose", candidate: structuredClone(candidate), baseline: activeLessons(state, c.facts) };
+    }
+    if (command.learningRevision !== state.revision) throw new V2Error(409, "Learning state changed; refresh before deciding.");
+    const candidate = state.candidates.find((c) => c.id === command.candidateId);
+    if (!candidate) throw new V2Error(404, "Candidate is outside this workspace.");
+    if (command.action === "evaluate_lesson") {
+      if (!(candidate.status === "ready" || candidate.status === "evaluated" && candidate.evaluation?.version !== EVALUATION_VERSION) || candidate.baseVersion !== ROLE_VERSION || baselineCandidate(state, candidate.scope) !== candidate.baseCandidateId) throw new V2Error(409, "Candidate is not ready or its baseline changed; propose a new version.");
+      candidate.status = "evaluating"; candidate.updatedAt = new Date().toISOString(); state.revision++;
+      return { id: command.id, kind: "evaluate", candidate: structuredClone(candidate), baseline: activeLessons(state, candidate.evidence.facts) };
+    }
+    if (["proposing", "evaluating"].includes(candidate.status)) throw new V2Error(409, "Wait for the learning run before a decision.");
+    const active = state.active.find((a) => sameScope(a.scope, candidate.scope)), before = active?.candidateId ?? null;
+    let after = before;
+    if (command.action === "activate_lesson") {
+      if (candidate.status !== "evaluated" || !candidate.evaluation?.eligible || candidate.evaluation.version !== EVALUATION_VERSION || candidate.evaluation.provenance !== "live" || candidate.evaluation.model !== MODEL || !candidate.proposal || unsafeLesson(candidate.proposal) || candidate.baseVersion !== ROLE_VERSION || baselineCandidate(state, candidate.scope) !== candidate.baseCandidateId) throw new V2Error(409, "Only a current, safe, live-evaluated eligible candidate can activate.");
+      after = candidate.id; candidate.status = "active";
+    } else if (command.action === "rollback_lesson") {
+      if (before !== candidate.id) throw new V2Error(409, "Rollback must target the current active version.");
+      const activation = state.history.findLast((h) => h.action === "activate_lesson" && h.candidateId === candidate.id);
+      if (!activation) throw new V2Error(409, "Activation history is missing.");
+      const previous = state.candidates.find((c) => c.id === activation.before);
+      after = previous?.evaluation?.eligible && previous.evaluation.version === EVALUATION_VERSION && previous.evaluation.provenance === "live" && previous.evaluation.model === MODEL && previous.baseVersion === ROLE_VERSION && previous.proposal && !unsafeLesson(previous.proposal) ? previous.id : null;
+      candidate.status = "evaluated";
+    } else {
+      if (before === candidate.id) throw new V2Error(409, "Roll back an active candidate before rejecting it.");
+      candidate.status = "rejected"; candidate.error = command.note;
+    }
+    if (command.action !== "reject_lesson") {
+      state.active = state.active.filter((a) => !sameScope(a.scope, candidate.scope));
+      if (after) { const restored = state.candidates.find((c) => c.id === after); if (!restored?.evaluation?.eligible || restored.baseVersion !== ROLE_VERSION) throw new V2Error(409, "Previous version is unavailable."); restored.status = "active"; state.active.push({ scope: candidate.scope, candidateId: after }); }
+      if (before && before !== after) { const old = state.candidates.find((c) => c.id === before); if (old && old.id !== candidate.id) old.status = "evaluated"; }
+    }
+    state.history.push({ id: command.id, action: command.action, candidateId: candidate.id, before, after, at: new Date().toISOString(), note: command.note }); state.revision++;
+    return null;
+  });
+}
+
+export async function completeLearning(token: string, job: LearningJob, result: ProposedLesson | LearningEvaluation | Error) {
+  return workspaceAction(token, (data) => {
+    const state = data.learning, candidate = state?.candidates.find((c) => c.id === job.candidate.id);
+    if (!state || !candidate || candidate.status !== (job.kind === "propose" ? "proposing" : "evaluating")) throw new V2Error(409, "Learning run is no longer current.");
+    candidate.updatedAt = new Date().toISOString(); state.revision++;
+    if (result instanceof Error) { candidate.status = "failed"; candidate.error = "Learning run failed or exceeded its limits. No lesson was activated."; return; }
+    if (job.kind === "propose") {
+      if (data.cases[candidate.sourceCaseId]?.revision !== candidate.sourceRevision) { candidate.status = "failed"; candidate.error = "Source case changed while generating the candidate."; return; }
+      const proposal = ProposedLesson.parse(result);
+      candidate.proposal = proposal;
+      const unsafe = unsafeLesson(proposal) ?? (proposal.instruction?.includes(candidate.evidence.facts.invoiceId) ? "Candidate memorizes a source invoice instead of generalizing." : null);
+      candidate.status = unsafe ? "rejected" : "ready"; if (unsafe) candidate.error = unsafe;
+    } else {
+      const evaluation = LearningEvaluationSchema.parse(result);
+      if (evaluation.baseCandidateId !== candidate.baseCandidateId) throw new V2Error(409, "Evaluation baseline does not match this candidate.");
+      if (candidate.evaluation) (candidate.evaluationHistory ??= []).push(candidate.evaluation);
+      candidate.evaluation = { ...evaluation, ...assessEvaluation(evaluation.rows) }; candidate.status = "evaluated";
+    }
+  });
+}
+
+export async function reserveLearningCall(token: string, job: LearningJob, id: string) {
+  return workspaceAction(token, async (data, _, client) => {
+    const state = data.learning, candidate = state?.candidates.find((c) => c.id === job.candidate.id);
+    if (!state || !candidate || candidate.status !== (job.kind === "propose" ? "proposing" : "evaluating") || Date.now() - Date.parse(candidate.updatedAt) > 180_000 || job.kind === "propose" && data.cases[candidate.sourceCaseId]?.revision !== candidate.sourceRevision || job.kind === "evaluate" && baselineCandidate(state, candidate.scope) !== candidate.baseCandidateId) throw new V2Error(409, "Learning run was superseded.");
+    if (state.calls >= 64) throw new V2Error(429, "Workspace learning model-call limit reached.");
+    state.calls++;
+    const budget = await client.query("UPDATE rebuild_v2.budget SET used_micros=used_micros+20000 WHERE id=1 RETURNING id");
+    if (!budget.rowCount) throw new V2Error(503, "Initialize usage accounting before learning calls.");
+    await client.query("INSERT INTO rebuild_v2.reservations(id,cost_micros) VALUES($1,20000)", [id]);
+  });
 }

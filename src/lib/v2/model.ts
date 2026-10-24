@@ -10,13 +10,16 @@ export function boundedModel(options: {
   apiKey: string; reserve: (id: string) => Promise<void>; record: (call: ModelCall) => void | Promise<void>;
   start?: (call: Pick<ModelCall, "id" | "role">) => void | Promise<void>;
   model?: Model; signal?: AbortSignal;
+  maxCalls?: 20 | 32;
 }): Model {
   const delegate = options.model ?? new OpenAIProvider({ openAIClient: new OpenAI({ apiKey: options.apiKey, maxRetries: 0, timeout: 30_000 }), useResponses: true }).getModel(MODEL);
   let calls = 0;
   const deadline = Date.now() + 90_000;
+  const maxCalls = options.maxCalls ?? 20;
+  if (maxCalls !== 20 && maxCalls !== 32) throw new Error("Unsupported model-call bound");
   return {
     async getResponse(request: ModelRequest) {
-      if (++calls > 20 || Date.now() > deadline) throw new Error("Agent call/deadline limit reached");
+      if (++calls > maxCalls || Date.now() > deadline) throw new Error("Agent call/deadline limit reached");
       options.signal?.throwIfAborted();
       request.signal?.throwIfAborted();
       if (Buffer.byteLength(JSON.stringify(request), "utf8") > 32_000) throw new Error("Agent context limit reached");

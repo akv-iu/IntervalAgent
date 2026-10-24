@@ -80,7 +80,7 @@ test("payment controls distinguish consent, due actions, future dates and saved 
   const saved = simulatePayment("pending", agreement, facts, [], now, "pending"); c.operations = [saved.operation];
   expect(render()).toContain("reconciliation"); expect(render()).not.toContain("Simulate due payment");
   const records = renderToStaticMarkup(<CaseRecords c={c} />);
-  expect(records).toContain("Consent saved; this is not a receipt."); expect(records).toContain("No receipt or balance reduction."); expect(records).not.toContain("Not agreed.");
+  expect(records).toContain("Consent saved; this is not a receipt."); expect(records).toContain("No receipt or balance reduction at attempt time."); expect(records).not.toContain("Not agreed.");
   expect(records).toContain("Confirmed plan terms"); expect(records).not.toContain("Outdated; needs recalculation");
   c.agreements = [{ ...agreement, proposal: Object.fromEntries(Object.entries(proposal).reverse()) as typeof proposal }];
   expect(render()).not.toContain("Confirm this simulated plan");

@@ -1,6 +1,6 @@
 # IntervalAgent V2 rebuild: plan for review
 
-Status: Phase 3A is pushed as `fd8298e` on `v2-rebuild`; production V1 stays on `main`. Akshay approved Phase 3B with fresh usage unknown at the October 24, 8:26 AM Mountain checkpoint. Phase 3B explicit plan consent, due simulated installments, durable outcomes/receipts and agent assessment are implemented locally. Its delegated browser sample covered all four outcomes, persistence, retry safety and mobile keyboard controls; missed offer delegation and confirmed-plan labels were fixed. Live API calls were used for that test, with no deployment or push. Financial exception approvals/reconciliation remain Phase 3C; evaluated reusable learning remains Phase 4. Stop at this checkpoint. See [STATUS.md](STATUS.md) and [LOCAL-DEMO.md](LOCAL-DEMO.md) for results and limits.
+Status: Phases 3 and 4 are implemented and verified on `v2-rebuild`; production V1 stays on `main`. Akshay approved completing both without another approval pause and delegated testing, with a separate $2 total live-test budget. Delivery includes supervised financial corrections and scoped, evaluated instruction improvement with explicit activation/rollback. Phase 5 has not started. See [STATUS.md](STATUS.md) for evidence and limits and [LOCAL-DEMO.md](LOCAL-DEMO.md) for the walkthrough.
 Date: October 23, 2026. Branch: `v2-rebuild`, based on V1 commit `7a6c6c8`.
 Acceptance requirements: [SPEC.md](SPEC.md). The original root `SPEC.md` remains the V1 contract.
 
@@ -170,15 +170,25 @@ A labelled demo-processor control selects succeeded/failed/pending/unknown synth
 
 Consent/outcome commits before the model explains it. Failed/rejected/stale explanations cannot undo the operation or trigger a second one. Agents receive saved agreements/operations and choose useful assessment work; Reviewer still checks the reply, and assessment cannot propose another payment/recognition. Application validation controls effects. Per case: at most six confirmed plans and twelve attempts within existing 60-action limits and fixed expiry; controls do not consume chat turns. Policy versions advance to `*-options-2`, invalidating old offers; request a fresh quote without resetting the workspace.
 
-### Remaining Phase 3 implementation (Phase 3C; not started)
+### Phase 3C checkpoint: operator financial decisions
 
-Add scoped operator financial approval/reconciliation and traceable corrective decisions. Do not represent the existing Resume control as payment approval, unknown-result settlement, or a reversal. This remains subject to the next usage/approval checkpoint.
+> **Result:** An operator can record a verified prior payment or resolve a pending/unknown simulated attempt without losing original evidence.\
+> **Work:** Add separate takeover-only decisions, required evidence notes/references, atomic receipts/balances and saved decision context for agents.\
+> **Check:** Refuse stale, foreign, duplicate, unreviewed or stopped actions; preserve committed effects through failed/rejected explanations.
+
+Implemented locally: `approve_recognition` targets the latest accepted review and complete linked business confirmation, including Cedar's operator-required policy. It reuses matching/date/amount/duplicate checks; the operator cannot supply an arbitrary amount, invoice or receipt. New unreviewed messages invalidate approval. `reconcile_payment` targets one saved pending/unknown simulated operation and its unchanged source/balance. The operator records synthetic evidence and settled/not-settled; settlement adds one operator-provenance receipt, while not-settled adds no money and permits only a separate explicit new attempt.
+
+Both actions require takeover, current revision, stable ID, a 10–1200 character note and 1–80 character evidence reference. They consume no chat turn or model call, retain operator control, and append at most twelve decisions within existing action/lifetime limits. Original business evidence/attempts remain unchanged; decisions link their target, evidence, time, receipt and before/after balances/versions. Resume remains a conversation action. Explicit resume/retry supplies original and effective operation state plus decisions to the existing SDK agents; the orchestrator chooses assessment and Reviewer checks the explanation. No financial execution tools are granted.
+
+The approved closeout adds `approve_credit`, `approve_extension`, `reverse_receipt` and `reconcile_record`. Credits require a current accepted review and bounded amount, reduce debt without recording money received, and cannot be repeated against that review. Extensions approve the latest current saved request without rescheduling an agreed payment plan. A local receipt can be reversed once through a compensating decision: retain the receipt, annotate its reversal and restore its amount. Imported settled receipts remain read-only. An imported pending record can be resolved as settled/not-settled; retain its original state with a decision reference, and create a separate receipt only on settlement. Balance changes invalidate old plans/quotes. Every action uses takeover, revision, scope, evidence, duplication and transaction guards; no decision itself calls a model or sends a reply.
+
+This completes the bounded synthetic Phase 3 contract. It is a private role-playing demo, not production operator authentication or bank verification. Cash still requires complete prior-payment evidence. Changed external snapshots fail closed; arbitrary external writes, general policy editing, actual refunds and provider integration are outside this implementation. Synthetic credits and receipt compensation are the supported financial exceptions, not a universal accounting system.
 
 
 
 ### Phase 3 acceptance contract (across 3A, 3B and 3C)
 
-These bullets describe the full phase target; remaining financial approval/reconciliation work is identified above.
+These bullets describe the delivered phase contract within the synthetic and source-capability boundaries above.
 
 - Retrieve business-eligible payment methods/arrangements through tools; calculate amounts and schedules in code. The model explains and adapts the proposal.
 - Bind confirmation to a specific current proposal. Recheck consent, scope, policy, record versions and required authority before execution. Customer consent, Reviewer acceptance and operator approval are distinct.
@@ -203,6 +213,12 @@ Optional later: introduce a new synthetic payment mid-conversation to demonstrat
 - Compare current and candidate behavior on separate validation cases with declared criteria/budgets. Use deterministic checks and human assessment; keep final holdout answers out of tuning.
 - Support investigation, delegation, clarification, escalation and review improvements. Lessons cannot relax permissions, financial guards or spend limits.
 - A sandbox operator activates eligible versions only in that workspace. Shared promotion needs separate maintainer authorization and evaluation. Pin versions, retain evidence and support rollback; change subsequent work, not in-flight financial operations. Expiry/reset does not delete curated shared artifacts or restore spending allowance.
+
+Delivered: Reviewer diagnosis uses saved role corrections/rejected findings to propose one bounded reusable instruction. Four declared evaluation focuses cover invoice clarity, contact preferences, verification handoff and payment truthfulness, with supported role/focus combinations. Unsupported changes/data/tool repairs are rejected instead of becoming prompt patches. Independent validation uses two target cases, a regression and a safety case with matched baseline/candidate runs. Correctness must improve (or call count fall) while every candidate check passes; the server recomputes eligibility. A tie, partial run, unsafe result, scripted provenance, obsolete suite/model/base or changed baseline cannot activate. This is instruction/delegation/review improvement through the existing four roles, without model-weight training or self-modifying code.
+
+Learning is private to workspace, business and role, optionally narrowed to scenario family; exact scenario scope takes precedence. Subsequent jobs pin instruction IDs, and audit retains those IDs after rollback. Operator assessment is required for activation, rejection and rollback. Earlier comparison reports remain available after a declared suite upgrade. Rollback restores a valid prior version, otherwise base instructions, and records the actual before/after choice. Workspace reset retains curated learning/history/call accounting, interrupts pending learning and does not extend expiry; nothing is promoted to shared artifacts. Limits: eight candidates, forty learning actions (rollback remains available after exhaustion), sixty-four reserved model calls per workspace, thirty-two calls/ninety seconds per comparison. The ordinary conversation limit remains unchanged.
+
+Live acceptance exercised customer and Reviewer contexts, unsafe-feedback rejection, subsequent job pinning, rollback and business isolation. Current suite `learning-evals-2`: customer baseline 2/4 -> candidate 4/4; Reviewer 2/4 -> 3/4, so that Reviewer candidate stayed inactive. An earlier Reviewer candidate passed 4/4 and changed a controlled review decision before rollback. The original suite/report was retained when an apostrophe-scoring defect was fixed; no failed report was rewritten. Small development suites support these specific claims only, not general improvement or a final holdout score.
 
 Requirements: FR-10 through FR-13, FR-16, FR-18, FR-22; NFR-02, NFR-04, NFR-06 through NFR-08, NFR-10 through NFR-13.
 
@@ -232,7 +248,7 @@ Review with Akshay: final walkthrough, evidence-backed resume claims and stoppin
 - Review business names, six scenario families, payment methods and policy thresholds. Four roles, business verification and automatic reviewed case updates versus human-approved exceptions are agreed.
 - Initial model/API budget and nested-call, token, retry and deadline limits before Phase 1 live verification.
 - Review verification fields, request expiry/manual-follow-up rules and PostgreSQL test-source mapping. No spreadsheet endpoint is required. Real source connections/external notifications are not authorized.
-- Review the starting 24-hour/10-turn defaults, remaining admission/reply/eval limits and shared API cap before live use. Anonymous recovery requires the valid browser session.
+- Review the 24-hour/10-turn defaults and remaining admission/reply/eval limits before live use; the app-wide dollar cap was explicitly removed for local testing. Anonymous recovery requires the valid browser session.
 - Receipts stay structured synthetic evidence. Upload/OCR and real provider verification remain optional; business inbox, case/event recording and tester isolation are required.
 - Re-estimate effort after Phase 1 integration/model behavior is observed; no fixed delivery date is promised.
 

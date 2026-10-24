@@ -1,14 +1,22 @@
 import { z } from "zod";
 import { localDate } from "../time";
 import { PaymentProposal, proposalIsCurrent } from "./options";
-import { SimulationOutcome, type PaymentAgreement, type PaymentOperation } from "./payments";
+import { SimulationOutcome, type FinancialDecision, type PaymentAgreement, type PaymentOperation } from "./payments";
+import type { LessonInstruction } from "./learning";
 
-export const ROLE_VERSION = "v2-phase3b-2";
+export const ROLE_VERSION = "v2-phase4-1";
 
 const CommandIdentity = { id: z.uuid(), caseId: z.string().regex(/^[a-z-]{1,60}$/) };
 const Revision = z.number().int().nonnegative();
 export const CorrectionRole = z.enum(["customer", "business_verification", "account_resolution", "reviewer"]);
+const FinancialEvidence = { note: z.string().trim().min(10).max(1200), evidenceReference: z.string().trim().min(1).max(80) };
 export const CaseCommand = z.discriminatedUnion("action", [
+  z.object({ ...CommandIdentity, action: z.literal("approve_credit"), revision: Revision, targetAuditId: z.uuid(), amountCents: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), ...FinancialEvidence }).strict(),
+  z.object({ ...CommandIdentity, action: z.literal("approve_extension"), revision: Revision, sourceMessageId: z.string().min(1).max(100), ...FinancialEvidence }).strict(),
+  z.object({ ...CommandIdentity, action: z.literal("reverse_receipt"), revision: Revision, receiptId: z.string().min(1).max(100), ...FinancialEvidence }).strict(),
+  z.object({ ...CommandIdentity, action: z.literal("reconcile_record"), revision: Revision, paymentId: z.string().min(1).max(100), outcome: z.enum(["succeeded", "failed"]), ...FinancialEvidence }).strict(),
+  z.object({ ...CommandIdentity, action: z.literal("approve_recognition"), revision: Revision, targetAuditId: z.uuid(), ...FinancialEvidence }).strict(),
+  z.object({ ...CommandIdentity, action: z.literal("reconcile_payment"), revision: Revision, operationId: z.uuid(), outcome: z.enum(["succeeded", "failed"]), ...FinancialEvidence }).strict(),
   z.object({ ...CommandIdentity, action: z.literal("confirm_plan"), revision: Revision, proposal: PaymentProposal }).strict(),
   z.object({ ...CommandIdentity, action: z.literal("simulate_payment"), revision: Revision, agreementId: z.uuid(), outcome: SimulationOutcome }).strict(),
   z.object({ ...CommandIdentity, action: z.enum(["customer", "business", "retry", "takeover", "resume"]), text: z.string().trim().min(1).max(1800).optional(), requestId: z.uuid().optional() }).strict(),
@@ -54,7 +62,7 @@ export type Draft = z.infer<typeof Draft>;
 export const Review = z.object({ accepted: z.boolean(), reasons: z.array(z.string().max(300)).max(6) }).strict();
 
 export type Message = { id: string; channel: "customer" | "business"; speaker: "customer" | "business" | "agent"; text: string; at: string; requestId?: string; disposition?: "late"; origin?: "synthetic_opening" | "operator_revision" };
-export type Payment = { id: string; invoiceId: string; amountCents: number; date: string; status: "settled" | "pending"; includedInBalance: boolean; provenance?: "business_confirmation" | "simulated_operation"; businessMessageId?: string; requestId?: string; reference?: string | null; operationId?: string; agreementId?: string };
+export type Payment = { id: string; invoiceId: string; amountCents: number; date: string; status: "settled" | "pending"; includedInBalance: boolean; provenance?: "business_confirmation" | "simulated_operation" | "operator_decision"; businessMessageId?: string; requestId?: string; reference?: string | null; operationId?: string; agreementId?: string; decisionId?: string; reversedBy?: string; reconciledBy?: string };
 export type CaseFacts = {
   id: string; businessId: string; businessName: string; customer: string; invoiceId: string;
   balanceCents: number; balanceAsOf: string; sourceVersion: string; timezone: "America/Denver";
@@ -66,8 +74,9 @@ export type CaseFacts = {
 };
 export type Investigation = {
   facts: CaseFacts; messages: Message[]; now: string; verification: Verification | null; requestId?: string | null; caseUpdates?: CaseUpdate[];
-  agreements?: PaymentAgreement[]; operations?: PaymentOperation[]; paymentAction?: { kind: "agreement_confirmed" | "payment_attempted"; id: string };
+  agreements?: PaymentAgreement[]; operations?: PaymentOperation[]; financialDecisions?: FinancialDecision[]; paymentAction?: { kind: "agreement_confirmed" | "payment_attempted" | "financial_decided"; id: string };
   operatorFeedback?: { correctionId: string; targetAuditId: string; targetRole: z.infer<typeof CorrectionRole>; text: string; original: InvestigationResult };
+  lessons?: LessonInstruction[];
 };
 export type Activity = { role: "customer" | "business_verification" | "account_resolution" | "reviewer"; action: string; summary: string };
 export type InvestigationResult = {

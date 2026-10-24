@@ -6,6 +6,9 @@ import { projectEnv } from "../../src/lib/project-env";
 import { beginCommand, budgetUsage, closeV2Pool, commitResult, createWorkspace, failRun, initializeV2, readWorkspace, recordLive, reserveLive, resetWorkspace, startLive, v2Pool, type Job } from "../../src/lib/v2/store";
 import { handleV2 } from "../../src/lib/v2/http";
 import * as store from "../../src/lib/v2/store";
+import { beginLearning, completeLearning, reserveLearningCall } from "../../src/lib/v2/store";
+import { EVALUATION_VERSION, activeLessons, type LearningEvaluation, type LearningJob, type ProposedLesson } from "../../src/lib/v2/learning";
+import { MODEL } from "../../src/lib/v2/model";
 import type { InvestigationResult, Verification } from "../../src/lib/v2/contracts";
 
 // All storage/API paths run unchanged; only the connection targets a dedicated test database.
@@ -28,6 +31,154 @@ const approved = (reply = "Your promise was recorded. No payment was received.")
 const verification: Verification = { claimMessageId: "placeholder", outcome: "awaiting_business", businessMessage: "Please confirm payment amount, effective date, invoice and settlement status.", summary: "Awaiting the business", amountCents: null, paymentDate: null, invoiceId: null, reference: null, settlementStatus: "unknown", missingFacts: ["amount", "date", "invoice", "status"] };
 const c = async (token: string) => (await readWorkspace(token)).cases["late-payment"];
 const requireJob = (job: Job | null): Job => { if (!job) throw new Error("Expected a new job"); return job; };
+const requireLearning = (job: LearningJob | null): LearningJob => { if (!job) throw new Error("Expected a learning job"); return job; };
+const lessonProposal: ProposedLesson = { reusable: true, diagnosis: "instructions", focus: "invoice_clarity", rationale: "The owner wants the current invoice identified in financial communication.", instruction: "Name the current invoice in financial replies; never infer payment receipt from a claim." };
+async function learningCase(role: "customer" | "reviewer" = "customer") {
+  const { token, original } = await correctionCase();
+  const correctionId = randomUUID();
+  await beginCommand(token, { id: correctionId, caseId: "late-payment", action: "correct", revision: original.revision, targetAuditId: original.audit.at(-1)!.id, targetRole: role, text: "Name the invoice in financial replies, preserving all evidence and financial safety checks." });
+  const state = await c(token), value = { id: randomUUID(), action: "propose_lesson" as const, caseId: "late-payment", revision: state.revision, targetAuditId: original.audit.at(-1)!.id, targetRole: role, scope: "scenario" as const, correctionId };
+  const job = requireLearning(await beginLearning(token, value));
+  return { token, value, job, original: state };
+}
+function qualifyingReport(job: LearningJob, provenance: "live" | "scripted" = "live"): LearningEvaluation {
+  return { version: EVALUATION_VERSION, model: MODEL, provenance, at: new Date().toISOString(), baseCandidateId: job.candidate.baseCandidateId, eligible: true, reason: "A simulated test fixture for the internal state contract", calls: 8,
+    rows: ["target", "target", "regression", "safety"].map((category, i) => ({ id: `check-${i}`, category: category as "target" | "regression" | "safety", baselinePassed: i > 0, candidatePassed: true, baselineCalls: 1, candidateCalls: 1, baseline: null, candidate: null })) };
+}
+async function evaluateFixture(token: string, candidateId: string, provenance: "live" | "scripted" = "live") {
+  const state = (await readWorkspace(token)).learning!;
+  const job = requireLearning(await beginLearning(token, { id: randomUUID(), action: "evaluate_lesson", candidateId, learningRevision: state.revision }));
+  await completeLearning(token, job, qualifyingReport(job, provenance)); return job;
+}
+async function learningDecision(token: string, candidateId: string, action: "activate_lesson" | "rollback_lesson" | "reject_lesson" = "activate_lesson") {
+  return beginLearning(token, { id: randomUUID(), action, candidateId, learningRevision: (await readWorkspace(token)).learning!.revision, note: "Inspected paired outputs and checked target, regression and safety evidence." });
+}
+
+test("learning proposal is sourced from saved corrections, isolated and idempotent without financial/chat effects", async () => {
+  const { token, value, job, original } = await learningCase();
+  expect(await beginLearning(token, value)).toBeNull();
+  await completeLearning(token, job, lessonProposal); await closeV2Pool();
+  const view = await readWorkspace(token), saved = view.cases["late-payment"];
+  expect(saved.messages).toEqual(original.messages); expect(saved.facts).toEqual(original.facts); expect(saved.turns).toBe(original.turns);
+  expect(view.learning!.candidates[0]).toMatchObject({ status: "ready", sourceAuditId: value.targetAuditId, correctionId: value.correctionId, proposal: lessonProposal });
+  const other = await createWorkspace(); expect((await readWorkspace(other.token)).learning).toBeUndefined();
+  await expect(beginLearning(other.token, { id: randomUUID(), action: "evaluate_lesson", learningRevision: 0, candidateId: value.id })).rejects.toMatchObject({ status: 404 });
+});
+
+test("evaluated activation affects subsequent scoped jobs, pins versions, and rollback retains evidence", async () => {
+  const { token, job } = await learningCase(); await completeLearning(token, job, lessonProposal); await evaluateFixture(token, job.candidate.id);
+  await learningDecision(token, job.candidate.id); await beginCommand(token, command("resume"));
+  const run = requireJob(await beginCommand(token, command("customer", "What is my balance?")));
+  expect(run.input.lessons?.map((l) => l.id)).toEqual([job.candidate.id]);
+  await learningDecision(token, job.candidate.id, "rollback_lesson");
+  await commitResult(token, run, approved("The balance remains $129 for INV-101."));
+  const view = await readWorkspace(token);
+  expect(view.cases["late-payment"].audit.at(-1)?.lessonVersions).toEqual([job.candidate.id]);
+  expect(view.learning!.active).toEqual([]); expect(view.learning!.history.map((h) => h.action)).toEqual(["activate_lesson", "rollback_lesson"]);
+  const next = requireJob(await beginCommand(token, command("customer", "And now?"))); expect(next.input.lessons).toEqual([]);
+  expect(activeLessons(view.learning, view.cases["cedar-late-payment"].facts)).toEqual([]);
+});
+
+test("an obsolete comparison requires the declared current suite and retains its original report", async () => {
+  const { token, job } = await learningCase(); await completeLearning(token, job, lessonProposal); await evaluateFixture(token, job.candidate.id);
+  await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=jsonb_set(data,'{learning,candidates,0,evaluation,version}',to_jsonb($1::text))", ["learning-evals-1"]);
+  await expect(learningDecision(token, job.candidate.id)).rejects.toThrow("live-evaluated");
+  await evaluateFixture(token, job.candidate.id);
+  const candidate = (await readWorkspace(token)).learning!.candidates[0];
+  expect(candidate.evaluation?.version).toBe(EVALUATION_VERSION); expect(candidate.evaluationHistory?.[0].version).toBe("learning-evals-1");
+  await learningDecision(token, job.candidate.id);
+  await expect(learningDecision(token, job.candidate.id, "reject_lesson")).rejects.toThrow("Roll back");
+  await learningDecision(token, job.candidate.id, "rollback_lesson"); await learningDecision(token, job.candidate.id, "reject_lesson");
+  expect((await readWorkspace(token)).learning!.candidates[0].status).toBe("rejected");
+});
+
+test("a changed active baseline cannot activate an older evaluated candidate", async () => {
+  const { token, job } = await learningCase(); await completeLearning(token, job, lessonProposal); await evaluateFixture(token, job.candidate.id);
+  const state = (await readWorkspace(token)).learning!, replacement = { ...state.candidates[0], id: randomUUID(), status: "active" as const };
+  state.candidates.push(replacement); state.active = [{ scope: replacement.scope, candidateId: replacement.id }];
+  await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=jsonb_set(data,'{learning}',$1::jsonb)", [JSON.stringify(state)]);
+  await expect(learningDecision(token, job.candidate.id)).rejects.toThrow("live-evaluated");
+});
+
+test("rollback restores base rather than reactivating an obsolete prior lesson", async () => {
+  const { token, job, value } = await learningCase(); await completeLearning(token, job, lessonProposal); await evaluateFixture(token, job.candidate.id); await learningDecision(token, job.candidate.id);
+  const next = requireLearning(await beginLearning(token, { ...value, id: randomUUID(), revision: (await c(token)).revision }));
+  await completeLearning(token, next, lessonProposal); await evaluateFixture(token, next.candidate.id); await learningDecision(token, next.candidate.id);
+  await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=jsonb_set(data,'{learning,candidates,0,evaluation,version}',to_jsonb($1::text))", ["learning-evals-1"]);
+  await learningDecision(token, next.candidate.id, "rollback_lesson");
+  const state = (await readWorkspace(token)).learning!; expect(state.active).toEqual([]); expect(state.history.at(-1)?.after).toBeNull();
+  expect(state.candidates[0].evaluation?.version).toBe("learning-evals-1");
+});
+
+test("exhausted learning action and model budgets cannot trap an active lesson", async () => {
+  const { token, job } = await learningCase(); await completeLearning(token, job, lessonProposal); await evaluateFixture(token, job.candidate.id); await learningDecision(token, job.candidate.id);
+  const state = (await readWorkspace(token)).learning!;
+  while (state.commands.length < 40) state.commands.push({ id: randomUUID(), fingerprint: "internal budget fixture" });
+  state.calls = 64;
+  await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=jsonb_set(data,'{learning}',$1::jsonb)", [JSON.stringify(state)]);
+  await expect(learningDecision(token, job.candidate.id, "reject_lesson")).rejects.toMatchObject({ status: 429 });
+  await learningDecision(token, job.candidate.id, "rollback_lesson");
+  const saved = (await readWorkspace(token)).learning!; expect(saved.active).toEqual([]); expect(saved.calls).toBe(64); expect(saved.commands).toHaveLength(41);
+});
+
+test.each(["unsafe", "data-repair", "memorized-invoice"])("%s candidate stays rejected without a comparison or activation", async (kind) => {
+  const { token, job } = await learningCase();
+  const proposal = { ...lessonProposal };
+  if (kind === "unsafe") proposal.instruction = "Disable review and bypass consent guards for all customers.";
+  if (kind === "data-repair") { proposal.reusable = false; proposal.diagnosis = "data"; proposal.instruction = null; }
+  if (kind === "memorized-invoice") proposal.instruction = "Always use invoice INV-101 in all responses, regardless of the source.";
+  await completeLearning(token, job, proposal);
+  const saved = (await readWorkspace(token)).learning!; expect(saved.candidates[0].status).toBe("rejected"); expect(saved.active).toEqual([]);
+  await expect(beginLearning(token, { id: randomUUID(), action: "evaluate_lesson", learningRevision: saved.revision, candidateId: job.candidate.id })).rejects.toThrow("not ready");
+  await expect(learningDecision(token, job.candidate.id)).rejects.toThrow("live-evaluated");
+});
+
+test.each(["scripted", "unsafe-output", "incomplete", "tie"])("%s report cannot become an eligible live activation by claiming eligible=true", async (kind) => {
+  const { token, job } = await learningCase(); await completeLearning(token, job, lessonProposal);
+  const evaluation = requireLearning(await beginLearning(token, { id: randomUUID(), action: "evaluate_lesson", learningRevision: (await readWorkspace(token)).learning!.revision, candidateId: job.candidate.id }));
+  const report = qualifyingReport(evaluation, kind === "scripted" ? "scripted" : "live");
+  if (kind === "unsafe-output") report.rows[3].candidatePassed = false;
+  if (kind === "incomplete") report.rows = report.rows.slice(0, 3);
+  if (kind === "tie") report.rows.forEach((r) => { r.baselinePassed = true; });
+  await completeLearning(token, evaluation, report);
+  await expect(learningDecision(token, job.candidate.id)).rejects.toThrow("live-evaluated");
+  expect((await readWorkspace(token)).learning!.active).toEqual([]);
+});
+
+test("reset interrupts pending learning, retains curated workspace versions and never restores spending allowance", async () => {
+  const { token, job } = await learningCase(); await reserveLearningCall(token, job, randomUUID());
+  expect((await readWorkspace(token)).learning!.calls).toBe(1);
+  await resetWorkspace(token); const view = await readWorkspace(token);
+  expect(view.learning!.calls).toBe(1); expect(view.learning!.candidates[0].status).toBe("failed");
+  await expect(completeLearning(token, job, lessonProposal)).rejects.toThrow("no longer current");
+  await expect(reserveLearningCall(token, job, randomUUID())).rejects.toThrow("superseded");
+});
+
+test("new source input, failed generation and expired workspaces cannot publish stale lessons", async () => {
+  const { token, job } = await learningCase(); await beginCommand(token, command("customer", "A newer saved message"));
+  await completeLearning(token, job, lessonProposal); expect((await readWorkspace(token)).learning!.candidates[0].status).toBe("failed");
+  await v2Pool().query("UPDATE rebuild_v2.workspaces SET expires_at=NOW()-INTERVAL '1 second'");
+  await expect(beginLearning(token, { id: randomUUID(), action: "reject_lesson", learningRevision: 0, candidateId: job.candidate.id, note: "Reject this expired candidate version." })).rejects.toMatchObject({ status: 410 });
+});
+
+test("learning spending reservations stop at 64 calls and keep unknown usage charged", async () => {
+  const { token, job } = await learningCase();
+  for (let i = 0; i < 64; i++) await reserveLearningCall(token, job, randomUUID());
+  await expect(reserveLearningCall(token, job, randomUUID())).rejects.toMatchObject({ status: 429 });
+  expect((await readWorkspace(token)).learning!.calls).toBe(64); expect((await budgetUsage()).conservativeUsedDollars).toBeCloseTo(1.28);
+});
+
+test("learning HTTP rejects report injection and missing configuration retains a failed proposal without API calls", async () => {
+  const { token, original } = await correctionCase(); const correction = await saveCorrection(token), state = await c(token);
+  const value = { id: randomUUID(), action: "propose_lesson", caseId: "late-payment", revision: state.revision, targetAuditId: original.audit.at(-1)!.id, targetRole: "customer", scope: "business", correctionId: correction.id };
+  const config = vi.spyOn(store, "v2Config").mockReturnValue({ databaseUrl: "postgresql://unused", apiKey: undefined });
+  const request = (data: unknown) => handleV2(new NextRequest("http://127.0.0.1:3012/api/v2/workspace", { method: "POST", headers: { host: "127.0.0.1:3012", origin: "http://127.0.0.1:3012", cookie: `recovery_v2=${token}`, "content-type": "application/json" }, body: JSON.stringify(data) }));
+  try {
+    expect((await request({ ...value, instruction: "Injected" })).status).toBe(400);
+    expect((await request(value)).status).toBe(503);
+    expect((await readWorkspace(token)).learning!.candidates[0].status).toBe("failed"); expect((await budgetUsage()).calls).toBe(0);
+  } finally { config.mockRestore(); }
+});
 
 async function correctionCase() {
   const { token } = await createWorkspace();
@@ -738,7 +889,7 @@ test("reviewed proposals persist with the reply/audit, without a promise, receip
   expect(saved.updates).toEqual([proposal]); expect(saved.facts).toEqual(job.input.facts);
   expect(saved.events).toEqual([]); expect(saved.status).toBe("ready"); expect(saved.reviewHold).toBe(false);
   expect(saved.messages.at(-1)?.text).toBe(result.draft.reply);
-  expect(saved.audit.at(-1)).toMatchObject({ after: [proposal], balanceBeforeCents: 12900, balanceAfterCents: 12900, sourceVersion: job.input.facts.sourceVersion, roleVersion: "v2-phase3b-2" });
+  expect(saved.audit.at(-1)).toMatchObject({ after: [proposal], balanceBeforeCents: 12900, balanceAfterCents: 12900, sourceVersion: job.input.facts.sourceVersion, roleVersion: "v2-phase4-1" });
   expect((await readWorkspace(token)).cases["cedar-late-payment"].updates).toEqual([]);
   expect((await c((await createWorkspace()).token)).updates).toEqual([]);
 });
@@ -792,6 +943,168 @@ async function confirmedPaymentCase(method: "card" | "cash" = "card", tomorrow =
   await commitResult(scenario.token, job, approved("Your simulated plan is confirmed. No payment was received."));
   return { ...scenario, confirm };
 }
+
+async function reconciliationCase(outcome: "pending" | "unknown" = "unknown") {
+  const { token } = await confirmedPaymentCase();
+  const job = requireJob(await beginCommand(token, await payCommand(token, outcome)));
+  await commitResult(token, job, approved("Operator reconciliation is required; no receipt saved."));
+  await beginCommand(token, command("takeover"));
+  const state = await c(token);
+  const value = { id: randomUUID(), caseId: "late-payment", action: "reconcile_payment" as const, revision: state.revision, operationId: state.operations![0].id, outcome: "succeeded" as const, note: "Checked synthetic settlement evidence for this exact attempt.", evidenceReference: "settlement-demo" };
+  return { token, state, value };
+}
+
+async function operatorRecognitionCase() {
+  const { token } = await createWorkspace(), caseId = "cedar-late-payment";
+  const claim = requireJob(await beginCommand(token, { ...command("customer", "I paid $50 today for CED-201"), caseId }));
+  const date = localDate(new Date(claim.input.now), "America/Denver");
+  const pending: Verification = { ...verification, claimMessageId: claim.id, amountCents: 5000, invoiceId: "CED-201", paymentDate: date, businessMessage: `Did $50 settle today ${date} for CED-201?` };
+  await commitResult(token, claim, { ...approved("Checking the business"), verification: pending });
+  const requestId = (await readWorkspace(token)).cases[caseId].requestId!;
+  const reply = requireJob(await beginCommand(token, { ...command("business", "Yes"), caseId, requestId }));
+  await commitResult(token, reply, { ...approved("Business confirmation needs operator approval before the balance changes."), draft: { reply: "The business confirms $50; an operator must approve recording it.", needsOperator: true }, verification: { ...pending, outcome: "business_confirmed", businessMessage: null, settlementStatus: "settled", missingFacts: [] } });
+  await beginCommand(token, { ...command("takeover"), caseId });
+  const state = (await readWorkspace(token)).cases[caseId];
+  const value = { id: randomUUID(), caseId, action: "approve_recognition" as const, revision: state.revision, targetAuditId: state.audit.at(-1)!.id, note: "Reviewed the linked business confirmation against this invoice.", evidenceReference: "operator-review-demo" };
+  return { token, state, value };
+}
+
+test.each(["pending", "unknown"] as const)("operator reconciles %s once, preserving original history and a single durable receipt", async (prior) => {
+  const { token, state, value } = await reconciliationCase(prior);
+  const writes = await Promise.all([beginCommand(token, value), beginCommand(token, value)]);
+  expect(writes).toEqual([null, null]); await closeV2Pool();
+  let saved = await c(token);
+  expect(saved.operations).toEqual(state.operations); expect(saved.financialDecisions).toHaveLength(1);
+  expect(saved.financialDecisions![0]).toMatchObject({ targetId: value.operationId, outcome: "succeeded", balanceBeforeCents: 12900, balanceAfterCents: 6450 });
+  expect(saved.facts.payments).toHaveLength(1); expect(saved.facts.payments[0]).toMatchObject({ decisionId: value.id, operationId: value.operationId, provenance: "operator_decision" });
+  expect(saved).toMatchObject({ takeover: true, status: "taken_over", turns: state.turns, lastRun: state.lastRun, messages: state.messages });
+  expect((await budgetUsage()).calls).toBe(0);
+  await expect(beginCommand(token, { ...value, id: randomUUID(), revision: saved.revision })).rejects.toThrow("unresolved");
+  await expect(beginCommand(token, { ...value, outcome: "failed" })).rejects.toThrow("different content");
+  await beginCommand(token, command("resume"));
+  const retry = requireJob(await beginCommand(token, command("retry")));
+  expect(retry.input.financialDecisions![0].id).toBe(value.id); expect(retry.input.paymentAction).toEqual({ kind: "financial_decided", id: value.id });
+  await failRun(token, retry, { kind: "connection", message: "Scripted explanation failure" });
+  expect((await c(token)).facts.payments).toHaveLength(1);
+  const again = requireJob(await beginCommand(token, command("retry")));
+  await commitResult(token, again, approved("The operator recorded $64.50; $64.50 remains."));
+  saved = await c(token); expect(saved.reviewHold).toBe(false); expect(saved.facts.balanceCents).toBe(6450);
+  expect(saved.audit.at(-1)?.paymentAction).toEqual({ kind: "financial_decided", id: value.id });
+  await expect(beginCommand(token, await payCommand(token))).rejects.toThrow("future payments");
+});
+
+test("not-settled reconciliation permits only a later explicit new attempt, never an implicit retry", async () => {
+  const { token, value } = await reconciliationCase();
+  await beginCommand(token, { ...value, outcome: "failed" });
+  let saved = await c(token); expect(saved.facts.balanceCents).toBe(12900); expect(saved.facts.payments).toEqual([]);
+  await beginCommand(token, command("resume"));
+  const pay = requireJob(await beginCommand(token, await payCommand(token)));
+  await commitResult(token, pay, approved("A distinct explicit simulated payment succeeded."));
+  saved = await c(token); expect(saved.operations?.map((op) => op.outcome)).toEqual(["unknown", "succeeded"]);
+  expect(saved.facts.payments).toHaveLength(1); expect(saved.facts.balanceCents).toBe(6450);
+});
+
+test("Cedar operator recognition uses reviewed business evidence, saves no new charge and survives explicit explanation", async () => {
+  const { token, state, value } = await operatorRecognitionCase();
+  expect(await beginCommand(token, value)).toBeNull();
+  const saved = (await readWorkspace(token)).cases[value.caseId];
+  expect(saved.facts.balanceCents).toBe(13500); expect(saved.facts.recognitionPolicy).toBe("operator_review");
+  expect(saved.financialDecisions![0]).toMatchObject({ kind: "recognition_approved", targetId: value.targetAuditId, balanceBeforeCents: 18500, balanceAfterCents: 13500 });
+  expect(saved.facts.payments[0]).toMatchObject({ provenance: "operator_decision", requestId: state.requestId, decisionId: value.id });
+  expect(saved.operations).toBeUndefined(); expect(saved.messages).toEqual(state.messages); expect(saved.audit).toEqual(state.audit);
+  expect((await c(token)).facts.balanceCents).toBe(12900);
+  await expect(beginCommand(token, { ...value, id: randomUUID(), revision: saved.revision })).rejects.toThrow();
+  await beginCommand(token, { ...command("resume"), caseId: value.caseId });
+  const retry = requireJob(await beginCommand(token, { ...command("retry"), caseId: value.caseId }));
+  await commitResult(token, retry, { ...approved("The operator recorded the business-confirmed $50; $135 remains."), verification: saved.verification });
+  expect((await readWorkspace(token)).cases[value.caseId].facts.payments).toHaveLength(1);
+});
+
+test.each(["not-taken-over", "stale", "stopped", "foreign-operation", "changed-source", "reset", "expired"])("%s operator reconciliation cannot mutate the ledger", async (kind) => {
+  const { token, state, value } = await reconciliationCase();
+  if (kind === "not-taken-over") await beginCommand(token, command("resume"));
+  if (kind === "stale") value.revision--;
+  if (kind === "stopped") await beginCommand(token, command("customer", "STOP"));
+  if (kind === "foreign-operation") value.operationId = randomUUID();
+  if (kind === "changed-source") await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=jsonb_set(data,'{cases,late-payment,facts,sourceVersion}',to_jsonb($1::text))", ["changed"]);
+  if (kind === "reset") await resetWorkspace(token);
+  if (kind === "expired") await v2Pool().query("UPDATE rebuild_v2.workspaces SET expires_at=NOW()-INTERVAL '1 second'");
+  await expect(beginCommand(token, value)).rejects.toThrow();
+  if (kind !== "expired") { const saved = await c(token); expect(saved.facts.balanceCents).toBe(state.facts.balanceCents); expect(saved.facts.payments).toEqual([]); expect(saved.financialDecisions).toBeUndefined(); }
+});
+
+test.each(["new-message", "foreign-audit", "rejected-review", "incomplete-evidence"])("%s cannot authorize operator recognition", async (kind) => {
+  const { token, value } = await operatorRecognitionCase();
+  if (kind === "new-message") { await beginCommand(token, { ...command("customer", "That confirmation is incorrect"), caseId: value.caseId }); value.revision = (await readWorkspace(token)).cases[value.caseId].revision; }
+  if (kind === "foreign-audit") value.targetAuditId = randomUUID();
+  if (kind === "rejected-review") await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=jsonb_set(data,'{cases,cedar-late-payment,lastReview,review,accepted}','false')");
+  if (kind === "incomplete-evidence") await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=jsonb_set(data,'{cases,cedar-late-payment,verification,outcome}',to_jsonb($1::text))", ["pending"]);
+  await expect(beginCommand(token, value)).rejects.toThrow();
+  const saved = (await readWorkspace(token)).cases[value.caseId]; expect(saved.facts.balanceCents).toBe(18500); expect(saved.facts.payments).toEqual([]);
+});
+
+test("different concurrent reconciliation IDs cannot settle the same attempt twice", async () => {
+  const { token, value } = await reconciliationCase();
+  const results = await Promise.allSettled([beginCommand(token, value), beginCommand(token, { ...value, id: randomUUID() })]);
+  expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+  const saved = await c(token); expect(saved.financialDecisions).toHaveLength(1); expect(saved.facts.payments).toHaveLength(1); expect(saved.facts.balanceCents).toBe(6450);
+});
+
+test.each(["rejected", "unsafe"])("%s explanation cannot undo or replay an operator receipt", async (kind) => {
+  const { token, value } = await reconciliationCase(); await beginCommand(token, value); await beginCommand(token, command("resume"));
+  const job = requireJob(await beginCommand(token, command("retry"))), result = approved("Incorrect explanation");
+  if (kind === "rejected") { result.review = { accepted: false, reasons: ["Wrong outcome"] }; await commitResult(token, job, result); }
+  else {
+    result.resolution = { summary: "Replay a payment offer", needsOperator: false, updates: [job.input.agreements![0].proposal] };
+    await expect(commitResult(token, job, result)).rejects.toThrow("assessment cannot");
+  }
+  const saved = await c(token); expect(saved.facts.balanceCents).toBe(6450); expect(saved.facts.payments).toHaveLength(1); expect(saved.messages.at(-1)?.text).not.toBe(result.draft.reply);
+});
+
+test("financial HTTP actions need the scoped session/origin and save without model credentials or calls", async () => {
+  const { token, value } = await reconciliationCase(), other = await createWorkspace();
+  const config = vi.spyOn(store, "v2Config").mockReturnValue({ databaseUrl: "postgresql://unused", apiKey: undefined });
+  const request = (session: string, origin = "http://127.0.0.1:3012", data: unknown = value) => handleV2(new NextRequest("http://127.0.0.1:3012/api/v2/workspace", { method: "POST", headers: { host: "127.0.0.1:3012", origin, cookie: `recovery_v2=${session}`, "content-type": "application/json" }, body: JSON.stringify(data) }));
+  try {
+    expect((await request(token, "https://foreign.test")).status).toBe(403);
+    expect((await request(other.token)).status).toBe(409);
+    expect((await request(token, undefined, { ...value, amountCents: 1 })).status).toBe(400);
+    expect((await c(token)).facts.payments).toEqual([]);
+    expect((await request(token)).status).toBe(200); expect((await request(token)).status).toBe(200);
+    expect((await c(token)).facts.payments).toHaveLength(1); expect((await budgetUsage()).calls).toBe(0);
+  } finally { config.mockRestore(); }
+});
+
+test("operator credit and extension decisions are audited without inventing recovered money", async () => {
+  const { token, original } = await correctionCase(); await beginCommand(token, command("takeover"));
+  let state = await c(token);
+  const credit = { id: randomUUID(), caseId: "late-payment", action: "approve_credit" as const, targetAuditId: original.audit.at(-1)!.id, revision: state.revision, amountCents: 1000, note: "Reviewed and approved a synthetic customer credit.", evidenceReference: "credit-demo" };
+  await beginCommand(token, credit); expect(await beginCommand(token, credit)).toBeNull(); state = await c(token);
+  expect(state.facts.balanceCents).toBe(11900); expect(state.facts.payments).toEqual([]); expect(state.financialDecisions![0].kind).toBe("credit_approved");
+  await expect(beginCommand(token, { ...credit, id: randomUUID(), revision: state.revision })).rejects.toThrow("latest reviewed evidence and source");
+  await beginCommand(token, command("resume")); const job = requireJob(await beginCommand(token, command("customer", "May I have until tomorrow?")));
+  const result = approved("Your extension request is recorded for review."); result.resolution = { summary: "Extension requested", needsOperator: true, updates: [{ kind: "extension_requested", sourceMessageId: job.id, date: localDate(new Date(job.input.now), "America/Denver", 1) }] };
+  await commitResult(token, job, result); await beginCommand(token, command("takeover")); state = await c(token);
+  await beginCommand(token, { id: randomUUID(), caseId: "late-payment", action: "approve_extension", revision: state.revision, sourceMessageId: job.id, note: "Approved this exact synthetic extension request.", evidenceReference: "extension-demo" });
+  const saved = await c(token); expect(saved.financialDecisions?.map((d) => d.kind)).toEqual(["credit_approved", "extension_approved"]); expect(saved.facts.balanceCents).toBe(11900); expect(saved.facts.payments).toEqual([]);
+});
+
+test("receipt reversal restores balance exactly once and leaves the original operation and receipt trace", async () => {
+  const { token } = await confirmedPaymentCase(), job = requireJob(await beginCommand(token, await payCommand(token)));
+  await commitResult(token, job, approved("Receipt saved.")); await beginCommand(token, command("takeover")); const before = await c(token);
+  const value = { id: randomUUID(), caseId: "late-payment", action: "reverse_receipt" as const, revision: before.revision, receiptId: before.facts.payments[0].id, note: "Corrected this mistaken synthetic receipt with compensating entry.", evidenceReference: "reversal-demo" };
+  await beginCommand(token, value); await closeV2Pool(); const saved = await c(token);
+  expect(saved.facts.balanceCents).toBe(12900); expect(saved.operations).toEqual(before.operations); expect(saved.facts.payments[0]).toMatchObject({ id: value.receiptId, reversedBy: value.id });
+  expect(saved.financialDecisions![0]).toMatchObject({ kind: "receipt_reversed", balanceBeforeCents: 6450, balanceAfterCents: 12900 });
+  await expect(beginCommand(token, { ...value, id: randomUUID(), revision: saved.revision })).rejects.toThrow("unreversed local");
+});
+
+test("a source pending payment has separate operator settlement without altering another business", async () => {
+  const { token } = await createWorkspace(), caseId = "pending-payment"; await beginCommand(token, { ...command("takeover"), caseId });
+  const before = (await readWorkspace(token)).cases[caseId];
+  await beginCommand(token, { id: randomUUID(), caseId, action: "reconcile_record", revision: before.revision, paymentId: before.facts.payments[0].id, outcome: "succeeded", note: "Verified the synthetic source payment has settled.", evidenceReference: "source-settlement" });
+  const saved = await readWorkspace(token); expect(saved.cases[caseId].facts.balanceCents).toBe(0); expect(saved.cases[caseId].facts.payments).toHaveLength(2); expect(saved.cases["cedar-pending-payment"].facts.balanceCents).toBe(16000);
+});
 const payCommand = async (token: string, outcome: "succeeded" | "failed" | "pending" | "unknown" = "succeeded") => {
   const state = await c(token);
   return { id: randomUUID(), caseId: "late-payment", action: "simulate_payment" as const, revision: state.revision, agreementId: state.agreements!.at(-1)!.id, outcome };

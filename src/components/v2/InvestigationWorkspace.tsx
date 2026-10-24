@@ -7,6 +7,9 @@ import type { CaseState, WorkspaceView } from "@/lib/v2/store";
 import BusinessDashboard, { CaseRecords } from "./BusinessDashboard";
 import OperatorCorrections, { PausedReplyNotice } from "./OperatorCorrections";
 import PaymentPanel from "./PaymentPanel";
+import FinancialReview from "./FinancialReview";
+import FinancialAdjustments from "./FinancialAdjustments";
+import LearningPanel from "./LearningPanel";
 import type { PaymentProposal } from "@/lib/v2/options";
 import type { SimulationOutcome } from "@/lib/v2/payments";
 import styles from "./workspace.module.css";
@@ -139,13 +142,13 @@ export default function InvestigationWorkspace() {
     return () => { reducedMotion.removeEventListener("change", cancel); cancel(); };
   }, [attention, caseId]);
 
-  async function act(action: string, text?: string, interrupt = false, correction: { revision?: number; targetAuditId?: string; targetRole?: string; correctionId?: string; proposal?: PaymentProposal; agreementId?: string; outcome?: SimulationOutcome } = {}) {
+  async function act(action: string, text?: string, interrupt = false, correction: { revision?: number; targetAuditId?: string; targetRole?: string; correctionId?: string; proposal?: PaymentProposal; agreementId?: string; outcome?: SimulationOutcome; operationId?: string; note?: string; evidenceReference?: string; amountCents?: number; paymentId?: string; receiptId?: string; sourceMessageId?: string; learningRevision?: number; candidateId?: string; scope?: "scenario" | "business" } = {}) {
     if (running.current && !interrupt) return false;
     if (interrupt) controller.current?.abort();
     running.current = true; setBusy(true); setWaitSeconds(0); setError("");
     const abort = new AbortController(); controller.current = abort;
     const control = action === "create" || action === "reset";
-    const fields = control ? { action } : { caseId, action, ...(text ? { text } : {}), ...(action === "business" ? { requestId: c?.requestId } : {}), ...correction };
+    const fields = control ? { action } : action.endsWith("_lesson") ? { action, ...(action === "propose_lesson" ? { caseId } : {}), ...correction } : { caseId, action, ...(text ? { text } : {}), ...(action === "business" ? { requestId: c?.requestId } : {}), ...correction };
     const serialized = JSON.stringify(fields);
     if (pending.current?.payload !== serialized) pending.current = { payload: serialized, id: crypto.randomUUID() };
     const command = control ? fields : { ...fields, id: pending.current.id };
@@ -226,7 +229,10 @@ export default function InvestigationWorkspace() {
           <div className={styles.paneHead}><div><h3 id="operator-title">Operator review</h3><p>{attention === "operator" ? "Your judgment is needed" : "Inspect saved evidence or take over"}</p></div><span className={styles.signal} data-handoff-anchor aria-hidden="true" /></div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm">Takeover pauses automatic replies. Resume allows a later message or retry. STOP stays in force.</p><button className={button} disabled={c.stopped} onClick={() => void act(c.takeover || c.reviewHold ? "resume" : "takeover", undefined, true)}>{c.takeover || c.reviewHold ? "Resume automatic replies" : "Take over this case"}</button></div>
           {c.lastReview && <details className={styles.technical}><summary>Review and evidence packet: {c.lastReview.review.accepted ? "accepted" : "blocked"}</summary><p className="mt-2">{c.lastReview.verification?.summary || "No business-verification findings were returned. See saved agent history for what was attempted."}</p>{c.lastReview.resolution && <p className="mt-2">{c.lastReview.resolution.summary}</p>}<ul className="mt-2 list-inside list-disc">{c.lastReview.review.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></details>}
+          <FinancialReview key={`financial-${caseId}`} c={c} now={workspace.observedAt ?? c.now} busy={processing} onDecide={({ action, ...fields }) => act(action, undefined, false, fields)} />
+          <FinancialAdjustments key={`adjustments-${caseId}`} c={c} busy={processing} onDecide={({ action, ...fields }) => act(action, undefined, false, fields)} />
           <OperatorCorrections key={caseId} c={c} busy={processing} onSave={({ text, ...correction }) => act("correct", text, false, correction)} onRetry={(correction) => act("retry_correction", undefined, false, correction)} />
+          <LearningPanel key={`learning-${caseId}`} c={c} state={workspace.learning} busy={processing} seconds={waitSeconds} onAction={({ action, ...fields }) => act(action, undefined, false, fields)} />
           <div className={styles.savedPanel}>
             <div><h4>Saved commitments and requests</h4><CaseRecords c={c} /></div>
             <details className={styles.technical}><summary>Saved agent history</summary>{c.activity.length ? <ol className="mt-2 space-y-2 text-sm">{c.activity.map((item, index) => <li key={index}><span className="font-medium">{item.role.replaceAll("_", " ")} / {item.action}</span>: {item.summary}</li>)}</ol> : <p className="mt-2 text-sm text-muted">No agent work has run. Opening or refreshing makes no model calls.</p>}</details>

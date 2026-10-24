@@ -4,6 +4,9 @@ import { AccountSourceError, syntheticSource } from "./source";
 import { boundedModel } from "./model";
 import { describeFailure } from "./failures";
 import { CaseCommand } from "./contracts";
+import { LearningCommand } from "./learning";
+import { proposeLesson, evaluateLesson } from "./learning-model";
+import { beginLearning, completeLearning, reserveLearningCall } from "./store";
 import { beginCommand, budgetUsage, commitResult, createWorkspace, failRun, readWorkspace, recordLive, reserveLive, resetWorkspace, startLive, V2Error, v2Config } from "./store";
 
 const COOKIE = "recovery_v2";
@@ -45,6 +48,24 @@ export async function handleV2(request: Request): Promise<Response> {
       }
       const created = await createWorkspace();
       return response({ workspace: created.view, budget: await budgetUsage() }, 201, `${COOKIE}=${created.token}; Path=/api/v2; Max-Age=86400; HttpOnly; SameSite=Strict`);
+    }
+    const learning = LearningCommand.safeParse(value);
+    if (learning.success) {
+      const job = await beginLearning(token, learning.data);
+      if (job) {
+        try {
+          const config = v2Config();
+          if (!config.apiKey) throw new V2Error(503, "Live model key is missing. Learning made no API call.");
+          const signal = AbortSignal.any([request.signal, AbortSignal.timeout(90_000)]);
+          const model = boundedModel({ apiKey: config.apiKey, reserve: (id) => reserveLearningCall(token, job, id), record: recordLive, signal, maxCalls: 32 });
+          const result = job.kind === "propose" ? await proposeLesson(job, model, signal) : await evaluateLesson(job, model, "live", signal);
+          await completeLearning(token, job, result);
+        } catch (error) {
+          await completeLearning(token, job, error instanceof Error ? error : new Error("Learning failed")).catch(() => {});
+          throw new V2Error(503, "Learning run failed or exceeded its limits. No lesson was activated; inspect saved candidate history.");
+        }
+      }
+      return response({ workspace: await readWorkspace(token), budget: await budgetUsage() });
     }
     const command = CaseCommand.safeParse(value);
     if (!command.success) throw new V2Error(400, "Invalid case action or message.");
