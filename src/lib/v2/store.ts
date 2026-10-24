@@ -11,7 +11,7 @@ import type { RunFailure } from "./failures";
 
 export class V2Error extends Error { constructor(public status: number, message: string) { super(message); } }
 export type PlannedEvent = { id: string; sourceMessageId: string; channel: "call" | "email"; date: string; window: string; timezone: string; state: "planned" | "superseded" | "blocked"; beyondExpiry: boolean };
-export type RunStep = { id: string; role: string; state: "started" | "completed"; at: string };
+export type RunStep = { id: string; role: string; state: "started" | "completed"; at: string; tools?: string[] };
 export type FinishedRun = { id: string; startedAt: string; finishedAt: string; durationMs: number; calls: number; steps: RunStep[]; outcome: "completed" | "blocked" | "failed" | "interrupted"; failure?: RunFailure };
 export type OperatorCorrection = NonNullable<Investigation["operatorFeedback"]> & { at: string; revision: number; runId?: string; outcome?: FinishedRun["outcome"]; result?: InvestigationResult };
 export type CaseState = Investigation & {
@@ -250,7 +250,7 @@ export async function commitResult(token: string, job: Job, result: Investigatio
     if (!result.review.accepted) { c.status = "needs_review"; return; }
     if ([result.draft.reply, result.verification?.businessMessage ?? ""].some((text) => findThreats(text).length > 0)) throw new V2Error(409, "Communication failed the preserved threat/false-claim guard.");
     if (result.verification) validateVerification(result.verification, job.input);
-    const updates = validateUpdates(result.resolution?.updates ?? [], { ...job.input, verification: result.verification });
+    const updates = validateUpdates(result.resolution?.updates ?? [], { ...job.input, facts: c.facts, now: c.now, verification: result.verification });
     if (job.input.operatorFeedback && updates.some((u) => u.kind === "payment_recognized")) throw new V2Error(409, "A correction retry cannot record or replay a payment. Use the normal evidence workflow.");
     if (updates.some((u) => u.kind === "payment_recognized") && (result.draft.needsOperator || result.resolution?.needsOperator)) throw new V2Error(409, "Operator approval is required before this payment can be recognized.");
     for (const update of updates) {
@@ -320,7 +320,7 @@ export async function startLive(call: Pick<ModelCall, "id" | "role">, scope: { t
     const c = data.cases[scope.job.caseId];
     if (!c || c.revision !== scope.job.revision || c.run?.id !== scope.job.id || c.stopped || c.takeover || c.reviewHold) throw new V2Error(409, "Run is no longer current.");
     c.run.activeCallId = call.id; c.run.activeRole = call.role ?? "unknown";
-    c.run.steps = [...(c.run.steps ?? []), { id: call.id, role: c.run.activeRole, state: "started" as const, at: new Date().toISOString() }].slice(-12);
+    c.run.steps = [...(c.run.steps ?? []), { id: call.id, role: c.run.activeRole, state: "started" as const, at: new Date().toISOString() }].slice(-40);
   });
 }
 
@@ -331,7 +331,7 @@ export async function recordLive(call: ModelCall, scope?: { token: string; job: 
     if (c?.run?.id !== scope.job.id || c.revision !== scope.job.revision || c.run.activeCallId !== call.id) return;
     c.run.calls = (c.run.calls ?? 0) + 1;
     c.run.lastCompletedRole = call.role;
-    c.run.steps = [...(c.run.steps ?? []), { id: call.id, role: call.role ?? "unknown", state: "completed" as const, at: new Date().toISOString() }].slice(-12);
+    c.run.steps = [...(c.run.steps ?? []), { id: call.id, role: call.role ?? "unknown", state: "completed" as const, at: new Date().toISOString(), tools: call.tools }].slice(-40);
     delete c.run.activeCallId; delete c.run.activeRole;
   });
   if (!call.usageKnown) return;

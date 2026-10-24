@@ -58,9 +58,9 @@ describe("V2 role and write boundaries", () => {
   });
   test("roles have only source, delegation or date tools; writes require reviewed proposals", () => {
     const agents = buildAgents(input, fakeModel(() => textResult({})));
-    expect(agents.customer.tools.map((t) => t.name)).toEqual(["read_case", "business_verification", "account_resolution"]);
+    expect(agents.customer.tools.map((t) => t.name)).toEqual(["read_case", "get_payment_options", "business_verification", "account_resolution"]);
     expect(agents.business.tools).toEqual([]);
-    expect(agents.account.tools.map((t) => t.name)).toEqual(["resolve_relative_date"]);
+    expect(agents.account.tools.map((t) => t.name)).toEqual(["resolve_relative_date", "calculate_payment_proposal"]);
     expect(agents.reviewer.tools).toEqual([]);
   });
   test("the same role definitions receive the selected business facts without another business's context", async () => {
@@ -74,7 +74,7 @@ describe("V2 role and write boundaries", () => {
     expect(requests).toHaveLength(2);
     for (const request of requests) {
       const context = JSON.stringify(request.input);
-      expect(context).toContain("Cedar Home Services"); expect(context).toContain("CED-204"); expect(context).toContain("operator_review"); expect(context).toContain("annual service-plan cancellation");
+      expect(context).toContain("Cedar Home Services"); expect(context).toContain("CED-204"); expect(context).toContain("operator_review"); expect(context).toContain("annual service-plan cancellation"); expect(context).toContain("cedar-options-1");
       expect(context).not.toContain("Northside Fitness"); expect(context).not.toContain("INV-101");
     }
   });

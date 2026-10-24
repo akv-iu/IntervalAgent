@@ -1,12 +1,17 @@
 import { formatCents } from "@/lib/format";
 import { scenarioName, statusNames } from "@/lib/v2/presentation";
 import type { CaseState, WorkspaceView } from "@/lib/v2/store";
+import { proposalIsCurrent } from "@/lib/v2/options";
 import styles from "./workspace.module.css";
 
-export function CaseRecords({ c }: { c: Pick<CaseState, "preferredChannel" | "updates" | "events"> }) {
+export function CaseRecords({ c }: { c: Pick<CaseState, "facts" | "now" | "preferredChannel" | "updates" | "events"> }) {
   return <>
     {c.preferredChannel && <p className="mt-2 text-sm">Current channel preference: {c.preferredChannel}.</p>}
-    {c.updates.length ? <ul className="mt-2 space-y-2 text-sm">{c.updates.map((update, index) => <li key={`${update.sourceMessageId}-${index}`}>{update.kind === "payment_recognized" ? `Business-confirmed payment: ${formatCents(update.amountCents)} on ${update.date}, ${update.invoiceId}. Applied to this simulated balance.` : update.kind === "promise" ? `Promise: ${formatCents(update.amountCents)} on ${update.date}. No payment received.` : update.kind === "extension_requested" ? `Extension requested to ${update.date}. Not approved.` : update.kind === "contact_preference" ? `Preference changed to ${update.channel}. No appointment scheduled.` : `${update.channel} requested: ${update.date}, ${update.window}.`}</li>)}</ul> : <p className="mt-2 text-sm text-muted">No reviewed updates saved yet.</p>}
+    {c.updates.length ? <ul className="mt-2 space-y-2 text-sm">{c.updates.map((update, index) => <li key={`${update.sourceMessageId}-${index}`}>{update.kind === "payment_proposed" ? <>
+      <p>Payment proposal · {c.updates.slice(index + 1).some((u) => u.kind === "payment_proposed") ? "Superseded" : proposalIsCurrent(update, c.facts, c.now) ? "Latest offer at last case update" : "Outdated; needs recalculation"}: {update.method.replaceAll("_", " ")}, {formatCents(update.balanceCents)} total.</p>
+      <ol className="ml-4 list-decimal">{update.schedule.map((part) => <li key={part.date}>{formatCents(part.amountCents)} on {part.date}</li>)}</ol>
+      <p>Not agreed. No payment received. No added fees or interest.</p>
+    </> : update.kind === "payment_recognized" ? `Business-confirmed payment: ${formatCents(update.amountCents)} on ${update.date}, ${update.invoiceId}. Applied to this simulated balance.` : update.kind === "promise" ? `Promise: ${formatCents(update.amountCents)} on ${update.date}. No payment received.` : update.kind === "extension_requested" ? `Extension requested to ${update.date}. Not approved.` : update.kind === "contact_preference" ? `Preference changed to ${update.channel}. No appointment scheduled.` : `${update.channel} requested: ${update.date}, ${update.window}.`}</li>)}</ul> : <p className="mt-2 text-sm text-muted">No reviewed updates saved yet.</p>}
     {c.events.map((event) => <p className="mt-2 text-sm" key={event.id}>{event.state}: {event.channel}, {event.date}, {event.window} ({event.timezone}). Not executed.{event.beyondExpiry ? " Planned window extends beyond this workspace's expiry." : ""}</p>)}
   </>;
 }

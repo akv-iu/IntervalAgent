@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { localDate } from "../time";
+import { PaymentProposal, proposalIsCurrent } from "./options";
 
-export const ROLE_VERSION = "v2-phase2d-1";
+export const ROLE_VERSION = "v2-phase3a-2";
 
 const CommandIdentity = { id: z.uuid(), caseId: z.string().regex(/^[a-z-]{1,60}$/) };
 const Revision = z.number().int().nonnegative();
@@ -16,6 +17,7 @@ export type CaseCommand = z.infer<typeof CaseCommand>;
 export const DateOnly = z.iso.date();
 const Text = z.string().min(1).max(1200);
 export const CaseUpdate = z.discriminatedUnion("kind", [
+  PaymentProposal,
   z.object({ kind: z.literal("promise"), amountCents: z.number().int().positive(), date: DateOnly, sourceMessageId: z.string() }).strict(),
   z.object({ kind: z.literal("extension_requested"), date: DateOnly, sourceMessageId: z.string() }).strict(),
   z.object({ kind: z.literal("contact_preference"), channel: z.enum(["call", "email"]), sourceMessageId: z.string() }).strict(),
@@ -71,10 +73,12 @@ export type InvestigationResult = {
 
 export function validateUpdates(updates: CaseUpdate[], input: Investigation): CaseUpdate[] {
   if (updates.filter((u) => u.kind === "payment_recognized").length > 1) throw new Error("Only one payment can be recognized per reviewed result");
+  if (updates.filter((u) => u.kind === "payment_proposed").length > 1 || (updates.some((u) => u.kind === "payment_proposed") && updates.some((u) => u.kind === "payment_recognized"))) throw new Error("Use one current proposal per result, separately from payment recognition");
   return updates.map((value) => {
     const update = CaseUpdate.parse(value);
     const source = input.messages.find((m) => m.id === update.sourceMessageId);
     if (!source || source.channel !== "customer" || source.speaker !== "customer") throw new Error("Update needs a customer source message");
+    if (update.kind === "payment_proposed" && !proposalIsCurrent(update, input.facts, input.now)) throw new Error("Proposal does not match current business policy, source, balance or calculated schedule");
     if (update.kind === "payment_recognized") {
       const v = input.verification;
       if (!v || v.outcome !== "business_confirmed") throw new Error("Recognition needs business confirmation");

@@ -21,6 +21,26 @@ test("completed and failed runtime remain inspectable without a current run or i
   expect(legacy).toContain("no saved run"); expect(legacy).not.toContain("completed model calls");
 });
 
+test("runtime groups start/completion into one row per call and shows requested tools", () => {
+  const run: NonNullable<CaseState["run"]> = { id: "run", revision: 1, startedAt: "2026-10-24T12:00:00Z", calls: 1, steps: [
+    { id: "calculate", role: "account_resolution", state: "started", at: "2026-10-24T12:00:01Z" },
+    { id: "calculate", role: "account_resolution", state: "completed", at: "2026-10-24T12:00:02Z", tools: ["calculate_payment_proposal"] },
+    { id: "findings", role: "account_resolution", state: "started", at: "2026-10-24T12:00:02Z" },
+  ] };
+  const html = renderToStaticMarkup(<RuntimeBox c={{ run }} seconds={2} />);
+  expect(html.match(/<li>/g)).toHaveLength(2);
+  expect(html).toContain("requested calculate payment proposal");
+  expect(html).toContain("Account Resolution: started"); expect(html).toContain("Account Resolution: completed");
+  expect(html).not.toContain("Earlier steps were not retained"); expect(html).toContain('tabindex="0"');
+});
+
+test("legacy truncated runtime reports the missing calls instead of implying the visible rows are the full run", () => {
+  const saved: FinishedRun = { id: "old-run", startedAt: "2026-10-23T12:00:00Z", finishedAt: "2026-10-23T12:00:06Z", durationMs: 6000, calls: 7, steps: [{ id: "last-call", role: "reviewer", state: "completed", at: "2026-10-23T12:00:06Z" }], outcome: "completed" };
+  const html = renderToStaticMarkup(<RuntimeBox c={{ run: null, lastRun: saved }} seconds={0} />);
+  expect(html).toContain("Showing 1 of 7 completed calls."); expect(html).toContain("Earlier steps were not retained");
+  expect(html).not.toContain("requested undefined");
+});
+
 test("the customer sees business outreach first and business-labelled replies, with their own response separate", () => {
   const at = new Date("2026-10-23T12:00:00Z"), facts = startingCases(at)[1];
   const messages: CaseState["messages"] = [openingMessage(facts, at), { id: "customer", channel: "customer", speaker: "customer", text: "I already paid", at: at.toISOString() }, { id: "agent-reply", channel: "customer", speaker: "agent", text: "I can help check that payment", at: at.toISOString() }];

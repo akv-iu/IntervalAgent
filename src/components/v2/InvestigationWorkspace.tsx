@@ -18,6 +18,9 @@ export function RuntimeBox({ c, seconds }: { c: Pick<CaseState, "run" | "lastRun
   const run = c.run, saved = c.lastRun;
   const active = run?.activeRole && roleNames[run.activeRole];
   const steps = run?.steps ?? saved?.steps ?? [];
+  const calls = [...new Map(steps.map((step) => [step.id, step])).values()];
+  const shownCompleted = calls.filter((call) => call.state === "completed").length;
+  const totalCompleted = run?.calls ?? saved?.calls ?? 0;
   const outcome = saved ? { completed: "complete", blocked: "review blocked", failed: "failed", interrupted: "interrupted" }[saved.outcome] : "";
   return <details className={styles.runtime} key={run?.id ?? saved?.id ?? "no-run"}>
     <summary>{run ? `Runtime · ${active || "working"}` : saved ? `Last run · ${outcome}` : "Runtime · no saved run"}</summary>
@@ -25,7 +28,8 @@ export function RuntimeBox({ c, seconds }: { c: Pick<CaseState, "run" | "lastRun
       <p className={styles.runMeta}>{run ? seconds : ((saved?.durationMs ?? 0) / 1000).toFixed(1)}s · {run?.calls ?? saved?.calls ?? 0} completed model calls</p>
       <p>{run ? "The customer reply appears after review. Progress updates make no model calls." : "Kept here until the next message or retry starts a run. Audit history is retained separately."}</p>
       {saved?.failure && <p>{saved.failure.message}{saved.failure.status ? ` HTTP ${saved.failure.status}.` : ""}{saved.failure.code ? ` Code: ${saved.failure.code}.` : ""}</p>}
-      <ol className={styles.steps} aria-label="Latest run steps">{steps.map((step) => <li key={`${step.id}-${step.state}`}><span>{roleNames[step.role] ?? "Agent"}: {step.state}</span><time dateTime={step.at}>{new Date(step.at).toLocaleTimeString()}</time></li>)}</ol>
+      {shownCompleted < totalCompleted && <p>Showing {shownCompleted} of {totalCompleted} completed calls. Earlier steps were not retained for this saved run.</p>}
+      <ol className={styles.steps} aria-label="Latest run model calls" tabIndex={0}>{calls.map((call) => <li key={call.id}><span>{roleNames[call.role] ?? "Agent"}: {call.state}{call.tools?.length ? ` · requested ${call.tools.map((name) => name.replaceAll("_", " ")).join(", ")}` : ""}</span><time dateTime={call.at}>{new Date(call.at).toLocaleTimeString()}</time></li>)}</ol>
     </> : <p>Opening outreach makes no model call. Older run evidence, if any, remains in saved agent history.</p>}
   </details>;
 }

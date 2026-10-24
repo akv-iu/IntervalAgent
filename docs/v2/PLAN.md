@@ -1,6 +1,6 @@
 # IntervalAgent V2 rebuild: plan for review
 
-Status: Phase 2C is pushed as `6138a32` on `v2-rebuild`; production V1 stays on `main`. Phase 2D's isolated PostgreSQL source mapping and automated checks are complete locally for Akshay's review, following explicit approval with fresh usage unknown. No paid model calls or deployment occurred in 2D. The earlier 32.9-second/eight-call correction latency finding remains open. Installment operations remain Phase 3 and evaluated reusable learning remains Phase 4; neither has started. The local $2 API ceiling is removed for local testing; accounting and per-run/workspace limits remain. See [STATUS.md](STATUS.md) and [LOCAL-DEMO.md](LOCAL-DEMO.md).
+Status: Phase 2D is pushed as `5d20fab` to `v2-rebuild`; production V1 stays on `main`. Akshay approved Phase 3A with fresh usage unknown. Phase 3A options, calculated full-balance offers and saved reviewed proposals include the October 24 call-efficiency refinement; Akshay authorized push to `v2-rebuild`. Live acceptance remains incomplete. Agreement/payment execution and operator financial approval remain later Phase 3 work; evaluated reusable learning remains Phase 4. No paid model calls or deployment occurred in 3A; the prior latency finding remains open. See [STATUS.md](STATUS.md) and [LOCAL-DEMO.md](LOCAL-DEMO.md).
 Date: October 23, 2026. Branch: `v2-rebuild`, based on V1 commit `7a6c6c8`.
 Acceptance requirements: [SPEC.md](SPEC.md). The original root `SPEC.md` remains the V1 contract.
 
@@ -133,7 +133,7 @@ Review with Akshay: both threads, saved status/events/receipts, resumption, revi
 - Support investigation, verification, correction/retry, takeover and resume. Show partial/full promises, extension requested/approved, preferred channel/date/window and awaiting-business/answered/overdue requests. Follow-up is explicit, not a scheduled agent.
 - Test separate workspace histories, reset/expiry and exhausted-turn behavior. Switching simulated actors cannot grant maintainer rights or another tester's records.
 - Add the PostgreSQL adapter over a different synthetic source schema in an isolated test database. Run shared adapter checks and the same investigation through both adapters; no production connection.
-- Phase 2D checkpoint (implemented locally; stopped for review): a read-only PostgreSQL adapter maps separate organization/account/payment tables in `intervalagent_v2_test` to the same contract as the fixtures. Shared checks and direct-read/business-verification journeys exercise both sources through the same SDK entry point with identical role definitions and scripted model responses. Scope, money, dates/versions, explicit missing/failure outcomes and safe errors are validated before model calls. A changed snapshot that conflicts with locally committed receipt evidence is blocked for reconciliation rather than silently replacing it. The app keeps its saved synthetic source; no source-selection UI, real business connection, paid model call or deployment was added.
+- Phase 2D checkpoint (pushed as `5d20fab`): a read-only PostgreSQL adapter maps separate organization/account/payment tables in `intervalagent_v2_test` to the same contract as the fixtures. Shared checks and direct-read/business-verification journeys exercise both sources through the same SDK entry point with identical role definitions and scripted model responses. Scope, money, dates/versions, explicit missing/failure outcomes and safe errors are validated before model calls. A changed snapshot that conflicts with locally committed receipt evidence is blocked for reconciliation rather than silently replacing it. The app keeps its saved synthetic source; no source-selection UI, real business connection, paid model call or deployment was added.
 
 Requirements: FR-01 through FR-03, FR-06 through FR-08, FR-10, FR-15, FR-17 through FR-22; applicable NFRs remain enforced.
 
@@ -145,6 +145,20 @@ Review with Akshay: selection, inboxes, promises/extension/contact events, takeo
 > **Result:** A client chooses an eligible option and follows its actual simulated payment/resolution outcome.\
 > **Work:** Add current-proposal confirmation, validated writes, operation states and agent assessment of outcomes.\
 > **Check:** Prove correct amounts, no duplicate effects and truthful handling of failed, pending or uncertain results.
+
+### Phase 3A checkpoint: eligible options and reviewed proposals
+
+> **Result:** Customers can discuss each business's eligible methods and receive a concrete saved offer.\
+> **Work:** Add versioned synthetic policies, model-selected option/calculation tools and reviewed proposal records.\
+> **Check:** Preserve cents/dates, reject unsupported or stale terms, and keep offers distinct from agreements and receipts.
+
+Implemented locally, stopped for Akshay's manual test. Business policy and today/tomorrow are supplied upfront, so a simple options question can stay with the orchestrator without redundant reads. Account Resolution chooses the calculation tool for a concrete offer and Reviewer checks it. Scripted SDK paths verify two calls for direct options and five for an accepted proposal; live counts can vary. Runtime groups events by call, shows requested tools and retains the initial dispatch for new bounded runs; legacy truncation is labelled. Northside permits card/bank transfer/cash and 1/2/3 monthly payments, starting within 30 days; Cedar permits card/bank transfer and 1/2/3/4/6 payments, starting within 45 days. These are explicit synthetic defaults, not real business terms. Full remaining balance only, with zero added fees/interest. Clarify method/count/first date; unsupported requests need alternatives or operator review. Calculate dates in code using the original day of month, clamped at month-end, and split cents without rounding loss.
+
+Save a `payment_proposed` update atomically with the accepted reply and audit, bound to customer evidence, policy/source versions, invoice, balance and exact schedule. Revalidate before commit. Preserve prior offers and label superseded/outdated terms in the existing records view; labels refer to the saved case clock. Do not mix recognition and a new offer in one result. No agreement, customer confirmation action, new payment, receipt, balance reduction or external source write occurs. Existing workspaces require no reset/migration.
+
+Remaining Phase 3 work, subject to the next usage/approval checkpoint: bind explicit consent to a current saved proposal, execute guarded simulated outcomes and add supervised financial approvals. This 3A checkpoint does not implement those actions.
+
+### Remaining Phase 3 implementation
 
 - Retrieve business-eligible payment methods/arrangements through tools; calculate amounts and schedules in code. The model explains and adapts the proposal.
 - Bind confirmation to a specific current proposal. Recheck consent, scope, policy, record versions and required authority before execution. Customer consent, Reviewer acceptance and operator approval are distinct.

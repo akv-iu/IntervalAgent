@@ -1,14 +1,42 @@
 # V2 status
 
-October 23, 2026. Work is local on `v2-rebuild` in `D:\Projects\IntervalAgent-v1-rebuild`.
+October 24, 2026. Work is local on `v2-rebuild` in `D:\Projects\IntervalAgent-v1-rebuild`.
 
 Product direction update: Akshay is developing an independent project and is no longer preparing an Interval AI presentation. The medium scope and existing agent/evaluation requirements remain. He accepted the latest functional correction, finalized the UI preview and explicitly approved implementing the Daylight checkpoint with current Codex usage unknown. The Daylight UI is now implemented locally; the other two themes remain previews.
 
 Current spending policy: Akshay explicitly chose **Remove the $2 cap for local testing** on October 23. The local aggregate dollar ceiling is removed from the app/database and checkpoint fallback. Historical usage and reservations remain; manual/live calls bill the configured OpenAI API account. Earlier $2 figures below are historical, not the current policy. Per-run, turn, workspace, STOP and financial-review guards remain enforced.
 
-**Phase 2C is pushed as `6138a32` to `v2-rebuild`; production `main` remains V1. Phase 2D passed automated checks; Akshay authorized its push/continuation on October 23. The next implementation checkpoint still requires usage reporting and approval.** Akshay approved 2D with fresh Codex usage/reset times unknown at the 8:41 PM Mountain check. This phase used only the isolated test database and scripted model responses: no paid model call, browser pass, deployment or V1 database change. No new source-selection UI was added. Phase 3 financial operations and Phase 4 evaluated learning have not started.
+**Phase 2D is pushed as `5d20fab` to `v2-rebuild`; production `main` remains V1. Phase 3A and its October 24 call-efficiency refinement are complete; Akshay authorized push to `v2-rebuild`. UI/live-conversation acceptance remains incomplete.** He explicitly approved 3A with fresh five-hour/weekly allowance and reset times unknown. This checkpoint used scripted SDK responses and only the isolated test database; no paid model call, browser pass, deployment or V1 database change. The next checkpoint has not started.
 
-### Phase 2D: reusable account-source mapping
+### Phase 3A: payment options and reviewed offers
+
+The orchestrator receives scoped business policy and local today/tomorrow directly; when a concrete offer is useful it chooses Account Resolution. That role receives the same policy/dates and has calculation/date tools, with Reviewer still required. The orchestrator retains a tool for an explicit policy recheck; routine policy retrieval is not a required model round trip. No hardcoded intent router or forced all-role pipeline was added. The existing SDK/tool model remains in use; see [official OpenAI agent/tool guidance](https://developers.openai.com/api/docs/guides/agents/define-agents). The harness/role version is `v2-phase3a-2`.
+
+Explicit synthetic defaults: Northside supports card/bank transfer/cash and 1/2/3 payments starting within 30 local days. Cedar supports card/bank transfer and 1/2/3/4/6 payments starting within 45 days. Both offer the full remaining balance at zero added fees/interest. Unknown businesses have no fallback policy. Code splits safe integer cents, keeps remainder cents in the last payments and computes monthly dates with original-day/month-end clamping, including leap years. Missing terms need clarification; exceptions need alternatives or operator review.
+
+A strict `payment_proposed` update binds method/count/date, exact schedule, customer evidence, policy/source versions, invoice and balance. Validate it after the specialist and again against the locked current case before commit. The accepted reply, proposal and before/after audit persist together. It cannot be combined with payment recognition in one result. Existing balance, receipts and contact events are unchanged. An offer is not a promise, approved arrangement or payment; no agreement/payment command or button exists in this checkpoint.
+
+The existing dashboard/operator records show the schedule and explicit unagreed/no-payment labels. Newer offers supersede earlier display while preserving history; changed facts or terms show outdated offers. Labels compare with the last saved case clock rather than implying a continuously ticking expiry check. Existing JSONB histories need no reset or database migration.
+
+Two self-review passes: (1) traced options -> model-selected tools -> typed proposals -> review -> transactional commit -> shared records, checked business isolation, current locked facts, exact cents/calendar dates and separated recognition. (2) checked forged schedules despite positive review, stale/source/policy/customer evidence, rejected reviews, duplicate commands, STOP/takeover/new-input/reset/expiry and original-history preservation. Found and excluded ignored `results/` TSX backups from TypeScript compilation; production sources and tests remain checked. Clarified that offer labels use saved case time. These are self-reviews, not independent or browser reviews.
+
+Verification: **685 offline tests and 102 isolated PostgreSQL tests passed**, plus type checking, targeted lint, production build, stylesheet assets and the preserved V1 replay gate. Scripted SDK examples exercised a two-call direct options path and a five-call calculated offer path; they are not measured live latency or quality. The new saved-state/negative tests confirm no proposal receipts/balance changes. Existing V1 tracing warnings remain. No new dependency or orchestration framework was added.
+
+UI source delivery: approved Daylight/Barlow/blue direction retained (ENERGY 2 / RHYTHM 2 / MOTION 2); no new asset or motion. Existing records use a semantic ordered schedule with distinct superseded/outdated/unagreed states. Source rendering checks pass; actual live wording/routing, browser readability, keyboard and narrow-width acceptance remain Akshay's. Follow the new first section of [LOCAL-DEMO.md](LOCAL-DEMO.md). No model-quality or latency improvement is claimed.
+
+Akshay authorized pushing the completed Phase 3A checkpoint, including the call-efficiency refinement, without merging or deployment. Next, after acceptance and a fresh usage/approval checkpoint: explicit consent bound to a current proposal, guarded simulated outcomes and supervised financial decisions. Partial-balance/custom-cadence offers and reusable evaluated learning are not implemented here. The earlier 32.9-second correction latency remains open.
+
+### October 24 manual-feedback refinement
+
+Akshay reported four Account Resolution calls and a confusing twelve-row start/completion list, then authorized reducing redundant work and pushing the checkpoint. This is a refinement of approved Phase 3A; Phase 3B is not started. Fresh allowance/reset metadata was unknown at 8:07 AM Mountain because the latest event remained October 23 at 11:06 AM. No paid generation or browser test was performed by the coding agent.
+
+Policy and today/tomorrow now enter customer, resolution and review inputs directly. The model still chooses delegation and calculation; no intent router, mandatory pipeline or removed review. Scripted accepted paths use two calls for direct options and five for a calculated proposal; the rejection/revision path still runs additional reviews. The specialist no longer has a redundant options-read tool. Cedar-context tests verify its own policy version is supplied.
+
+Runtime groups persisted events into one row per call and reports requested tools. New runs retain forty events, covering the existing twenty-call maximum; the initial dispatch is preserved. Legacy missing events are explicitly labelled against the total completed-call count. Optional tool fields preserve existing histories without a migration/reset. The expanded list retains the approved theme and has a keyboard-scrollable height limit.
+
+Two refinement self-reviews: (1) traced SDK input/tool callers, verified model choice, required review, context scope and existing financial/usage guards; (2) checked grouped active/completed/legacy rendering, persisted dispatch/tool evidence after reconnect and superseding-run fences. Offline and PostgreSQL regressions passed; targeted follow-up, build/type/lint, CSS assets and pinned V1 replay results are recorded with the handoff. These are self-reviews, not independent reviews or live performance measurements. Actual live call count, latency and browser acceptance remain Akshay's.
+
+### Phase 2D: reusable account-source mapping (pushed `5d20fab`)
 
 The fixture adapter and a new PostgreSQL adapter return the same strictly validated account evidence. The latter maps differently shaped organization/account/payment tables in the `v2_source_demo` schema of `intervalagent_v2_test`. It uses one parameterized SELECT, scoped by business and account; the test reader enforces read-only transactions and a three-second statement timeout. Money remains safe integer cents; raw payment/policy states are explicitly mapped. Both sources remain synthetic, with adapter identity separate from provenance.
 
@@ -22,7 +50,7 @@ Two self-review passes: (1) followed source/SDK/HTTP callers, checked parameteri
 
 Final verification: **659 offline tests and 89 isolated PostgreSQL tests passed**. Production build/type checking, targeted application/script/test lint, served/built stylesheet checks and the pinned V1 replay gate passed. Existing V1 dynamic-filesystem tracing warnings remain. Akshay authorized pushing this completed checkpoint to `v2-rebuild`; unrelated local notes and secrets are excluded. No browser pass is needed to inspect a new UI because none was added; live-model behavior and latency were not remeasured. The earlier 32.9-second correction latency remains open.
 
-Next proposed phase after review and a fresh usage/approval checkpoint: Phase 3 simulated operations and supervision, beginning with eligible options and guarded proposals. No implementation of that phase is authorized by this status file.
+The Phase 2D handoff originally proposed eligible options and guarded proposals next. Akshay subsequently approved Phase 3A; its current delivery is recorded above. That approval does not authorize subsequent checkpoints.
 
 ### Delegated Phase 2C browser acceptance
 
@@ -89,8 +117,8 @@ Historical statements below describe earlier local checkpoints; this handoff sup
 
 | Check | Observation |
 | --- | --- |
-| Offline tests | 659 passed; includes preserved V1 coverage, operator feedback/SDK boundaries, shared source contracts/validation, dashboard/correction/attention/runtime rendering and safe failures |
-| V2 PostgreSQL integration | 89 passed in `intervalagent_v2_test`; PostgreSQL source contract/mapping, scripted SDK journeys and existing workspace checks; no paid model calls |
+| Offline tests | 685 passed; includes V1, source/feedback boundaries, scoped options, schedule arithmetic/dates, scripted SDK/review, proposal rendering and safe failures |
+| V2 PostgreSQL integration | 102 passed in `intervalagent_v2_test`; includes proposal persistence/isolation, rejected/forged/stale terms and interruptions; no paid model calls |
 | Type checking | Passed |
 | Application/script/test lint | Passed, using the targeted command in LOCAL-DEMO.md |
 | Repository-wide lint | Blocked by four pre-existing `require()` lint errors in untracked `docs/learn/check.cjs`; that file was left unchanged |

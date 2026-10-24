@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import BusinessDashboard, { CaseRecords } from "../src/components/v2/BusinessDashboard";
 import { startingCases } from "../src/lib/v2/fixtures";
 import type { CaseState, WorkspaceView } from "../src/lib/v2/store";
+import { calculateProposal } from "../src/lib/v2/options";
 
 function workspace(): WorkspaceView {
   return { resets: 0, expiresAt: "2026-10-24T12:00:00Z", cases: Object.fromEntries(startingCases(new Date("2026-10-23T12:00:00Z")).map((facts) => [facts.id, {
@@ -31,4 +32,19 @@ test("dashboard and case records distinguish saved promises, requests and event 
   for (const text of ["Promise: $50.00", "No payment received.", "Extension requested", "Not approved.", "Current channel preference: email.", "planned: email", "superseded: email", "blocked: email", "Not executed.", "beyond this workspace"]) expect(html).toContain(text);
   expect(renderToStaticMarkup(<CaseRecords c={c} />)).toContain("Promise: $50.00");
   expect(renderToStaticMarkup(<BusinessDashboard workspace={view} businessId="cedar" selectedId="cedar-late-payment" disabled={false} onSelect={() => {}} />)).not.toContain("Promise: $50.00");
+});
+
+test("saved offers show exact dates/amounts, supersession and stale facts without implying agreement", () => {
+  const view = workspace(), c = view.cases["fresh-record"];
+  const first = calculateProposal(c.facts, c.now, { method: "cash", count: 2, firstDate: "2026-10-24", sourceMessageId: "request" });
+  c.updates = [first];
+  const render = () => renderToStaticMarkup(<CaseRecords c={c} />);
+  const html = render();
+  for (const text of ["Latest offer at last case update", "$39.50", "2026-10-24", "2026-11-24", "Not agreed.", "No payment received.", "No added fees or interest."]) expect(html).toContain(text);
+  expect(html).not.toContain("Promise:"); expect(html).not.toContain("Applied to this simulated balance");
+  c.updates.push(calculateProposal(c.facts, c.now, { method: "card", count: 1, firstDate: "2026-10-25", sourceMessageId: "new-request" }));
+  expect(render()).toContain("Superseded"); expect(render()).toContain("Latest offer at last case update");
+  c.facts.balanceCents = 1;
+  expect(render()).toContain("Outdated; needs recalculation"); expect(render()).not.toContain("Latest offer at last case update");
+  expect(renderToStaticMarkup(<BusinessDashboard workspace={view} businessId="cedar" selectedId="cedar-late-payment" disabled={false} onSelect={() => {}} />)).not.toContain("Payment proposal");
 });

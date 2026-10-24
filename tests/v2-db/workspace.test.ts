@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { localDate } from "../../src/lib/time";
+import { calculateProposal } from "../../src/lib/v2/options";
 import { projectEnv } from "../../src/lib/project-env";
 import { beginCommand, budgetUsage, closeV2Pool, commitResult, createWorkspace, failRun, initializeV2, readWorkspace, recordLive, reserveLive, resetWorkspace, startLive, v2Pool, type Job } from "../../src/lib/v2/store";
 import { handleV2 } from "../../src/lib/v2/http";
@@ -538,6 +539,20 @@ test("model progress is saved without advancing a superseding run", async () => 
   expect((await c(token)).run).toBeNull();
 });
 
+test("runtime retains the dispatch and requested tools beyond the old six-call display window", async () => {
+  const { token } = await createWorkspace(), job = requireJob(await beginCommand(token, command()));
+  for (let i = 0; i < 7; i++) {
+    const call = { id: randomUUID(), role: i === 0 ? "customer" : "account_resolution", inputTokens: 10, outputTokens: 2, usageKnown: true, latencyMs: 1, tools: i === 0 ? ["account_resolution"] : ["calculate_payment_proposal"] };
+    await reserveLive(call.id, { token, job }); await startLive(call, { token, job }); await recordLive(call, { token, job });
+  }
+  await commitResult(token, job, approved()); await closeV2Pool();
+  const runtime = (await c(token)).lastRun;
+  expect(runtime?.calls).toBe(7); expect(runtime?.steps).toHaveLength(14);
+  expect(runtime?.steps[0]).toMatchObject({ role: "customer", state: "started" });
+  expect(runtime?.steps[1]).toMatchObject({ role: "customer", state: "completed", tools: ["account_resolution"] });
+  expect(runtime?.steps.at(-1)?.tools).toEqual(["calculate_payment_proposal"]);
+});
+
 test("fresh cases seed one persisted opening without spending, customer turns or retryable work", async () => {
   const { token, view } = await createWorkspace();
   for (const state of Object.values(view.cases)) {
@@ -703,4 +718,57 @@ test.each([
     method: "POST", headers: { ...headers, "Content-Type": "application/json" } as Record<string, string>, body: "{}",
   });
   expect((await handleV2(request)).status).toBe(403);
+});
+
+
+test("reviewed proposals persist with the reply/audit, without a promise, receipt, event or balance change", async () => {
+  const { token } = await createWorkspace();
+  const request = command("customer", "Can I use cash in two installments starting tomorrow?");
+  const job = requireJob(await beginCommand(token, request));
+  const proposal = calculateProposal(job.input.facts, job.input.now, { method: "cash", count: 2, firstDate: localDate(new Date(job.input.now), "America/Denver", 1), sourceMessageId: request.id });
+  const result = approved("Here is a two-installment cash proposal. It is not agreed and no payment was received.");
+  result.resolution = { summary: "Calculated proposal only", needsOperator: false, updates: [proposal] };
+  await commitResult(token, job, result);
+  expect(await beginCommand(token, request)).toBeNull();
+  await closeV2Pool();
+  const saved = await c(token);
+  expect(saved.updates).toEqual([proposal]); expect(saved.facts).toEqual(job.input.facts);
+  expect(saved.events).toEqual([]); expect(saved.status).toBe("ready"); expect(saved.reviewHold).toBe(false);
+  expect(saved.messages.at(-1)?.text).toBe(result.draft.reply);
+  expect(saved.audit.at(-1)).toMatchObject({ after: [proposal], balanceBeforeCents: 12900, balanceAfterCents: 12900, sourceVersion: job.input.facts.sourceVersion, roleVersion: "v2-phase3a-2" });
+  expect((await readWorkspace(token)).cases["cedar-late-payment"].updates).toEqual([]);
+  expect((await c((await createWorkspace()).token)).updates).toEqual([]);
+});
+
+test.each(["rejected-review", "forged-amount", "foreign-policy", "stale-source", "foreign-customer", "future-date"])("%s proposal cannot publish terms even with a fabricated positive review", async (kind) => {
+  const { token } = await createWorkspace();
+  const request = command("customer", "Please propose two installments tomorrow"), job = requireJob(await beginCommand(token, request));
+  const proposal = calculateProposal(job.input.facts, job.input.now, { method: "card", count: 2, firstDate: localDate(new Date(job.input.now), "America/Denver", 1), sourceMessageId: request.id });
+  const result = approved("Here is the proposed schedule, not an agreement.");
+  if (kind === "rejected-review") result.review = { accepted: false, reasons: ["Not supported"] };
+  if (kind === "forged-amount") proposal.schedule[0].amountCents = 1;
+  if (kind === "foreign-policy") proposal.policyVersion = "cedar-options-1";
+  if (kind === "stale-source") proposal.sourceVersion = "outdated";
+  if (kind === "foreign-customer") proposal.sourceMessageId = randomUUID();
+  if (kind === "future-date") { proposal.firstDate = localDate(new Date(job.input.now), "America/Denver", 31); proposal.schedule[0].date = proposal.firstDate; }
+  result.resolution = { summary: "Proposal", needsOperator: false, updates: [proposal] };
+  if (kind === "rejected-review") await commitResult(token, job, result);
+  else await expect(commitResult(token, job, result)).rejects.toThrow();
+  const saved = await c(token);
+  expect(saved.updates).toEqual([]); expect(saved.facts).toEqual(job.input.facts);
+  expect(saved.messages.filter((m) => m.speaker === "agent" && m.origin !== "synthetic_opening")).toEqual([]);
+});
+
+test.each(["stop", "takeover", "new-input", "reset", "expired"])("%s blocks an in-flight proposal without recording terms or receipts", async (interruption) => {
+  const { token } = await createWorkspace();
+  const request = command("customer", "Can I pay in installments?"), job = requireJob(await beginCommand(token, request));
+  const proposal = calculateProposal(job.input.facts, job.input.now, { method: "card", count: 2, firstDate: localDate(new Date(job.input.now), "America/Denver", 1), sourceMessageId: request.id });
+  const result = approved("Proposed only"); result.resolution = { summary: "Proposal", needsOperator: false, updates: [proposal] };
+  if (interruption === "stop") await beginCommand(token, command("customer", "STOP"));
+  if (interruption === "takeover") await beginCommand(token, command("takeover"));
+  if (interruption === "new-input") await beginCommand(token, command("customer", "Actually I disagree with the balance"));
+  if (interruption === "reset") await resetWorkspace(token);
+  if (interruption === "expired") await v2Pool().query("UPDATE rebuild_v2.workspaces SET expires_at=now()-interval '1 second'");
+  await expect(commitResult(token, job, result)).rejects.toMatchObject({ status: interruption === "expired" ? 410 : 409 });
+  if (interruption !== "expired") { const saved = await c(token); expect(saved.updates).toEqual([]); expect(saved.facts.payments).toEqual([]); }
 });

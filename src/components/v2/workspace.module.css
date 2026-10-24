@@ -43,7 +43,7 @@
 .runtime summary { font-weight: 600; cursor: pointer; }
 .runtime p { margin-top: 6px; }
 .runMeta { color: var(--workspace-muted); font-variant-numeric: tabular-nums; }
-.steps { margin-top: 12px; }
+.steps { margin-top: 12px; max-height: 20rem; overflow-y: auto; }
 .steps li { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; padding: 4px 0; }
 .steps time { color: var(--workspace-muted); }
 .layout { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr); gap: 20px; }

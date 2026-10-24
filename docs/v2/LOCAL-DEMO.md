@@ -1,7 +1,28 @@
-# V2 local demo: Phase 2D source-adapter checkpoint
+# V2 local demo: Phase 3A options and proposal checkpoint
 
 Worktree: `D:\Projects\IntervalAgent-v1-rebuild`, branch `v2-rebuild`.
 Open **http://127.0.0.1:3012/v2**. Akshay owns browser/UI/manual acceptance.
+
+## Check Phase 3A first
+
+Refresh **http://127.0.0.1:3012/v2**; no reset or migration is needed. This checkpoint adds offers, not payment execution. You own the live conversation/browser pass; the implementation used scripted responses only and made no paid model calls.
+
+1. Select Northside / Sam. If the earlier test left the case under operator control, use **Resume automatic replies** first; STOP remains in force and is not bypassed. Use another ready case if Sam's allowance is exhausted.
+2. Send `What payment methods and installment options do you have?` Expect Northside's card, bank transfer or cash and 1/2/3 payments, rather than an invented policy or automatic operator hold. The orchestrator can answer this simple read without a specialist.
+3. Send `Can I pay the full remaining balance in cash in two monthly installments starting tomorrow?` Expect Account Resolution's calculation tool and required Reviewer. For Sam's unchanged $79 balance, the offer is $39.50 tomorrow plus $39.50 on the same day next month (clamped if necessary). Model wording/routing is not scripted; report any missed calculation, invented term or unnecessary escalation.
+4. In saved records under the dashboard/operator pane, expect a **Payment proposal** with exact amounts/dates, method and **Not agreed. No payment received.** Refresh/reselect: it must persist without changing the balance, adding a receipt, promise or contact event. Ask for a different eligible method/date to create a newer offer; the old one should show **Superseded**. Offer labels refer to the last saved case update.
+5. Select Cedar / Jamie and request cash or five installments. Cedar permits only card/bank transfer and 1/2/3/4/6 payments. Expect clarification/alternatives, or operator review for an exception. Northside policy and Sam's saved offer must not appear in this case. A normal eligible offer alone should not require operator escalation.
+6. Reply `Yes, go ahead` after an offer. It must not claim an approved arrangement, charge, receipt or reduced balance: explicit agreement and execution are the next checkpoint. Check record readability and disclosures by keyboard/narrow width; no new payment/approval button exists yet.
+
+Synthetic defaults: Northside's first date is within 30 days; Cedar's within 45 days, using the displayed case timezone. Offers cover the full remaining balance, with no added fees/interest. Partial amounts, custom cadence and financial exceptions are not automatically approved. A month-end plan keeps its original day anchor; extra cents go to the final installments. STOP and existing turn/workspace limits remain.
+
+Automated results: 685 offline tests and 102 isolated PostgreSQL tests passed. Scripted SDK checks cover direct options, model-selected calculation, required review and rejection of forged schedules. They do not prove live model quality or latency. No browser test was performed by the coding agent for 3A.
+
+### October 24 call-efficiency refinement
+
+Business policy and today/tomorrow now arrive in the run context. A simple options question can be answered directly; Account Resolution still chooses the calculation tool for a concrete offer. Scripted SDK checks use two calls for direct options and five for an accepted calculated offer (dispatch, calculation request, findings, customer reply, Reviewer). These are tested paths, not a hard cap or measured live performance. Clarification, another date offset or review revision can require more calls.
+
+For your next manual exchange, expand Runtime. Each model call now occupies one row, with requested tool names on completed calls; start/completion events are not displayed as separate calls. New runs retain up to forty events for the existing twenty-call limit, including the initial dispatch. The history scroll area is keyboard-focusable. Old saved runs cannot recover discarded events; they show the visible/total completed count and a missing-history notice instead. No workspace reset is needed. Report the total calls and elapsed time from a new run so we can assess actual model behavior.
 
 ## Phase 2D: automated source proof
 
@@ -13,7 +34,7 @@ Shared adapter checks cover both businesses, duplicate case IDs across businesse
 
 Changed source facts cannot replace locally committed receipt evidence automatically: the loader stops for reconciliation. It does not claim an external database was updated or silently fall back to fixtures. Supporting a new database schema needs an explicit mapping. No production database or source-selection UI is connected.
 
-Latest verification: **659 offline tests and 89 isolated PostgreSQL tests passed**, plus build/type checking, targeted lint, stylesheet checks and the pinned V1 replay gate. Implementation is local and stopped for review; Phase 3 has not started.
+Historical Phase 2D verification: **659 offline tests and 89 isolated PostgreSQL tests passed**, plus build/type checking, targeted lint, stylesheet checks and the pinned V1 replay gate. That checkpoint is now pushed as `5d20fab`; current Phase 3A checks are recorded above.
 
 ## Check Phase 2C first
 
@@ -36,7 +57,7 @@ Refresh **http://127.0.0.1:3012/v2**. No reset is required. The existing browser
 2. Inspect **Synthetic source and policy** in a case. Northside allows reviewed recognition from complete business confirmation; Cedar requires operator approval. Operator payment approval is not implemented in this checkpoint, so Cedar confirmation cannot automatically reduce a balance. Existing Northside cases keep their saved policy and source data.
 3. As Riley at Cedar, try `I promise to pay $50 tomorrow. Please call me tomorrow afternoon.` After the reviewed reply, inspect the table and operator records: the promise and planned call should agree, with no received-money or executed-call claim. This conversation makes paid model calls on your configured account.
 4. Switch to Northside, then return to Riley. Use **Refresh history**, reload the browser, and reselect Cedar/Riley. Messages, reviewed updates, planned events and balance should still agree; Northside must not show Riley's promise or inbox. Opening, selecting and refreshing alone make no model calls. A full browser reload starts selection at Alex; it does not delete other clients' work.
-5. Inspect the partial-payment, different-reference, cancellation/renewal, affordability and pending-payment source records. These initialize facts rather than scripts; conversations may change direction. Eligible payment options, arrangements, approval controls and new-payment execution are still later work. A pending receipt must not be described as settled.
+5. Inspect the partial-payment, different-reference, cancellation/renewal, affordability and pending-payment source records. These initialize facts rather than scripts; conversations may change direction. Eligible methods and unagreed full-balance offers are now available in 3A; arrangement agreement, approval controls and new-payment execution remain later work. A pending receipt must not be described as settled.
 6. Check the selectors, table collapse/expand, case links, role highlight, Runtime and existing controls by keyboard and at a narrow width. The table has its own focusable horizontal scroll region; the page itself should not overflow. Browser, visual and model-behavior acceptance remain yours.
 
 ## Existing Daylight UI checks
