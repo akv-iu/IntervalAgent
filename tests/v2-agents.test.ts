@@ -74,7 +74,7 @@ describe("V2 role and write boundaries", () => {
     expect(requests).toHaveLength(2);
     for (const request of requests) {
       const context = JSON.stringify(request.input);
-      expect(context).toContain("Cedar Home Services"); expect(context).toContain("CED-204"); expect(context).toContain("operator_review"); expect(context).toContain("annual service-plan cancellation"); expect(context).toContain("cedar-options-1");
+      expect(context).toContain("Cedar Home Services"); expect(context).toContain("CED-204"); expect(context).toContain("operator_review"); expect(context).toContain("annual service-plan cancellation"); expect(context).toContain("cedar-options-2");
       expect(context).not.toContain("Northside Fitness"); expect(context).not.toContain("INV-101");
     }
   });

@@ -1,13 +1,16 @@
 import { z } from "zod";
 import { localDate } from "../time";
 import { PaymentProposal, proposalIsCurrent } from "./options";
+import { SimulationOutcome, type PaymentAgreement, type PaymentOperation } from "./payments";
 
-export const ROLE_VERSION = "v2-phase3a-2";
+export const ROLE_VERSION = "v2-phase3b-2";
 
 const CommandIdentity = { id: z.uuid(), caseId: z.string().regex(/^[a-z-]{1,60}$/) };
 const Revision = z.number().int().nonnegative();
 export const CorrectionRole = z.enum(["customer", "business_verification", "account_resolution", "reviewer"]);
 export const CaseCommand = z.discriminatedUnion("action", [
+  z.object({ ...CommandIdentity, action: z.literal("confirm_plan"), revision: Revision, proposal: PaymentProposal }).strict(),
+  z.object({ ...CommandIdentity, action: z.literal("simulate_payment"), revision: Revision, agreementId: z.uuid(), outcome: SimulationOutcome }).strict(),
   z.object({ ...CommandIdentity, action: z.enum(["customer", "business", "retry", "takeover", "resume"]), text: z.string().trim().min(1).max(1800).optional(), requestId: z.uuid().optional() }).strict(),
   z.object({ ...CommandIdentity, action: z.literal("correct"), revision: Revision, targetAuditId: z.uuid(), targetRole: CorrectionRole, text: z.string().trim().min(1).max(1200) }).strict(),
   z.object({ ...CommandIdentity, action: z.literal("retry_correction"), revision: Revision, correctionId: z.uuid() }).strict(),
@@ -51,7 +54,7 @@ export type Draft = z.infer<typeof Draft>;
 export const Review = z.object({ accepted: z.boolean(), reasons: z.array(z.string().max(300)).max(6) }).strict();
 
 export type Message = { id: string; channel: "customer" | "business"; speaker: "customer" | "business" | "agent"; text: string; at: string; requestId?: string; disposition?: "late"; origin?: "synthetic_opening" | "operator_revision" };
-export type Payment = { id: string; invoiceId: string; amountCents: number; date: string; status: "settled" | "pending"; includedInBalance: boolean; provenance?: "business_confirmation"; businessMessageId?: string; requestId?: string; reference?: string | null };
+export type Payment = { id: string; invoiceId: string; amountCents: number; date: string; status: "settled" | "pending"; includedInBalance: boolean; provenance?: "business_confirmation" | "simulated_operation"; businessMessageId?: string; requestId?: string; reference?: string | null; operationId?: string; agreementId?: string };
 export type CaseFacts = {
   id: string; businessId: string; businessName: string; customer: string; invoiceId: string;
   balanceCents: number; balanceAsOf: string; sourceVersion: string; timezone: "America/Denver";
@@ -63,6 +66,7 @@ export type CaseFacts = {
 };
 export type Investigation = {
   facts: CaseFacts; messages: Message[]; now: string; verification: Verification | null; requestId?: string | null; caseUpdates?: CaseUpdate[];
+  agreements?: PaymentAgreement[]; operations?: PaymentOperation[]; paymentAction?: { kind: "agreement_confirmed" | "payment_attempted"; id: string };
   operatorFeedback?: { correctionId: string; targetAuditId: string; targetRole: z.infer<typeof CorrectionRole>; text: string; original: InvestigationResult };
 };
 export type Activity = { role: "customer" | "business_verification" | "account_resolution" | "reviewer"; action: string; summary: string };
@@ -72,6 +76,7 @@ export type InvestigationResult = {
 };
 
 export function validateUpdates(updates: CaseUpdate[], input: Investigation): CaseUpdate[] {
+  if (input.paymentAction && updates.some((u) => u.kind === "payment_recognized" || u.kind === "payment_proposed")) throw new Error("Payment assessment cannot propose another payment or replay recognition; use the saved outcome.");
   if (updates.filter((u) => u.kind === "payment_recognized").length > 1) throw new Error("Only one payment can be recognized per reviewed result");
   if (updates.filter((u) => u.kind === "payment_proposed").length > 1 || (updates.some((u) => u.kind === "payment_proposed") && updates.some((u) => u.kind === "payment_recognized"))) throw new Error("Use one current proposal per result, separately from payment recognition");
   return updates.map((value) => {

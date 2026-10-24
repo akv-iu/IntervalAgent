@@ -1,9 +1,32 @@
-# V2 local demo: Phase 3A options and proposal checkpoint
+# V2 local demo: Phase 3B consent and simulated payment checkpoint
 
 Worktree: `D:\Projects\IntervalAgent-v1-rebuild`, branch `v2-rebuild`.
-Open **http://127.0.0.1:3012/v2**. Akshay owns browser/UI/manual acceptance.
+Open **http://127.0.0.1:3012/v2**. Akshay delegated the Phase 3B browser pass; future manual passes remain his unless assigned.
 
-## Check Phase 3A first
+October 24 delegated test: Jamie's consent/success/receipt/reload/explanation retry passed; Riley's failed then explicitly retried pending outcome passed; Robin's unknown outcome/reload passed. Pending/unknown stayed blocked after Resume. Mobile width and keyboard payment activation passed. A missed offer handoff and confirmed-plan label were fixed and rechecked. Northside's existing cases were preserved. See [STATUS.md](STATUS.md) for timings, scope, live API accounting and remaining checks. No workspace reset is needed; Riley and Robin remain held for reconciliation, which is not implemented yet.
+
+## Check Phase 3B first
+
+Open/refresh **http://127.0.0.1:3012/v2**. No reset or migration is needed, but old offers have outdated policy versions: ask for a fresh proposal. The checklist below can repeat the delegated sample or cover additional cases. Initial implementation verification used scripted responses and the isolated test database; the delegated test above used live calls.
+
+1. Select Northside / Sam (resume automatic replies first if the earlier manual test left an operator hold; STOP remains in force). Send `Can I pay the full remaining balance by card in two monthly installments starting today?` Use another ready case if Sam's allowance is exhausted. Expect a fresh reviewed offer, not an executed payment.
+2. In **Simulated plan and payment**, inspect the exact method, invoice, amounts and dates. With Sam's unchanged $79 balance, expect $39.50 today plus $39.50 next month. Click **Confirm this simulated plan**. Expect saved consent and a reviewed agent explanation, with balance unchanged and no receipt. Confirmation uses an action, not a customer chat turn. A chat `Yes` alone must not confirm/charge.
+3. Select **Success** under **Demo processor outcome**, then click **Simulate due payment of $39.50**. Expect one simulated receipt and a $39.50 remaining balance. Inspect saved records/runtime and refresh/reselect: outcome, receipt and balance must persist. The next installment is future-dated, so it cannot execute now or automatically later.
+4. On a separate ready case, create/confirm a card plan starting today and choose **Failed**. Expect an attempt with no receipt or balance reduction. A new explicit click can retry the same due installment; retrying an agent explanation must not charge again.
+5. On other ready cases, choose **Pending** or **Unknown**. Expect no receipt/reduction and an operator reconciliation hold. Resume must not permit a new payment or relabel the result as succeeded. Reconciliation controls are not implemented yet; use a different case for other tests.
+6. Create/confirm a plan starting tomorrow: future terms can persist, but no payment executes before its due date. Refresh history after dates change to update observed server time; future dates do not extend this workspace's 24-hour lifetime. No scheduler runs.
+7. A cash plan may be offered/confirmed, but cannot automatically create a cash receipt: operator receipt approval is still pending. Existing pending payments and unresolved business-payment evidence must block new payment/confirmation controls. Customer-reported prior payments continue using business verification, not these buttons to declare old money received.
+8. Check all labels, selects/buttons, saved outcomes and keyboard/narrow-width behavior. Controls should disable during a run, STOP, takeover or review hold. Report total calls/latency, unexpected escalation, stale terms or inaccurate success wording. If the model explanation fails, inspect the saved result first; **Retry from saved evidence** retries the explanation only.
+
+The outcome selector is a test control for a synthetic processor; it is not real bank evidence. No real payment, email, call, automatic charge or future agent runs. Confirmation/payment actions use your configured OpenAI account for the subsequent agent explanation during manual testing; normal API billing applies. No paid model calls were made during initial implementation; live calls were used in the subsequently delegated test.
+
+Automated Phase 3B verification: **696 offline tests and 128 isolated PostgreSQL tests passed**, plus build/type checks, targeted lint, CSS assets and preserved V1 replay. These checks do not prove live wording or latency.
+
+## Earlier Phase 3A checks
+
+The offer-only boundary below describes the earlier checkpoint; Phase 3B above supersedes its unavailable-confirmation/execution statements.
+
+
 
 Refresh **http://127.0.0.1:3012/v2**; no reset or migration is needed. This checkpoint adds offers, not payment execution. You own the live conversation/browser pass; the implementation used scripted responses only and made no paid model calls.
 
@@ -12,7 +35,7 @@ Refresh **http://127.0.0.1:3012/v2**; no reset or migration is needed. This chec
 3. Send `Can I pay the full remaining balance in cash in two monthly installments starting tomorrow?` Expect Account Resolution's calculation tool and required Reviewer. For Sam's unchanged $79 balance, the offer is $39.50 tomorrow plus $39.50 on the same day next month (clamped if necessary). Model wording/routing is not scripted; report any missed calculation, invented term or unnecessary escalation.
 4. In saved records under the dashboard/operator pane, expect a **Payment proposal** with exact amounts/dates, method and **Not agreed. No payment received.** Refresh/reselect: it must persist without changing the balance, adding a receipt, promise or contact event. Ask for a different eligible method/date to create a newer offer; the old one should show **Superseded**. Offer labels refer to the last saved case update.
 5. Select Cedar / Jamie and request cash or five installments. Cedar permits only card/bank transfer and 1/2/3/4/6 payments. Expect clarification/alternatives, or operator review for an exception. Northside policy and Sam's saved offer must not appear in this case. A normal eligible offer alone should not require operator escalation.
-6. Reply `Yes, go ahead` after an offer. It must not claim an approved arrangement, charge, receipt or reduced balance: explicit agreement and execution are the next checkpoint. Check record readability and disclosures by keyboard/narrow width; no new payment/approval button exists yet.
+6. Reply `Yes, go ahead` after an offer. Chat alone must not claim confirmation, a charge, receipt or reduced balance: use the separate Phase 3B controls. Check record readability and disclosures by keyboard/narrow width; financial approval controls remain unavailable.
 
 Synthetic defaults: Northside's first date is within 30 days; Cedar's within 45 days, using the displayed case timezone. Offers cover the full remaining balance, with no added fees/interest. Partial amounts, custom cadence and financial exceptions are not automatically approved. A month-end plan keeps its original day anchor; extra cents go to the final installments. STOP and existing turn/workspace limits remain.
 

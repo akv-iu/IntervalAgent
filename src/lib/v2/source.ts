@@ -20,7 +20,7 @@ export const AccountFacts = z.object({
   recognitionPolicy: z.enum(["business_confirmation", "operator_review"]).optional(),
   scenario: z.enum(["late_payment", "partial_payment", "conflicting_reference", "cancellation_overlap", "affordability", "pending_payment"]).optional(),
   accountNotes: z.array(z.string().min(1).max(500)).max(20).optional(),
-  payments: z.array(z.object({ id: Id, invoiceId: Id, amountCents: Money, date: z.iso.date(), status: z.enum(["settled", "pending"]), includedInBalance: z.boolean(), provenance: z.literal("business_confirmation").optional(), businessMessageId: Id.optional(), requestId: Id.optional(), reference: z.string().max(80).nullable().optional() }).strict()).max(100),
+  payments: z.array(z.object({ id: Id, invoiceId: Id, amountCents: Money, date: z.iso.date(), status: z.enum(["settled", "pending"]), includedInBalance: z.boolean(), provenance: z.enum(["business_confirmation", "simulated_operation"]).optional(), businessMessageId: Id.optional(), requestId: Id.optional(), reference: z.string().max(80).nullable().optional(), operationId: Id.optional(), agreementId: Id.optional() }).strict()).max(100),
 }).strict() satisfies z.ZodType<CaseFacts>;
 
 const SourceMeta = { scope: z.object({ businessId: Id, caseId: Id }).strict(), adapter: z.enum(["fixture", "postgresql"]), provenance: z.literal("synthetic") };
@@ -63,7 +63,7 @@ export async function loadSourceInput(input: Investigation, source: AccountSourc
   if (checked.facts.invoiceId !== input.facts.invoiceId) throw new AccountSourceError("scope_mismatch");
   const saved = AccountFacts.safeParse(input.facts);
   if (!saved.success) throw new AccountSourceError("invalid_record");
-  if ((saved.data.payments.some((p) => p.provenance === "business_confirmation") || input.caseUpdates?.some((u) => u.kind === "payment_recognized")) && !isDeepStrictEqual(saved.data, checked.facts)) throw new AccountSourceError("reconciliation_required");
+  if ((saved.data.payments.some((p) => p.provenance) || input.caseUpdates?.some((u) => u.kind === "payment_recognized")) && !isDeepStrictEqual(saved.data, checked.facts)) throw new AccountSourceError("reconciliation_required");
   return { input: structuredClone({ ...input, facts: checked.facts }), source: checked };
 }
 

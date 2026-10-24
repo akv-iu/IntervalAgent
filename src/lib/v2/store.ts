@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { Pool, type PoolClient } from "pg";
 import { projectEnv } from "../project-env";
 import { isGlobalStop } from "./contact";
@@ -8,6 +9,7 @@ import { openingMessage, startingCases } from "./fixtures";
 import { CaseCommand, ROLE_VERSION, validateUpdates, validateVerification, type Activity, type CaseUpdate, type Investigation, type InvestigationResult } from "./contracts";
 import type { ModelCall } from "./model";
 import type { RunFailure } from "./failures";
+import { confirmPlan, paymentHold, simulatePayment } from "./payments";
 
 export class V2Error extends Error { constructor(public status: number, message: string) { super(message); } }
 export type PlannedEvent = { id: string; sourceMessageId: string; channel: "call" | "email"; date: string; window: string; timezone: string; state: "planned" | "superseded" | "blocked"; beyondExpiry: boolean };
@@ -24,11 +26,11 @@ export type CaseState = Investigation & {
   updates: CaseUpdate[]; events: PlannedEvent[]; activity: Activity[];
   preferredChannel: "call" | "email" | null;
   commands: { id: string; fingerprint: string }[]; retries: number;
-  audit: { id: string; at: string; before: CaseUpdate[]; after: CaseUpdate[]; balanceBeforeCents?: number; balanceAfterCents?: number; review: InvestigationResult["review"]; roleVersion: string; sourceVersion: string; sourceMessageIds: string[]; replyId: string | null; runtime?: FinishedRun; correctionId?: string }[];
+  audit: { id: string; at: string; before: CaseUpdate[]; after: CaseUpdate[]; balanceBeforeCents?: number; balanceAfterCents?: number; review: InvestigationResult["review"]; roleVersion: string; sourceVersion: string; sourceMessageIds: string[]; replyId: string | null; runtime?: FinishedRun; correctionId?: string; paymentAction?: Investigation["paymentAction"] }[];
   lastReview: InvestigationResult | null;
 };
 type Workspace = { cases: Record<string, CaseState>; resets: number };
-export type WorkspaceView = Workspace & { expiresAt: string };
+export type WorkspaceView = Workspace & { expiresAt: string; observedAt?: string };
 export type Job = { id: string; revision: number; caseId: string; input: Investigation };
 export type Command = CaseCommand;
 let pool: Pool | undefined;
@@ -134,7 +136,7 @@ export async function readWorkspace(token: string): Promise<WorkspaceView> {
       c.revision++; finishRun(c, "interrupted"); c.status = c.stopped ? "stopped" : c.takeover ? "taken_over" : "run_failed";
       c.activity.push({ role: "reviewer", action: "interrupted", summary: "Run interrupted. Read saved state before an explicit retry." });
     }
-    return { ...data, expiresAt };
+    return { ...data, expiresAt, observedAt: new Date().toISOString() };
   });
 }
 
@@ -147,6 +149,11 @@ export async function resetWorkspace(token: string) {
     data.cases = fresh.cases; data.resets++;
     return { ...data, expiresAt };
   });
+}
+
+function investigationInput(c: CaseState, operatorFeedback?: Investigation["operatorFeedback"]): Investigation {
+  return structuredClone({ facts: c.facts, messages: c.messages, now: c.now, verification: c.verification, requestId: c.requestId, caseUpdates: c.updates,
+    ...(c.agreements ? { agreements: c.agreements } : {}), ...(c.operations ? { operations: c.operations } : {}), ...(c.paymentAction ? { paymentAction: c.paymentAction } : {}), ...(operatorFeedback ? { operatorFeedback } : {}) });
 }
 
 export async function beginCommand(token: string, command: Command): Promise<Job | null> {
@@ -164,6 +171,35 @@ export async function beginCommand(token: string, command: Command): Promise<Job
     if (!stop && c.commands.length >= 60) throw new V2Error(429, "Case action limit reached. History and STOP remain available.");
     if (c.stopped && stop) return null;
     c.commands.push({ id: command.id, fingerprint });
+    if (command.action === "confirm_plan" || command.action === "simulate_payment") {
+      if (c.run || c.stopped || c.takeover || c.reviewHold || c.status === "needs_review" || command.revision !== c.revision) throw new V2Error(409, "Case changed, is running, stopped or held. Refresh and resolve the hold before confirming or paying.");
+      const hold = paymentHold(c.facts, c.operations, c.verification, c.requestId);
+      if (hold) throw new V2Error(409, hold);
+      const now = new Date().toISOString();
+      try {
+        if (command.action === "confirm_plan") {
+          const proposal = c.updates.filter((u) => u.kind === "payment_proposed").at(-1);
+          if (!proposal || !isDeepStrictEqual(proposal, command.proposal)) throw new Error("Confirm only this case's latest saved proposal, with its exact displayed terms.");
+          const audit = c.audit.findLast((a) => a.review.accepted && a.after.some((u) => isDeepStrictEqual(u, proposal)) && !a.before.some((u) => isDeepStrictEqual(u, proposal)));
+          if (!audit || c.agreements?.some((a) => isDeepStrictEqual(a.proposal, proposal))) throw new Error("The proposal is unreviewed or already confirmed.");
+          if ((c.agreements?.length ?? 0) >= 6) throw new Error("Case plan-confirmation limit reached.");
+          (c.agreements ??= []).push(confirmPlan(command.id, proposal, audit.id, c.facts, now));
+          c.paymentAction = { kind: "agreement_confirmed", id: command.id };
+        } else {
+          const agreement = c.agreements?.at(-1);
+          if (!agreement || agreement.id !== command.agreementId) throw new Error("Only the latest confirmed plan in this case can receive a payment.");
+          if ((c.operations?.length ?? 0) >= 12) throw new Error("Case payment-attempt limit reached.");
+          const saved = simulatePayment(command.id, agreement, c.facts, c.operations ?? [], now, command.outcome);
+          (c.operations ??= []).push(saved.operation); c.facts = saved.facts;
+          c.paymentAction = { kind: "payment_attempted", id: command.id };
+        }
+      } catch (error) { throw new V2Error(409, error instanceof Error ? error.message : "Simulated operation could not be validated."); }
+      // Consent/outcome commits before explanation; a failed model call must never replay or undo the effect.
+      c.revision++; c.now = now; c.status = "processing"; delete c.lastRun;
+      c.run = { id: command.id, revision: c.revision, startedAt: now };
+      c.activity.push({ role: "customer", action: c.paymentAction.kind, summary: "Application saved the explicit simulation action before agent assessment. No real payment was made." });
+      return { id: command.id, revision: c.revision, caseId: command.caseId, input: investigationInput(c) };
+    }
     let operatorFeedback: Investigation["operatorFeedback"];
     if (command.action === "correct" || command.action === "retry_correction") {
       if (c.stopped) throw new V2Error(409, "Contact is stopped. A correction cannot resume contact.");
@@ -225,12 +261,13 @@ export async function beginCommand(token: string, command: Command): Promise<Job
     }
     if (text && command.action !== "retry") c.messages.push({ id: command.id, text, channel: command.action === "business" ? "business" : "customer", speaker: command.action === "business" ? "business" : "customer", at: new Date().toISOString(), ...(command.action === "business" ? { requestId: c.requestId! } : {}) });
     finishRun(c, "interrupted");
+    if (command.action !== "retry" && command.action !== "retry_correction") delete c.paymentAction;
     c.revision++; c.now = new Date().toISOString();
     if (c.takeover || c.reviewHold) { c.status = c.reviewHold ? "needs_review" : "taken_over"; c.run = null; return null; }
     c.status = "processing";
     delete c.lastRun;
     c.run = { id: command.id, revision: c.revision, startedAt: c.now };
-    return { id: command.id, revision: c.revision, caseId: command.caseId, input: structuredClone({ facts: c.facts, messages: c.messages, now: c.now, verification: c.verification, requestId: c.requestId, caseUpdates: c.updates, ...(operatorFeedback ? { operatorFeedback } : {}) }) };
+    return { id: command.id, revision: c.revision, caseId: command.caseId, input: investigationInput(c, operatorFeedback) };
   });
 }
 
@@ -241,6 +278,7 @@ export async function commitResult(token: string, job: Job, result: Investigatio
     c.lastReview = result; c.activity.push(...result.activity, { role: "customer", action: "run_complete", summary: `${c.run.calls ?? 0} model calls completed in ${((Date.now() - Date.parse(c.run.startedAt)) / 1000).toFixed(1)}s.` }); c.activity = c.activity.slice(-150); finishRun(c, result.review.accepted ? "completed" : "blocked");
     const audit: CaseState["audit"][number] = { id: job.id, at: new Date().toISOString(), before: [...c.updates], after: [...c.updates], balanceBeforeCents: c.facts.balanceCents, balanceAfterCents: c.facts.balanceCents, review: result.review, roleVersion: ROLE_VERSION, sourceVersion: job.input.facts.sourceVersion, sourceMessageIds: job.input.messages.filter((m) => m.speaker !== "agent").map((m) => m.id), replyId: result.review.accepted ? `${job.id}-reply` : null };
     c.audit.push(audit);
+    if (job.input.paymentAction) audit.paymentAction = job.input.paymentAction;
     audit.runtime = c.lastRun;
     if (job.input.operatorFeedback) {
       const correction = c.corrections?.find((item) => item.runId === job.id);
@@ -256,7 +294,7 @@ export async function commitResult(token: string, job: Job, result: Investigatio
     for (const update of updates) {
       if ("date" in update && update.kind !== "payment_recognized" && update.date < localDate(new Date(c.now), c.facts.timezone)) throw new V2Error(409, "Past dates need clarification before recording a new promise/request.");
       if (update.kind === "payment_recognized" && update.date > localDate(new Date(c.now), c.facts.timezone)) throw new V2Error(409, "Future payments cannot be recognized.");
-      if (c.updates.some((u) => JSON.stringify(u) === JSON.stringify(update))) continue;
+      if (c.updates.some((u) => isDeepStrictEqual(u, update))) continue;
       c.updates.push(update);
       if (update.kind === "payment_recognized") {
         c.facts.payments.push({ id: `business-${c.requestId}`, invoiceId: update.invoiceId, amountCents: update.amountCents, date: update.date, status: "settled", includedInBalance: true, provenance: "business_confirmation", businessMessageId: update.businessMessageId, requestId: c.requestId!, reference: update.reference });
@@ -284,7 +322,7 @@ export async function commitResult(token: string, job: Job, result: Investigatio
         c.messages.push({ id: `${job.id}-business`, channel: "business", speaker: "agent", text: result.verification.businessMessage, at: new Date().toISOString(), requestId: c.requestId });
     }
     c.messages.push({ id: `${job.id}-reply`, channel: "customer", speaker: "agent", text: result.draft.reply, at: new Date().toISOString(), ...(job.input.operatorFeedback ? { origin: "operator_revision" as const } : {}) });
-    c.reviewHold = result.draft.needsOperator || result.resolution?.needsOperator || false;
+    c.reviewHold = result.draft.needsOperator || result.resolution?.needsOperator || c.operations?.some((op) => op.outcome === "pending" || op.outcome === "unknown") || false;
     c.status = c.reviewHold ? "needs_review" : c.verification && ["awaiting_business", "needs_facts", "pending", "conflicting"].includes(c.verification.outcome) ? "awaiting_business" : "ready";
   });
 }

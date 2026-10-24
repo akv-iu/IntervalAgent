@@ -12,7 +12,7 @@ const input: Investigation = { facts, now, verification: null, messages: [{ id: 
 
 test("business policies are separate, cloned, and never default an unknown business", () => {
   const northside = paymentOptions(facts), cedar = paymentOptions({ ...facts, businessId: "cedar" });
-  expect(northside).toMatchObject({ status: "available", methods: ["card", "bank_transfer", "cash"], counts: [1, 2, 3], addedFeesCents: 0, executionEnabled: false, agreementEnabled: false });
+  expect(northside).toMatchObject({ status: "available", methods: ["card", "bank_transfer", "cash"], counts: [1, 2, 3], addedFeesCents: 0, executionEnabled: true, agreementEnabled: true });
   expect(cedar).toMatchObject({ status: "available", methods: ["card", "bank_transfer"], counts: [1, 2, 3, 4, 6] });
   if (northside.status === "available") northside.methods.length = 0;
   expect(paymentOptions(facts)).toMatchObject({ methods: ["card", "bank_transfer", "cash"] });
@@ -81,7 +81,7 @@ test("simple options stay with the orchestrator; no forced specialist pipeline",
     calls++;
     if (request.systemInstructions?.includes("Independently challenge")) return output({ accepted: true, reasons: [] });
     expect(request.systemInstructions).toContain("Own the customer");
-    expect(JSON.stringify(request.input)).toContain("northside-options-1");
+    expect(JSON.stringify(request.input)).toContain("northside-options-2");
     return output({ reply: "Card, bank transfer or cash; one payment or two/three monthly installments. What works for you?", needsOperator: false });
   }, async *getStreamedResponse() { throw new Error("unused"); } };
   const result = await investigate(input, model);
@@ -95,12 +95,12 @@ test.each([true, false])("model-selected specialist calculates a proposal and Re
   const model: Model = { async getResponse(request) {
     requests.push(request);
     if (request.systemInstructions?.includes("Independently challenge")) {
-      expect(JSON.stringify(request.input)).toContain("northside-options-1");
+      expect(JSON.stringify(request.input)).toContain("northside-options-2");
       return output({ accepted, reasons: accepted ? [] : ["Customer preference needs clarification"] });
     }
     if (request.systemInstructions?.includes("Interpret commitments")) {
       const step = ++accountCalls;
-      expect(JSON.stringify(request.input)).toContain("northside-options-1");
+      expect(JSON.stringify(request.input)).toContain("northside-options-2");
       expect(JSON.stringify(request.input)).toContain("2026-10-24");
       expect(request.tools.some((t) => t.name === "get_payment_options")).toBe(false);
       if (step === 1) return call("calculate_payment_proposal", terms);

@@ -13,14 +13,14 @@ export const PaymentProposal = ProposalTerms.extend({
 export type PaymentProposal = z.infer<typeof PaymentProposal>;
 
 const policies: Record<string, { version: string; methods: z.infer<typeof PaymentMethod>[]; counts: number[]; startWithinDays: number }> = {
-  northside: { version: "northside-options-1", methods: ["card", "bank_transfer", "cash"], counts: [1, 2, 3], startWithinDays: 30 },
-  cedar: { version: "cedar-options-1", methods: ["card", "bank_transfer"], counts: [1, 2, 3, 4, 6], startWithinDays: 45 },
+  northside: { version: "northside-options-2", methods: ["card", "bank_transfer", "cash"], counts: [1, 2, 3], startWithinDays: 30 },
+  cedar: { version: "cedar-options-2", methods: ["card", "bank_transfer"], counts: [1, 2, 3, 4, 6], startWithinDays: 45 },
 };
 
 export function paymentOptions(facts: CaseFacts) {
   const policy = Object.hasOwn(policies, facts.businessId) ? policies[facts.businessId] : undefined;
   if (!policy) return { status: "unavailable" as const, businessId: facts.businessId };
-  return { status: "available" as const, businessId: facts.businessId, ...structuredClone(policy), currency: "USD", cadence: "monthly", addedFeesCents: 0, interestCents: 0, executionEnabled: false, agreementEnabled: false };
+  return { status: "available" as const, businessId: facts.businessId, ...structuredClone(policy), currency: "USD", cadence: "monthly", addedFeesCents: 0, interestCents: 0, executionMethods: ["card", "bank_transfer"] as z.infer<typeof PaymentMethod>[], executionEnabled: true, agreementEnabled: true };
 }
 
 // shortcut: full-balance monthly offers only; add allocation/cadence rules when partial or custom offers are supported.
@@ -46,6 +46,10 @@ export function calculateProposal(facts: CaseFacts, now: string, value: z.infer<
 export function proposalIsCurrent(proposal: PaymentProposal, facts: CaseFacts, now: string): boolean {
   try { return JSON.stringify(PaymentProposal.parse(proposal)) === JSON.stringify(calculateProposal(facts, now, proposalTerms(proposal))); }
   catch { return false; }
+}
+
+export function sameProposal(left: PaymentProposal, right: PaymentProposal): boolean {
+  return JSON.stringify(PaymentProposal.parse(left)) === JSON.stringify(PaymentProposal.parse(right));
 }
 
 function proposalTerms(proposal: PaymentProposal): z.infer<typeof ProposalTerms> {

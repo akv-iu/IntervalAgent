@@ -58,9 +58,10 @@ export async function handleV2(request: Request): Promise<Response> {
         const investigated = await investigateFromSource(job.input, syntheticSource([job.input.facts]), model, signal);
         await commitResult(token, { ...job, input: investigated.input }, investigated.result);
       } catch (error) {
-        const failure = error instanceof AccountSourceError ? { kind: "source", message: error.message, code: error.reason } : error instanceof V2Error ? { kind: "configuration", status: error.status, message: error.message } : describeFailure(error);
+        let failure = error instanceof AccountSourceError ? { kind: "source", message: error.message, code: error.reason } : error instanceof V2Error ? { kind: "configuration", status: error.status, message: error.message } : describeFailure(error);
+        if (job.input.paymentAction) failure = { ...failure, message: `${failure.message} The simulated action is already saved. Inspect its outcome; retrying the agent does not repeat the payment.` };
         await failRun(token, job, failure).catch(() => {});
-        if (error instanceof V2Error) throw error;
+        if (error instanceof V2Error) throw new V2Error(error.status, failure.message);
         throw new V2Error(503, failure.message);
       }
     }

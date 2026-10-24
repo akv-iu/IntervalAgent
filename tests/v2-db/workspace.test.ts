@@ -5,6 +5,7 @@ import { calculateProposal } from "../../src/lib/v2/options";
 import { projectEnv } from "../../src/lib/project-env";
 import { beginCommand, budgetUsage, closeV2Pool, commitResult, createWorkspace, failRun, initializeV2, readWorkspace, recordLive, reserveLive, resetWorkspace, startLive, v2Pool, type Job } from "../../src/lib/v2/store";
 import { handleV2 } from "../../src/lib/v2/http";
+import * as store from "../../src/lib/v2/store";
 import type { InvestigationResult, Verification } from "../../src/lib/v2/contracts";
 
 // All storage/API paths run unchanged; only the connection targets a dedicated test database.
@@ -226,7 +227,9 @@ test("existing workspaces gain twelve scoped cases without rewriting saved work,
   await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=$1,expires_at=$2", [{ cases, resets: 2 }, expiry]);
   const [a, b] = await Promise.all([readWorkspace(token), readWorkspace(token)]);
   expect(Object.keys(a.cases)).toHaveLength(12);
-  expect(b).toEqual(a);
+  expect(b).toEqual({ ...a, observedAt: b.observedAt });
+  expect(Number.isFinite(Date.parse(a.observedAt!))).toBe(true);
+  expect(Number.isFinite(Date.parse(b.observedAt!))).toBe(true);
   expect(a.expiresAt).toBe(expiry); expect(a.resets).toBe(2);
   for (const id of Object.keys(cases)) expect(a.cases[id]).toEqual(cases[id]);
   const added = a.cases["cedar-late-payment"];
@@ -735,7 +738,7 @@ test("reviewed proposals persist with the reply/audit, without a promise, receip
   expect(saved.updates).toEqual([proposal]); expect(saved.facts).toEqual(job.input.facts);
   expect(saved.events).toEqual([]); expect(saved.status).toBe("ready"); expect(saved.reviewHold).toBe(false);
   expect(saved.messages.at(-1)?.text).toBe(result.draft.reply);
-  expect(saved.audit.at(-1)).toMatchObject({ after: [proposal], balanceBeforeCents: 12900, balanceAfterCents: 12900, sourceVersion: job.input.facts.sourceVersion, roleVersion: "v2-phase3a-2" });
+  expect(saved.audit.at(-1)).toMatchObject({ after: [proposal], balanceBeforeCents: 12900, balanceAfterCents: 12900, sourceVersion: job.input.facts.sourceVersion, roleVersion: "v2-phase3b-2" });
   expect((await readWorkspace(token)).cases["cedar-late-payment"].updates).toEqual([]);
   expect((await c((await createWorkspace()).token)).updates).toEqual([]);
 });
@@ -747,7 +750,7 @@ test.each(["rejected-review", "forged-amount", "foreign-policy", "stale-source",
   const result = approved("Here is the proposed schedule, not an agreement.");
   if (kind === "rejected-review") result.review = { accepted: false, reasons: ["Not supported"] };
   if (kind === "forged-amount") proposal.schedule[0].amountCents = 1;
-  if (kind === "foreign-policy") proposal.policyVersion = "cedar-options-1";
+  if (kind === "foreign-policy") proposal.policyVersion = "cedar-options-2";
   if (kind === "stale-source") proposal.sourceVersion = "outdated";
   if (kind === "foreign-customer") proposal.sourceMessageId = randomUUID();
   if (kind === "future-date") { proposal.firstDate = localDate(new Date(job.input.now), "America/Denver", 31); proposal.schedule[0].date = proposal.firstDate; }
@@ -771,4 +774,152 @@ test.each(["stop", "takeover", "new-input", "reset", "expired"])("%s blocks an i
   if (interruption === "expired") await v2Pool().query("UPDATE rebuild_v2.workspaces SET expires_at=now()-interval '1 second'");
   await expect(commitResult(token, job, result)).rejects.toMatchObject({ status: interruption === "expired" ? 410 : 409 });
   if (interruption !== "expired") { const saved = await c(token); expect(saved.updates).toEqual([]); expect(saved.facts.payments).toEqual([]); }
+});
+
+
+async function paymentCase(method: "card" | "cash" = "card", tomorrow = false) {
+  const { token } = await createWorkspace();
+  const request = command("customer", "Please offer two monthly payments starting today"), job = requireJob(await beginCommand(token, request));
+  const proposal = calculateProposal(job.input.facts, job.input.now, { method, count: 2, firstDate: localDate(new Date(job.input.now), "America/Denver", tomorrow ? 1 : 0), sourceMessageId: request.id });
+  const result = approved("Here is a proposal, not a payment."); result.resolution = { summary: "Calculated terms", needsOperator: false, updates: [proposal] };
+  await commitResult(token, job, result);
+  return { token, proposal };
+}
+async function confirmedPaymentCase(method: "card" | "cash" = "card", tomorrow = false) {
+  const scenario = await paymentCase(method, tomorrow), before = await c(scenario.token);
+  const confirm = { id: randomUUID(), caseId: "late-payment", action: "confirm_plan" as const, revision: before.revision, proposal: scenario.proposal };
+  const job = requireJob(await beginCommand(scenario.token, confirm));
+  await commitResult(scenario.token, job, approved("Your simulated plan is confirmed. No payment was received."));
+  return { ...scenario, confirm };
+}
+const payCommand = async (token: string, outcome: "succeeded" | "failed" | "pending" | "unknown" = "succeeded") => {
+  const state = await c(token);
+  return { id: randomUUID(), caseId: "late-payment", action: "simulate_payment" as const, revision: state.revision, agreementId: state.agreements!.at(-1)!.id, outcome };
+};
+
+test("confirmed terms persist with reviewed linkage; chat yes alone cannot confirm, pay or consume a turn for a control", async () => {
+  const { token, proposal } = await paymentCase();
+  const chat = requireJob(await beginCommand(token, command("customer", "Yes, go ahead")));
+  await commitResult(token, chat, approved("Use the displayed confirmation control to proceed."));
+  expect((await c(token)).agreements).toBeUndefined(); expect((await c(token)).facts.balanceCents).toBe(12900);
+  const before = await c(token), confirm = { id: randomUUID(), caseId: "late-payment", action: "confirm_plan" as const, revision: before.revision, proposal };
+  const job = requireJob(await beginCommand(token, confirm));
+  expect(job.input.paymentAction).toEqual({ kind: "agreement_confirmed", id: confirm.id });
+  await commitResult(token, job, approved("Plan confirmed, with no payment received.")); await closeV2Pool();
+  const saved = await c(token);
+  expect(saved.turns).toBe(before.turns); expect(saved.agreements).toHaveLength(1); expect(saved.operations).toBeUndefined();
+  expect(saved.agreements![0]).toMatchObject({ id: confirm.id, proposal, proposalAuditId: saved.audit[0].id });
+  expect(saved.facts.balanceCents).toBe(12900); expect(saved.audit.at(-1)?.paymentAction?.id).toBe(confirm.id);
+  expect(await beginCommand(token, confirm)).toBeNull();
+});
+
+test.each(["succeeded", "failed", "pending", "unknown"] as const)("%s payment commits once, survives model failure and is not replayed by an explanation retry", async (outcome) => {
+  const { token } = await confirmedPaymentCase(), value = await payCommand(token, outcome);
+  const job = requireJob(await beginCommand(token, value));
+  const balance = outcome === "succeeded" ? 6450 : 12900;
+  expect((await c(token)).facts.balanceCents).toBe(balance);
+  await failRun(token, job, { kind: "connection", message: "Scripted explanation failure" }); await closeV2Pool();
+  let saved = await c(token);
+  expect(saved.operations).toHaveLength(1); expect(saved.operations![0].outcome).toBe(outcome);
+  expect(saved.facts.payments).toHaveLength(outcome === "succeeded" ? 1 : 0);
+  expect(await beginCommand(token, value)).toBeNull();
+  const retry = requireJob(await beginCommand(token, command("retry")));
+  expect(retry.input.operations).toEqual(saved.operations); expect(retry.input.paymentAction).toEqual({ kind: "payment_attempted", id: value.id });
+  await commitResult(token, retry, approved(`Saved simulation outcome: ${outcome}; no retry of the payment.`));
+  saved = await c(token);
+  expect(saved.operations).toHaveLength(1); expect(saved.facts.balanceCents).toBe(balance);
+  expect(saved.reviewHold).toBe(outcome === "pending" || outcome === "unknown");
+});
+
+test("concurrent payment clicks cannot create duplicate receipts or apply the next installment early", async () => {
+  const { token } = await confirmedPaymentCase(), value = await payCommand(token);
+  const jobs = await Promise.all([beginCommand(token, value), beginCommand(token, value)]);
+  expect(jobs.filter(Boolean)).toHaveLength(1);
+  await commitResult(token, requireJob(jobs.find(Boolean)!), approved("Simulated receipt saved; $64.50 remains."));
+  await expect(beginCommand(token, { ...value, id: randomUUID() })).rejects.toMatchObject({ status: 409 });
+  await expect(beginCommand(token, { ...value, outcome: "failed" })).rejects.toMatchObject({ status: 409 });
+  await expect(beginCommand(token, await payCommand(token))).rejects.toThrow("future payments");
+  expect((await c(token)).facts.payments).toHaveLength(1); expect((await c(token)).operations).toHaveLength(1);
+});
+
+test.each(["pending", "unknown"] as const)("%s results cannot be relabelled as success by resuming, a new UUID, or another confirmation", async (outcome) => {
+  const { token, proposal } = await confirmedPaymentCase(), job = requireJob(await beginCommand(token, await payCommand(token, outcome)));
+  await commitResult(token, job, approved("Operator reconciliation is required."));
+  await beginCommand(token, command("resume"));
+  await expect(beginCommand(token, await payCommand(token))).rejects.toThrow("reconciliation");
+  await expect(beginCommand(token, { id: randomUUID(), caseId: "late-payment", action: "confirm_plan", revision: (await c(token)).revision, proposal })).rejects.toThrow("reconciliation");
+  expect((await c(token)).facts.balanceCents).toBe(12900); expect((await c(token)).operations).toHaveLength(1);
+});
+
+test("a known failed attempt can receive a distinct explicit retry, without treating failure as a receipt", async () => {
+  const { token } = await confirmedPaymentCase(), failed = requireJob(await beginCommand(token, await payCommand(token, "failed")));
+  await commitResult(token, failed, approved("The simulation failed; no receipt or balance reduction."));
+  const retry = requireJob(await beginCommand(token, await payCommand(token)));
+  await commitResult(token, retry, approved("The new explicit simulation succeeded."));
+  const saved = await c(token);
+  expect(saved.operations?.map((op) => op.outcome)).toEqual(["failed", "succeeded"]);
+  expect(saved.facts.payments).toHaveLength(1); expect(saved.facts.balanceCents).toBe(6450);
+});
+
+test.each(["forged", "stale-revision", "unreviewed", "old-policy", "foreign-case"])("%s confirmation cannot grant financial authority", async (kind) => {
+  const { token, proposal } = await paymentCase(), before = await c(token);
+  if (kind === "unreviewed") await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=jsonb_set(data,'{cases,late-payment,audit}','[]')");
+  const value = { id: randomUUID(), caseId: kind === "foreign-case" ? "fresh-record" : "late-payment", action: "confirm_plan" as const, revision: kind === "stale-revision" ? before.revision - 1 : before.revision, proposal: { ...proposal } };
+  if (kind === "forged") value.proposal.schedule = [{ ...proposal.schedule[0], amountCents: 1 }, proposal.schedule[1]];
+  if (kind === "old-policy") value.proposal.policyVersion = "northside-options-1";
+  await expect(beginCommand(token, value)).rejects.toMatchObject({ status: 409 });
+  expect((await c(token)).agreements).toBeUndefined(); expect((await c(token)).facts.balanceCents).toBe(12900);
+});
+
+test.each(["cash", "future", "stale-source", "foreign-agreement", "stop", "takeover", "expired", "reset"])("%s blocks payment before any simulated receipt", async (kind) => {
+  const { token } = await confirmedPaymentCase(kind === "cash" ? "cash" : "card", kind === "future"), value = await payCommand(token);
+  if (kind === "stale-source") await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=jsonb_set(data,'{cases,late-payment,facts,sourceVersion}',$1::jsonb)", [JSON.stringify("changed-source")]);
+  if (kind === "foreign-agreement") value.agreementId = randomUUID();
+  if (kind === "stop") await beginCommand(token, command("customer", "STOP"));
+  if (kind === "takeover") await beginCommand(token, command("takeover"));
+  if (kind === "expired") await v2Pool().query("UPDATE rebuild_v2.workspaces SET expires_at=now()-interval '1 second'");
+  if (kind === "reset") await resetWorkspace(token);
+  await expect(beginCommand(token, value)).rejects.toMatchObject({ status: kind === "expired" ? 410 : 409 });
+  if (kind !== "expired") { const saved = await c(token); expect(saved.operations ?? []).toEqual([]); expect(saved.facts.payments).toEqual([]); }
+});
+
+test("proposal deduplication survives PostgreSQL JSON key ordering across a reviewed retry", async () => {
+  const { token, proposal } = await paymentCase(), job = requireJob(await beginCommand(token, command("retry")));
+  const result = approved("The same offer is retained."); result.resolution = { summary: "Same proposal", needsOperator: false, updates: [proposal] };
+  await commitResult(token, job, result);
+  expect((await c(token)).updates).toHaveLength(1);
+});
+
+test("HTTP explanation configuration failure preserves the already-committed receipt and returns an honest retry message", async () => {
+  const { token } = await confirmedPaymentCase(), value = await payCommand(token);
+  const config = vi.spyOn(store, "v2Config").mockReturnValue({ databaseUrl: "postgresql://unused", apiKey: undefined });
+  try {
+    const response = await handleV2(new NextRequest("http://127.0.0.1:3012/api/v2/workspace", { method: "POST", headers: { host: "127.0.0.1:3012", origin: "http://127.0.0.1:3012", cookie: `recovery_v2=${token}`, "content-type": "application/json" }, body: JSON.stringify(value) }));
+    expect(response.status).toBe(503);
+    expect((await response.json()).error).toContain("simulated action is already saved");
+    expect((await c(token)).facts.balanceCents).toBe(6450); expect((await c(token)).operations).toHaveLength(1);
+    expect((await budgetUsage()).calls).toBe(0);
+    const duplicate = await handleV2(new NextRequest("http://127.0.0.1:3012/api/v2/workspace", { method: "POST", headers: { host: "127.0.0.1:3012", origin: "http://127.0.0.1:3012", cookie: `recovery_v2=${token}`, "content-type": "application/json" }, body: JSON.stringify(value) }));
+    expect(duplicate.status).toBe(200); expect((await c(token)).facts.payments).toHaveLength(1);
+  } finally { config.mockRestore(); }
+});
+
+test("a rejected assessment or attempted financial replay cannot undo a committed simulated receipt", async () => {
+  const { token, proposal } = await confirmedPaymentCase(), value = await payCommand(token);
+  const job = requireJob(await beginCommand(token, value));
+  const unsafe = approved("Replay the payment"); unsafe.resolution = { summary: "Another offer during assessment", needsOperator: false, updates: [proposal] };
+  await expect(commitResult(token, job, unsafe)).rejects.toThrow("assessment cannot");
+  expect((await c(token)).facts.balanceCents).toBe(6450); expect((await c(token)).facts.payments).toHaveLength(1);
+  const rejected = approved("Unpublished wrong explanation"); rejected.review = { accepted: false, reasons: ["Incorrect outcome"] };
+  await commitResult(token, job, rejected);
+  const saved = await c(token);
+  expect(saved.operations).toHaveLength(1); expect(saved.facts.balanceCents).toBe(6450);
+  expect(saved.messages.at(-1)?.text).not.toBe(rejected.draft.reply); expect(saved.status).toBe("needs_review");
+});
+
+test("unresolved business evidence blocks confirmation rather than reclassifying old money", async () => {
+  const { token, proposal } = await paymentCase();
+  await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=jsonb_set(jsonb_set(data,'{cases,late-payment,verification}',$1::jsonb),'{cases,late-payment,requestId}',$2::jsonb)", [JSON.stringify({ ...verification, claimMessageId: proposal.sourceMessageId }), JSON.stringify(randomUUID())]);
+  await expect(beginCommand(token, { id: randomUUID(), caseId: "late-payment", action: "confirm_plan", revision: (await c(token)).revision, proposal })).rejects.toThrow("business payment evidence");
+  expect((await c(token)).agreements).toBeUndefined(); expect((await c(token)).facts.payments).toEqual([]);
 });

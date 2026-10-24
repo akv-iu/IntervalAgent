@@ -6,6 +6,9 @@ import { caseAttention, roleNames, scenarioName, statusNames, type Attention } f
 import type { CaseState, WorkspaceView } from "@/lib/v2/store";
 import BusinessDashboard, { CaseRecords } from "./BusinessDashboard";
 import OperatorCorrections, { PausedReplyNotice } from "./OperatorCorrections";
+import PaymentPanel from "./PaymentPanel";
+import type { PaymentProposal } from "@/lib/v2/options";
+import type { SimulationOutcome } from "@/lib/v2/payments";
 import styles from "./workspace.module.css";
 
 type Budget = { capDollars: number | null; conservativeUsedDollars: number; calls: number; unknown_calls: number; input_tokens: number; output_tokens: number };
@@ -136,7 +139,7 @@ export default function InvestigationWorkspace() {
     return () => { reducedMotion.removeEventListener("change", cancel); cancel(); };
   }, [attention, caseId]);
 
-  async function act(action: string, text?: string, interrupt = false, correction: { revision?: number; targetAuditId?: string; targetRole?: string; correctionId?: string } = {}) {
+  async function act(action: string, text?: string, interrupt = false, correction: { revision?: number; targetAuditId?: string; targetRole?: string; correctionId?: string; proposal?: PaymentProposal; agreementId?: string; outcome?: SimulationOutcome } = {}) {
     if (running.current && !interrupt) return false;
     if (interrupt) controller.current?.abort();
     running.current = true; setBusy(true); setWaitSeconds(0); setError("");
@@ -200,6 +203,7 @@ export default function InvestigationWorkspace() {
           <section id="v2-customer" data-pane="customer" className={paneClass("customer")} aria-labelledby="customer-title">
             <div className={styles.paneHead}><div><h3 id="customer-title">Customer conversation</h3><p>{c.facts.businessName} · chatting as {c.facts.customer}</p></div><span className={styles.signal} data-handoff-anchor aria-hidden="true" /></div>
             <Thread c={c} channel="customer" />
+            <PaymentPanel key={caseId} c={c} now={workspace.observedAt} busy={processing} onConfirm={(proposal) => void act("confirm_plan", undefined, false, { revision: c.revision, proposal })} onPay={(agreementId, outcome) => void act("simulate_payment", undefined, false, { revision: c.revision, agreementId, outcome })} />
             {c.verification?.outcome === "business_reported" && c.verification.amountCents !== null && <div className={styles.notice}><p>Business report: {formatCents(c.verification.amountCents)} paid toward {c.verification.invoiceId}.</p>{!c.reviewHold && !c.stopped && <button type="button" className={`${button} mt-2`} disabled={processing} onClick={() => void act("customer", "I dispute the business report and would like an operator to review it.")}>Dispute business report</button>}</div>}
             <PausedReplyNotice c={c} />
             {c.status === "run_failed" && <p className={styles.notice}>{c.lastRun?.failure?.message ?? "Your message is saved, but the agent run failed. The earlier error details were not retained. Use Retry from saved evidence to try again."}</p>}

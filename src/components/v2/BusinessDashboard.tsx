@@ -1,18 +1,20 @@
 import { formatCents } from "@/lib/format";
 import { scenarioName, statusNames } from "@/lib/v2/presentation";
 import type { CaseState, WorkspaceView } from "@/lib/v2/store";
-import { proposalIsCurrent } from "@/lib/v2/options";
+import { proposalIsCurrent, sameProposal } from "@/lib/v2/options";
 import styles from "./workspace.module.css";
 
-export function CaseRecords({ c }: { c: Pick<CaseState, "facts" | "now" | "preferredChannel" | "updates" | "events"> }) {
+export function CaseRecords({ c }: { c: Pick<CaseState, "facts" | "now" | "preferredChannel" | "updates" | "events" | "agreements" | "operations"> }) {
   return <>
     {c.preferredChannel && <p className="mt-2 text-sm">Current channel preference: {c.preferredChannel}.</p>}
     {c.updates.length ? <ul className="mt-2 space-y-2 text-sm">{c.updates.map((update, index) => <li key={`${update.sourceMessageId}-${index}`}>{update.kind === "payment_proposed" ? <>
-      <p>Payment proposal · {c.updates.slice(index + 1).some((u) => u.kind === "payment_proposed") ? "Superseded" : proposalIsCurrent(update, c.facts, c.now) ? "Latest offer at last case update" : "Outdated; needs recalculation"}: {update.method.replaceAll("_", " ")}, {formatCents(update.balanceCents)} total.</p>
+      <p>Payment proposal · {c.agreements?.some((a) => sameProposal(a.proposal, update)) ? "Confirmed plan terms" : c.updates.slice(index + 1).some((u) => u.kind === "payment_proposed") ? "Superseded" : proposalIsCurrent(update, c.facts, c.now) ? "Latest offer at last case update" : "Outdated; needs recalculation"}: {update.method.replaceAll("_", " ")}, {formatCents(update.balanceCents)} total.</p>
       <ol className="ml-4 list-decimal">{update.schedule.map((part) => <li key={part.date}>{formatCents(part.amountCents)} on {part.date}</li>)}</ol>
-      <p>Not agreed. No payment received. No added fees or interest.</p>
+      <p>{c.agreements?.some((a) => sameProposal(a.proposal, update)) ? "Plan confirmed separately; see saved attempts for any received payment." : "Not agreed. No payment received."} No added fees or interest.</p>
     </> : update.kind === "payment_recognized" ? `Business-confirmed payment: ${formatCents(update.amountCents)} on ${update.date}, ${update.invoiceId}. Applied to this simulated balance.` : update.kind === "promise" ? `Promise: ${formatCents(update.amountCents)} on ${update.date}. No payment received.` : update.kind === "extension_requested" ? `Extension requested to ${update.date}. Not approved.` : update.kind === "contact_preference" ? `Preference changed to ${update.channel}. No appointment scheduled.` : `${update.channel} requested: ${update.date}, ${update.window}.`}</li>)}</ul> : <p className="mt-2 text-sm text-muted">No reviewed updates saved yet.</p>}
     {c.events.map((event) => <p className="mt-2 text-sm" key={event.id}>{event.state}: {event.channel}, {event.date}, {event.window} ({event.timezone}). Not executed.{event.beyondExpiry ? " Planned window extends beyond this workspace's expiry." : ""}</p>)}
+    {c.agreements?.map((agreement, index) => <p className="mt-2 text-sm" key={agreement.id}>{index < (c.agreements?.length ?? 0) - 1 ? "Superseded plan" : "Confirmed simulated plan"}: {agreement.proposal.method.replaceAll("_", " ")}, {formatCents(agreement.proposal.balanceCents)} across {agreement.proposal.count} payment(s). Consent saved; this is not a receipt.</p>)}
+    {c.operations?.map((operation) => <p className="mt-2 text-sm" key={operation.id}>Simulated attempt {operation.id}: {operation.outcome}, {formatCents(operation.amountCents)} for {operation.invoiceId}. {operation.receiptId ? `Simulated receipt ${operation.receiptId}; remaining balance ${formatCents(operation.balanceAfterCents)}.` : "No receipt or balance reduction."}{operation.outcome === "pending" || operation.outcome === "unknown" ? " Operator reconciliation required before another attempt." : ""}</p>)}
   </>;
 }
 

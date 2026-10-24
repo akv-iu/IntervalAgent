@@ -1,6 +1,6 @@
 # IntervalAgent V2 rebuild: plan for review
 
-Status: Phase 2D is pushed as `5d20fab` to `v2-rebuild`; production V1 stays on `main`. Akshay approved Phase 3A with fresh usage unknown. Phase 3A options, calculated full-balance offers and saved reviewed proposals include the October 24 call-efficiency refinement; Akshay authorized push to `v2-rebuild`. Live acceptance remains incomplete. Agreement/payment execution and operator financial approval remain later Phase 3 work; evaluated reusable learning remains Phase 4. No paid model calls or deployment occurred in 3A; the prior latency finding remains open. See [STATUS.md](STATUS.md) and [LOCAL-DEMO.md](LOCAL-DEMO.md).
+Status: Phase 3A is pushed as `fd8298e` on `v2-rebuild`; production V1 stays on `main`. Akshay approved Phase 3B with fresh usage unknown at the October 24, 8:26 AM Mountain checkpoint. Phase 3B explicit plan consent, due simulated installments, durable outcomes/receipts and agent assessment are implemented locally. Its delegated browser sample covered all four outcomes, persistence, retry safety and mobile keyboard controls; missed offer delegation and confirmed-plan labels were fixed. Live API calls were used for that test, with no deployment or push. Financial exception approvals/reconciliation remain Phase 3C; evaluated reusable learning remains Phase 4. Stop at this checkpoint. See [STATUS.md](STATUS.md) and [LOCAL-DEMO.md](LOCAL-DEMO.md) for results and limits.
 Date: October 23, 2026. Branch: `v2-rebuild`, based on V1 commit `7a6c6c8`.
 Acceptance requirements: [SPEC.md](SPEC.md). The original root `SPEC.md` remains the V1 contract.
 
@@ -156,9 +156,29 @@ Implemented locally, stopped for Akshay's manual test. Business policy and today
 
 Save a `payment_proposed` update atomically with the accepted reply and audit, bound to customer evidence, policy/source versions, invoice, balance and exact schedule. Revalidate before commit. Preserve prior offers and label superseded/outdated terms in the existing records view; labels refer to the saved case clock. Do not mix recognition and a new offer in one result. No agreement, customer confirmation action, new payment, receipt, balance reduction or external source write occurs. Existing workspaces require no reset/migration.
 
-Remaining Phase 3 work, subject to the next usage/approval checkpoint: bind explicit consent to a current saved proposal, execute guarded simulated outcomes and add supervised financial approvals. This 3A checkpoint does not implement those actions.
+Phase 3A stopped at unagreed offers. Phase 3B below adds explicit consent and simulated execution; supervised financial approvals remain a subsequent checkpoint.
 
-### Remaining Phase 3 implementation
+### Phase 3B checkpoint: consent and simulated outcomes
+
+> **Result:** The customer confirms exact reviewed terms, then explicitly simulates the next due installment.\
+> **Work:** Add scoped confirmation/payment controls, atomic outcomes/receipts and model-led explanation of saved evidence.\
+> **Check:** Block stale/duplicate/held/future actions and preserve effects through model failure, rejection and retries.
+
+Implemented and tested, including Akshay's delegated browser sample recorded in STATUS.md; authorized for push to `v2-rebuild`. `confirm_plan` binds the current case revision and latest exact reviewed proposal to a saved agreement/audit. Chat yes alone has no financial authority. `simulate_payment` uses that case's latest agreement and computes the next due installment on the server. Only card/bank-transfer simulation is enabled; cash receipt approval is not implemented. Future installments stay recorded, with no scheduler or automatic charge. Refresh reads include server observation time for due-date controls; the server rechecks actual time and policy under lock.
+
+A labelled demo-processor control selects succeeded/failed/pending/unknown synthetic responses; it is test configuration, not bank evidence or a model decision. Succeeded commits one simulated receipt, balance/version change and operation record atomically. Other outcomes receive no receipt or balance reduction. Pending/unknown blocks new confirmations/attempts until later operator reconciliation; Resume cannot bypass that guard. Known failure permits a new explicit attempt; duplicate command IDs never replay. Existing pending payments and unresolved business evidence block starting another payment plan.
+
+Consent/outcome commits before the model explains it. Failed/rejected/stale explanations cannot undo the operation or trigger a second one. Agents receive saved agreements/operations and choose useful assessment work; Reviewer still checks the reply, and assessment cannot propose another payment/recognition. Application validation controls effects. Per case: at most six confirmed plans and twelve attempts within existing 60-action limits and fixed expiry; controls do not consume chat turns. Policy versions advance to `*-options-2`, invalidating old offers; request a fresh quote without resetting the workspace.
+
+### Remaining Phase 3 implementation (Phase 3C; not started)
+
+Add scoped operator financial approval/reconciliation and traceable corrective decisions. Do not represent the existing Resume control as payment approval, unknown-result settlement, or a reversal. This remains subject to the next usage/approval checkpoint.
+
+
+
+### Phase 3 acceptance contract (across 3A, 3B and 3C)
+
+These bullets describe the full phase target; remaining financial approval/reconciliation work is identified above.
 
 - Retrieve business-eligible payment methods/arrangements through tools; calculate amounts and schedules in code. The model explains and adapts the proposal.
 - Bind confirmation to a specific current proposal. Recheck consent, scope, policy, record versions and required authority before execution. Customer consent, Reviewer acceptance and operator approval are distinct.
