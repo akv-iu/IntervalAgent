@@ -45,7 +45,9 @@ export type CaseFacts = {
   balanceCents: number; balanceAsOf: string; sourceVersion: string; timezone: "America/Denver";
   phone: string | null; email: string | null;
   payments: Payment[];
-  recognitionPolicy?: "business_confirmation";
+  recognitionPolicy?: "business_confirmation" | "operator_review";
+  scenario?: "late_payment" | "partial_payment" | "conflicting_reference" | "cancellation_overlap" | "affordability" | "pending_payment";
+  accountNotes?: string[];
 };
 export type Investigation = {
   facts: CaseFacts; messages: Message[]; now: string; verification: Verification | null; requestId?: string | null; caseUpdates?: CaseUpdate[];

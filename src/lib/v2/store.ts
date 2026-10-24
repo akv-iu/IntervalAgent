@@ -102,6 +102,9 @@ async function workspaceAction<T>(token: string, fn: (data: Workspace, expiresAt
     const row = result.rows[0];
     if (!row) throw new V2Error(401, "Workspace is unavailable. Start a new private workspace.");
     if (row.expires_at.getTime() <= Date.now()) throw new V2Error(410, "Workspace expired. Its state cannot be restored.");
+    // Add new demo cases using the original workspace clock, without replacing saved cases or extending access.
+    const additions = freshWorkspace(new Date(row.expires_at.getTime() - 86_400_000));
+    for (const [id, state] of Object.entries(additions.cases)) if (!Object.hasOwn(row.data.cases, id)) row.data.cases[id] = state;
     for (const c of Object.values(row.data.cases)) {
       // Upgrade untouched legacy cases under the row lock; never rewrite a started or stopped conversation.
       if (!c.messages.length && c.turns === 0 && c.businessReplies === 0 && !c.commands.length && !c.audit.length && !c.run && c.status === "ready" && !c.stopped && !c.takeover && !c.reviewHold)

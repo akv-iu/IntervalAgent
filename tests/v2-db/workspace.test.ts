@@ -46,6 +46,53 @@ test("same-case histories are private across tester workspaces; foreign IDs fail
   await expect(beginCommand(a.token, { ...command(), caseId: "constructor" })).rejects.toMatchObject({ status: 404 });
 });
 
+test("existing workspaces gain twelve scoped cases without rewriting saved work, allowance or expiry", async () => {
+  const { token } = await createWorkspace();
+  await beginCommand(token, command());
+  await beginCommand(token, { ...command("customer", "STOP"), caseId: "fresh-record" });
+  const before = await readWorkspace(token);
+  const cases = Object.fromEntries(["late-payment", "fresh-record", "conflicting-payment"].map((id) => [id, before.cases[id]]));
+  const expiry = new Date(Date.now() + 7_200_000).toISOString();
+  await v2Pool().query("UPDATE rebuild_v2.workspaces SET data=$1,expires_at=$2", [{ cases, resets: 2 }, expiry]);
+  const [a, b] = await Promise.all([readWorkspace(token), readWorkspace(token)]);
+  expect(Object.keys(a.cases)).toHaveLength(12);
+  expect(b).toEqual(a);
+  expect(a.expiresAt).toBe(expiry); expect(a.resets).toBe(2);
+  for (const id of Object.keys(cases)) expect(a.cases[id]).toEqual(cases[id]);
+  const added = a.cases["cedar-late-payment"];
+  expect(added.messages).toHaveLength(1); expect(added.turns).toBe(0);
+  expect(added.messages[0].at).toBe(new Date(Date.parse(expiry) - 86_400_000).toISOString());
+  expect(added.facts.balanceAsOf).toBe(new Date(Date.parse(expiry) - 2 * 86_400_000).toISOString());
+  expect(await budgetUsage()).toMatchObject({ calls: 0, conservativeUsedDollars: 0 });
+});
+
+test("business request IDs cannot be used in another business case or tester workspace", async () => {
+  const a = await createWorkspace(), b = await createWorkspace();
+  const job = requireJob(await beginCommand(a.token, command("customer", "I paid $129 today for INV-101")));
+  await commitResult(a.token, job, { ...approved("I asked the business to verify."), verification: { ...verification, claimMessageId: job.id } });
+  const saved = await readWorkspace(a.token), requestId = saved.cases["late-payment"].requestId!;
+  const reply = { ...command("business", "Yes"), requestId };
+  await expect(beginCommand(a.token, { ...reply, caseId: "cedar-late-payment" })).rejects.toMatchObject({ status: 409 });
+  await expect(beginCommand(b.token, reply)).rejects.toMatchObject({ status: 409 });
+  expect((await readWorkspace(a.token)).cases["cedar-late-payment"]).toEqual(saved.cases["cedar-late-payment"]);
+  expect((await readWorkspace(b.token)).cases["late-payment"].messages).toHaveLength(1);
+});
+
+test("reviewed dashboard records persist independently across businesses and reconnects", async () => {
+  const { token } = await createWorkspace();
+  const job = requireJob(await beginCommand(token, { ...command(), caseId: "cedar-late-payment" }));
+  const date = localDate(new Date(), "America/Denver", 1);
+  const updates = [{ kind: "promise" as const, amountCents: 5000, date, sourceMessageId: job.id }, { kind: "contact_requested" as const, channel: "call" as const, date, window: "afternoon" as const, sourceMessageId: job.id }];
+  await commitResult(token, job, { ...approved(), resolution: { summary: "Recorded the promise and call request, without executing either.", needsOperator: false, updates } });
+  await closeV2Pool();
+  const view = await readWorkspace(token);
+  expect(view.cases["cedar-late-payment"].updates).toEqual(updates);
+  expect(view.cases["cedar-late-payment"].events[0]).toMatchObject({ state: "planned", channel: "call", date });
+  expect(view.cases["late-payment"].updates).toEqual([]);
+  expect(view.cases["late-payment"].events).toEqual([]);
+  expect(view.cases["cedar-late-payment"].facts.balanceCents).toBe(18500);
+});
+
 test("concurrent duplicate submissions/retries do not double-count or start duplicate jobs", async () => {
   const { token } = await createWorkspace(); const request = command();
   const jobs = await Promise.all([beginCommand(token, request), beginCommand(token, request)]);

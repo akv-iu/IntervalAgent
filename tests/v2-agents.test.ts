@@ -28,6 +28,21 @@ describe("V2 role and write boundaries", () => {
     expect(agents.account.tools.map((t) => t.name)).toEqual(["resolve_relative_date"]);
     expect(agents.reviewer.tools).toEqual([]);
   });
+  test("the same role definitions receive the selected business facts without another business's context", async () => {
+    const facts = startingCases(new Date(now)).find((c) => c.id === "cedar-cancellation-overlap")!;
+    const requests: ModelRequest[] = [];
+    const model = fakeModel((request) => {
+      requests.push(request);
+      return textResult(requests.length === 1 ? { reply: "Your cancellation request is recorded; no credit is approved.", needsOperator: false } : { accepted: true, reasons: [] });
+    });
+    await investigate({ facts, now, verification: null, messages: [{ id: "cedar-question", channel: "customer", speaker: "customer", text: "What does your record say about my cancellation?", at: now }] }, model);
+    expect(requests).toHaveLength(2);
+    for (const request of requests) {
+      const context = JSON.stringify(request.input);
+      expect(context).toContain("Cedar Home Services"); expect(context).toContain("CED-204"); expect(context).toContain("operator_review"); expect(context).toContain("annual service-plan cancellation");
+      expect(context).not.toContain("Northside Fitness"); expect(context).not.toContain("INV-101");
+    }
+  });
   test("model output cannot add a balance write or approve an extension", () => {
     expect(CaseUpdate.safeParse({ kind: "payment", amountCents: 12900 }).success).toBe(false);
     expect(CaseUpdate.safeParse({ kind: "extension_approved", date: "2026-10-30", sourceMessageId: "c1" }).success).toBe(false);

@@ -18,6 +18,21 @@
 .toolbar { padding-bottom: 20px; border-bottom: 1px solid var(--workspace-line); }
 .toolbar label { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .toolbar select { margin-left: 0; min-width: 0; }
+.selection { display: flex; flex-wrap: wrap; gap: 12px 20px; min-width: 0; }
+.dashboard { padding: 18px 0; border-bottom: 1px solid var(--workspace-line); }
+.dashboard > summary { cursor: pointer; font-size: 18px; font-weight: 600; }
+.tableScroll { max-width: 100%; overflow-x: auto; margin-top: 14px; }
+.caseTable { width: 100%; min-width: 660px; border-collapse: collapse; text-align: left; font-size: 13px; }
+.caseTable th, .caseTable td { vertical-align: top; padding: 12px; border-bottom: 1px solid var(--workspace-line); }
+.caseTable thead th { color: var(--workspace-muted); font-weight: 500; }
+.caseTable tbody th { width: 24%; font-weight: 500; }
+.caseTable tbody th p { margin-top: 4px; font-weight: 400; }
+.caseTable tbody td:nth-child(2) { width: 24%; }
+.caseTable tbody td:nth-child(3) { width: 36%; }
+.caseTable tr[aria-current="true"] { background: #edf5ff; }
+.caseTable a { color: var(--workspace-blue); text-decoration: underline; text-underline-offset: 3px; }
+.caseContext { max-width: 72ch; margin-top: 10px; font-size: 13px; }
+.caseContext summary { cursor: pointer; }
 .caseHeader { padding: 20px 0 12px; align-items: flex-start; }
 .caseMeta { flex: 1; min-width: 0; }
 .caseMeta h2 { font-size: 25px; font-weight: 600; }

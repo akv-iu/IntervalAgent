@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { formatCents } from "@/lib/format";
-import { caseAttention, type Attention } from "@/lib/v2/presentation";
+import { caseAttention, scenarioName, statusNames, type Attention } from "@/lib/v2/presentation";
 import type { CaseState, WorkspaceView } from "@/lib/v2/store";
+import BusinessDashboard, { CaseRecords } from "./BusinessDashboard";
 import styles from "./workspace.module.css";
 
 type Budget = { capDollars: number | null; conservativeUsedDollars: number; calls: number; unknown_calls: number; input_tokens: number; output_tokens: number };
@@ -12,7 +13,6 @@ const button = "rounded-md border border-line px-3 py-2 text-sm font-medium disa
 const primary = `${button} border-accent-ink bg-accent-ink text-white`;
 const field = "min-h-24 w-full rounded-md border border-line bg-white p-3 disabled:opacity-60";
 const roleNames: Record<string, string> = { customer: "Case Orchestrator", business_verification: "Business Verification", account_resolution: "Account Resolution", reviewer: "Reviewer" };
-const statusNames: Record<CaseState["status"], string> = { ready: "Ready for the customer", processing: "Agents are working", awaiting_business: "Waiting for the business", needs_review: "Operator review needed", run_failed: "Technical failure · explicit retry available", stopped: "Contact stopped", taken_over: "Under operator control" };
 
 export function RuntimeBox({ c, seconds }: { c: Pick<CaseState, "run" | "lastRun">; seconds: number }) {
   const run = c.run, saved = c.lastRun;
@@ -68,6 +68,9 @@ export default function InvestigationWorkspace() {
   const root = useRef<HTMLDivElement>(null);
   const previousAttention = useRef<{ caseId: string; role: Attention | null }>({ caseId, role: null });
   const c = workspace?.cases[caseId];
+  const cases = workspace ? Object.values(workspace.cases) : [];
+  const businesses = [...new Map(cases.map((item) => [item.facts.businessId, item.facts.businessName])).entries()];
+  const businessCases = cases.filter((item) => item.facts.businessId === c?.facts.businessId);
   const runId = c?.run?.id, runStartedAt = c?.run?.startedAt;
   const attention = c ? busy && !c.takeover && !c.reviewHold ? null : caseAttention(c) : null;
 
@@ -78,6 +81,11 @@ export default function InvestigationWorkspace() {
     if (payload.error) setError(payload.error);
   }
   async function load(signal?: AbortSignal) { accept(await getWorkspace(signal)); }
+
+  function selectCase(id: string) {
+    if (!workspace || !Object.hasOwn(workspace.cases, id) || running.current) return;
+    setCaseId(id); setCustomerText(""); setBusinessText(""); setError(""); pending.current = null;
+  }
 
   useEffect(() => {
     const abort = new AbortController();
@@ -156,20 +164,30 @@ export default function InvestigationWorkspace() {
   return <div className={styles.workspace} ref={root}>
     {error && <p role="alert" className="mb-4 rounded-md border border-fail bg-fail-bg p-3 text-fail">{error}</p>}
     {!workspace ? <>
-      <p role="status" className="mb-4 text-sm">{loading ? "Restoring your private workspace…" : "Start a private workspace to explore three synthetic client cases."}</p>
+      <p role="status" className="mb-4 text-sm">{loading ? "Restoring your private workspace…" : "Start a private workspace to explore two businesses and twelve synthetic client cases."}</p>
       <button className={primary} disabled={loading || busy} onClick={() => void act("create")}>Start private workspace</button>
     </> : <>
       <div className={styles.toolbar}>
-        <label className="min-w-0 text-sm font-medium">{c?.facts.businessName ?? "Business"} / client
-          <select className="ml-3 max-w-full rounded-md border border-line bg-white p-2 font-normal" value={caseId} disabled={processing} onChange={(event) => { setCaseId(event.target.value); setCustomerText(""); setBusinessText(""); pending.current = null; }}>
-            {Object.values(workspace.cases).map((item) => <option key={item.facts.id} value={item.facts.id}>{item.facts.customer}: {item.facts.id.replaceAll("-", " ")}</option>)}
+        <div className={styles.selection}>
+        <label className="min-w-0 text-sm font-medium">Business
+          <select className="max-w-full rounded-md border border-line bg-white p-2 font-normal" value={c?.facts.businessId ?? ""} disabled={processing} onChange={(event) => { const first = cases.find((item) => item.facts.businessId === event.target.value); if (first) selectCase(first.facts.id); }}>
+            {businesses.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
           </select>
         </label>
+        <label className="min-w-0 text-sm font-medium">Client
+          <select className="max-w-full rounded-md border border-line bg-white p-2 font-normal" value={caseId} disabled={processing} onChange={(event) => selectCase(event.target.value)}>
+            {businessCases.map((item) => <option key={item.facts.id} value={item.facts.id}>{item.facts.customer}: {scenarioName(item)}</option>)}
+          </select>
+        </label>
+        </div>
         <div className="flex flex-wrap gap-2"><button className={button} disabled={processing} onClick={() => void load().catch((e: unknown) => setError(e instanceof Error ? e.message : "Cannot refresh"))}>Refresh history</button><button className={button} disabled={processing} onClick={() => { if (window.confirm("Reset only your workspace? History will be cleared. Expiry and usage accounting will not reset.")) void act("reset"); }}>Reset workspace</button></div>
       </div>
       {c && <>
-        <div className={styles.caseHeader}>
-          <div className={styles.caseMeta}><h2>{c.facts.customer}&apos;s case</h2><p className="mt-1 text-sm">{c.facts.invoiceId} · {formatCents(c.facts.balanceCents)} on record</p><p className={styles.status}>{statusNames[c.status]} · {c.turns}/10 customer turns</p><p className={styles.status}>Balance as of {new Date(c.facts.balanceAsOf).toLocaleString()} ({c.facts.timezone})</p></div>
+        <BusinessDashboard workspace={workspace} businessId={c.facts.businessId} selectedId={caseId} disabled={processing} onSelect={selectCase} />
+        <div id="v2-case" className={styles.caseHeader}>
+          <div className={styles.caseMeta}><h2>{c.facts.customer}&apos;s case</h2><p className="mt-1 text-sm">{c.facts.businessName} · {c.facts.invoiceId} · {formatCents(c.facts.balanceCents)} on record</p><p className={styles.status}>{statusNames[c.status]} · {c.turns}/10 customer turns</p><p className={styles.status}>Balance as of {new Date(c.facts.balanceAsOf).toLocaleString()} ({c.facts.timezone})</p>
+            <details className={styles.caseContext}><summary>Synthetic source and policy</summary><p className="mt-2 text-sm">{c.facts.recognitionPolicy === "business_confirmation" ? "Reviewed, complete business confirmation can record an existing payment under this business's policy." : "Recording an existing payment requires operator approval; business confirmation alone cannot change the balance. Operator payment approval is not available in this checkpoint."}</p><ul className="mt-2 list-inside list-disc text-sm">{c.facts.accountNotes?.map((note) => <li key={note}>{note}</li>)}</ul></details>
+          </div>
           <RuntimeBox c={c} seconds={waitSeconds} />
         </div>
         <div className={styles.guide}><p role="status" aria-live="polite">{guide}</p>{attention && <a href={`#v2-${attention}`}>Go to {attention === "business" ? "business inbox" : attention === "operator" ? "operator review" : "customer conversation"}</a>}</div>
@@ -200,7 +218,7 @@ export default function InvestigationWorkspace() {
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm">Takeover pauses automatic replies. Resume allows a later message or retry. STOP stays in force.</p><button className={button} disabled={c.stopped} onClick={() => void act(c.takeover || c.reviewHold ? "resume" : "takeover", undefined, true)}>{c.takeover || c.reviewHold ? "Resume automatic replies" : "Take over this case"}</button></div>
           {c.lastReview && <details className={styles.technical}><summary>Review and evidence packet: {c.lastReview.review.accepted ? "accepted" : "blocked"}</summary><p className="mt-2">{c.lastReview.verification?.summary || "No business-verification findings were returned. See saved agent history for what was attempted."}</p>{c.lastReview.resolution && <p className="mt-2">{c.lastReview.resolution.summary}</p>}<ul className="mt-2 list-inside list-disc">{c.lastReview.review.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></details>}
           <div className={styles.savedPanel}>
-            <div><h4>Saved commitments and requests</h4>{c.preferredChannel && <p className="mt-2 text-sm">Current channel preference: {c.preferredChannel}.</p>}{c.updates.length ? <ul className="mt-2 space-y-2 text-sm">{c.updates.map((update, index) => <li key={`${update.sourceMessageId}-${index}`}>{update.kind === "payment_recognized" ? `Business-confirmed payment: ${formatCents(update.amountCents)} on ${update.date}, ${update.invoiceId}. Applied to this simulated balance.` : update.kind === "promise" ? `Promise: ${formatCents(update.amountCents)} on ${update.date}. No payment received.` : update.kind === "extension_requested" ? `Extension requested to ${update.date}. Not approved.` : update.kind === "contact_preference" ? `Preference changed to ${update.channel}. No appointment scheduled.` : `${update.channel} requested: ${update.date}, ${update.window}.`}</li>)}</ul> : <p className="mt-2 text-sm text-muted">No reviewed updates saved yet.</p>}{c.events.map((event) => <p className="mt-2 text-sm" key={event.id}>{event.state}: {event.channel}, {event.date}, {event.window} ({event.timezone}). Not executed.{event.beyondExpiry ? " Planned window extends beyond this workspace's expiry." : ""}</p>)}</div>
+            <div><h4>Saved commitments and requests</h4><CaseRecords c={c} /></div>
             <details className={styles.technical}><summary>Saved agent history</summary>{c.activity.length ? <ol className="mt-2 space-y-2 text-sm">{c.activity.map((item, index) => <li key={index}><span className="font-medium">{item.role.replaceAll("_", " ")} / {item.action}</span>: {item.summary}</li>)}</ol> : <p className="mt-2 text-sm text-muted">No agent work has run. Opening or refreshing makes no model calls.</p>}</details>
           </div>
         </section>

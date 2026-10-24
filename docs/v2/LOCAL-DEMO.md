@@ -1,11 +1,22 @@
-# V2 local demo: Phase 2A UI checkpoint
+# V2 local demo: Phase 2B business dashboard checkpoint
 
 Worktree: `D:\Projects\IntervalAgent-v1-rebuild`, branch `v2-rebuild`.
 Open **http://127.0.0.1:3012/v2**. Akshay owns browser/UI/manual acceptance.
 
-## Check the updated UI first
+## Check Phase 2B first
 
-The Daylight workspace uses the full V2 page width, with customer chat and the business inbox side by side, operator review below, and an expandable runtime box beside the case status. The shared V1 width limit and the extra outer card do not wrap V2. Customer-facing messages use the business name, with the customer's messages aligned separately. There are still one business and three clients; the remaining Phase 2 dashboard/source work has not started. No model calls were used to implement or verify this UI checkpoint.
+Refresh **http://127.0.0.1:3012/v2**. No reset is required. The existing browser session keeps its saved work and gains the missing cases; its original expiry and limits still apply.
+
+1. Use **Business** to switch between Northside Fitness and Cedar Home Services. Each **Client** menu and business case table should show six matching clients. **Open [client]'s case** should select that client and navigate to the conversation. Switching context clears unsent form text; saved conversations are retained. The table can be collapsed.
+2. Inspect **Synthetic source and policy** in a case. Northside allows reviewed recognition from complete business confirmation; Cedar requires operator approval. Operator payment approval is not implemented in this checkpoint, so Cedar confirmation cannot automatically reduce a balance. Existing Northside cases keep their saved policy and source data.
+3. As Riley at Cedar, try `I promise to pay $50 tomorrow. Please call me tomorrow afternoon.` After the reviewed reply, inspect the table and operator records: the promise and planned call should agree, with no received-money or executed-call claim. This conversation makes paid model calls on your configured account.
+4. Switch to Northside, then return to Riley. Use **Refresh history**, reload the browser, and reselect Cedar/Riley. Messages, reviewed updates, planned events and balance should still agree; Northside must not show Riley's promise or inbox. Opening, selecting and refreshing alone make no model calls. A full browser reload starts selection at Alex; it does not delete other clients' work.
+5. Inspect the partial-payment, different-reference, cancellation/renewal, affordability and pending-payment source records. These initialize facts rather than scripts; conversations may change direction. Eligible payment options, arrangements, approval controls and new-payment execution are still later work. A pending receipt must not be described as settled.
+6. Check the selectors, table collapse/expand, case links, role highlight, Runtime and existing controls by keyboard and at a narrow width. The table has its own focusable horizontal scroll region; the page itself should not overflow. Browser, visual and model-behavior acceptance remain yours.
+
+## Existing Daylight UI checks
+
+The Daylight workspace uses the full V2 page width, with customer chat and the business inbox side by side, operator review below, and an expandable runtime box beside the case status. The shared V1 width limit and the extra outer card do not wrap V2. Customer-facing messages use the business name, with the customer's messages aligned separately. There are now two businesses and twelve clients, plus a business-filtered dashboard. The second source mapping and richer corrections remain pending. No paid model calls were used to implement or verify Phase 2B.
 
 If the updated labels appear but the page is a plain vertical stack without pane borders or the workspace background, that is a stylesheet failure, not the intended design. The October 23 fix excludes `.module.css` from the global Tailwind loader so Next.js can export its scoped class names. Refresh with Ctrl+Shift+R after the local server picks up the configuration change; no workspace reset is needed. The asset checks below verify the actual class/stylesheet match without browser interaction or model calls.
 
