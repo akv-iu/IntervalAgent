@@ -1,6 +1,6 @@
 # IntervalAgent V2 rebuild: plan for review
 
-Status: Phases 3 and 4 are implemented and verified on `v2-rebuild`; production V1 stays on `main`. Akshay approved completing both without another approval pause and delegated testing, with a separate $2 total live-test budget. Delivery includes supervised financial corrections and scoped, evaluated instruction improvement with explicit activation/rollback. Phase 5A offline saved-output replay/reporting is now delivered; the rest of Phase 5 remains pending. See [STATUS.md](STATUS.md) for evidence and limits and [LOCAL-DEMO.md](LOCAL-DEMO.md) for the walkthrough.
+Status: Phases 3 and 4 are implemented and verified on `v2-rebuild`; production V1 stays on `main`. Akshay approved completing both without another approval pause and delegated testing, with a separate $2 total live-test budget. Delivery includes supervised financial corrections and scoped, evaluated instruction improvement with explicit activation/rollback. Phase 5A offline saved-output replay/reporting is now delivered; Phase 5B outreach-preview and documentation are implemented, awaiting Akshay's UI acceptance; broader Phase 5 verification remains pending. See [STATUS.md](STATUS.md) for evidence and limits and [LOCAL-DEMO.md](LOCAL-DEMO.md) for the walkthrough.
 Date: October 23, 2026. Branch: `v2-rebuild`, based on V1 commit `7a6c6c8`.
 Acceptance requirements: [SPEC.md](SPEC.md). The original root `SPEC.md` remains the V1 contract.
 
@@ -254,6 +254,16 @@ Delivered: `npm run eval:v2:replay` creates Markdown/JSON reports from the check
 This is saved-output replay, not exact provider-request or orchestration replay: those raw requests were never recorded. Scoring context is reconstructed only from the declared fixture and captured comparison date. Selected development evidence is not a final holdout; per-call latency is not total user wait, and known-token accounting is not billing. Missing customer/ledger outcomes stay unavailable rather than inferred from prose. See STATUS.md for counts and self-review evidence.
 
 Stop at this checkpoint. Remaining Phase 5 work includes broader journey coverage, presenting the preserved V1 learned outreach strategy in V2, architecture/final demonstration material and any optional hosting check. No UI change, paid call, production merge/deployment or hosting work is part of 5A.
+
+### Phase 5B checkpoint: outreach preview and architecture/demo walkthrough
+
+> **Result:** An operator can inspect the preserved V1 outreach choice and explain how both learning loops fit the four-agent application.\
+> **Work:** Add a small provenance-labelled, read-only policy preview and concise architecture/demo documents.\
+> **Check:** Reproduce frozen choices and guard empty/unknown inputs without changing case state; leave browser acceptance to Akshay.
+
+Implemented: the selected case's existing context area exposes V1 policy `v1-outreach-1`, source run `picker-20261016-011624-901`, choices, seeds, versions, synthetic train/test counts and source hash. Existing V2 facts lack overdue age, so a hypothetical age-group selector starts empty and resets on case change. No scenario-to-age inference, persistence, prompt change, scheduling, retraining, contact approval or business-specific improvement claim is added. Saved STOP/hold/preference/destination limitations remain explicit. The original V1 artifact/algorithm/reports remain intact; the UI uses only a compact snapshot. ARCHITECTURE.md and DEMO.md document actual responsibilities and a testable walkthrough.
+
+Stop after automated verification and branch push. Browser/UI acceptance belongs to Akshay, with the checklist in DEMO.md. Broader journey verification/final demonstration and any optional hosting assessment remain pending; the policy preview is not an automated outreach engine or a claim that Phase 5 is fully accepted.
 
 ## Decisions for Akshay's review
 

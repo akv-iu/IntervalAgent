@@ -1,9 +1,15 @@
 # V2 local demo: supervised payments and evaluated learning
 
 Worktree: `D:\Projects\IntervalAgent-v1-rebuild`, branch `v2-rebuild`.
-Open **http://127.0.0.1:3012/v2**. Phases 3 and 4 are complete at the bounded demo scope; Phase 5A offline replay/reporting is delivered; remaining Phase 5 work is pending. Akshay delegated this batch's testing. See [STATUS.md](STATUS.md) for exact results, spending and limits.
+Open **http://127.0.0.1:3012/v2**. Phases 3 and 4 are complete at the bounded demo scope; Phase 5A offline replay/reporting is delivered; Phase 5B outreach-preview/architecture/walkthrough is implemented with UI acceptance pending. Akshay owns this checkpoint's manual testing. See [STATUS.md](STATUS.md) for exact results, spending and limits.
 
 No migration/reset is needed. Refresh the page to load new controls. Workspaces still expire after their original 24 hours; browser recovery needs the valid session. Reset clears case history, retains private learning/history/call accounting, and does not replenish spending or extend expiry. Financial decision controls make no model calls; conversation, correction retry and learning proposal/comparison use the configured paid API. The app-wide $2 cap remains removed; the separate completed test batch stayed below its $2 guard.
+
+## Phase 5B: please check the outreach preview
+
+Refresh `/v2` and open **Outreach strategy: V1 policy preview** below the selected case's source/policy disclosure. No age is assumed. Select **31-60** for SMS at 18:00/friendly tone, then **61-90** for SMS at 10:00/formal tone (America/Denver). Inspect **Policy provenance**, change client/business to check that selection clears, and confirm chat, balances/preferences/events remain unchanged. This requires no paid model calls or workspace reset. If the old workspace expired, start your own new one subject to existing limits.
+
+Please perform the keyboard/narrow-layout and disclosure/link checks in [DEMO.md](DEMO.md#phase-5b-manualui-acceptance-for-akshay). Automated/source checks passed; no browser acceptance is claimed. [ARCHITECTURE.md](ARCHITECTURE.md) explains the four roles, durable handoffs, guarded effects and separate outreach/instruction learning loops. The `/picker` link opens the existing V1 reporting page, which needs its own imported V1 dataset and may show a different latest run.
 
 ## Phase 5A: offline evidence report
 

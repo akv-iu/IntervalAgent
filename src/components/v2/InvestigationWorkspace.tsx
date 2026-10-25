@@ -10,6 +10,7 @@ import PaymentPanel from "./PaymentPanel";
 import FinancialReview from "./FinancialReview";
 import FinancialAdjustments from "./FinancialAdjustments";
 import LearningPanel from "./LearningPanel";
+import OutreachStrategy from "./OutreachStrategy";
 import type { PaymentProposal } from "@/lib/v2/options";
 import type { SimulationOutcome } from "@/lib/v2/payments";
 import styles from "./workspace.module.css";
@@ -197,7 +198,8 @@ export default function InvestigationWorkspace() {
         <BusinessDashboard workspace={workspace} businessId={c.facts.businessId} selectedId={caseId} disabled={processing} onSelect={selectCase} />
         <div id="v2-case" className={styles.caseHeader}>
           <div className={styles.caseMeta}><h2>{c.facts.customer}&apos;s case</h2><p className="mt-1 text-sm">{c.facts.businessName} · {c.facts.invoiceId} · {formatCents(c.facts.balanceCents)} on record</p><p className={styles.status}>{statusNames[c.status]} · {c.turns}/10 customer turns</p><p className={styles.status}>Balance as of {new Date(c.facts.balanceAsOf).toLocaleString()} ({c.facts.timezone})</p>
-            <details className={styles.caseContext}><summary>Synthetic source and policy</summary><p className="mt-2 text-sm">{c.facts.recognitionPolicy === "business_confirmation" ? "Reviewed, complete business confirmation can record an existing payment under this business's policy." : "Recording an existing payment requires operator approval; business confirmation alone cannot change the balance. Operator payment approval is not available in this checkpoint."}</p><ul className="mt-2 list-inside list-disc text-sm">{c.facts.accountNotes?.map((note) => <li key={note}>{note}</li>)}</ul></details>
+            <details className={styles.caseContext}><summary>Synthetic source and policy</summary><p className="mt-2 text-sm">{c.facts.recognitionPolicy === "business_confirmation" ? "Reviewed, complete business confirmation can record an existing payment under this business's policy." : "Recording an existing payment requires operator approval; business confirmation alone cannot change the balance. Inspect the evidence in Operator review before approving it."}</p><ul className="mt-2 list-inside list-disc text-sm">{c.facts.accountNotes?.map((note) => <li key={note}>{note}</li>)}</ul></details>
+            <OutreachStrategy key={`outreach-${caseId}`} c={c} />
           </div>
           <RuntimeBox c={c} seconds={waitSeconds} />
         </div>
