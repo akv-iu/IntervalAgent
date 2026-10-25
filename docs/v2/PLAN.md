@@ -1,6 +1,6 @@
 # IntervalAgent V2 rebuild: plan for review
 
-Status: Phases 3 and 4 are implemented and verified on `v2-rebuild`; production V1 stays on `main`. Akshay approved completing both without another approval pause and delegated testing, with a separate $2 total live-test budget. Delivery includes supervised financial corrections and scoped, evaluated instruction improvement with explicit activation/rollback. Phase 5A offline saved-output replay/reporting is now delivered; Phase 5B outreach-preview and documentation are implemented, awaiting Akshay's UI acceptance; broader Phase 5 verification remains pending. See [STATUS.md](STATUS.md) for evidence and limits and [LOCAL-DEMO.md](LOCAL-DEMO.md) for the walkthrough.
+Status: Phases 1-4 and Phase 5's automated checkpoints are complete on `v2-rebuild`; production V1 stays on `main`. Delivery includes supervised financial corrections, scoped evaluated instruction improvement with explicit activation/rollback, saved-output replay, a preserved outreach-policy preview and architecture/demo documentation. Phase 5C final automated verification passed; Phase 5B UI acceptance remains pending with Akshay. See [READINESS.md](READINESS.md) for requirements/evidence/limits, [STATUS.md](STATUS.md) for checkpoint results and [LOCAL-DEMO.md](LOCAL-DEMO.md) for the walkthrough. No next implementation phase starts automatically.
 Date: October 23, 2026. Branch: `v2-rebuild`, based on V1 commit `7a6c6c8`.
 Acceptance requirements: [SPEC.md](SPEC.md). The original root `SPEC.md` remains the V1 contract.
 
@@ -264,6 +264,16 @@ Stop at this checkpoint. Remaining Phase 5 work includes broader journey coverag
 Implemented: the selected case's existing context area exposes V1 policy `v1-outreach-1`, source run `picker-20261016-011624-901`, choices, seeds, versions, synthetic train/test counts and source hash. Existing V2 facts lack overdue age, so a hypothetical age-group selector starts empty and resets on case change. No scenario-to-age inference, persistence, prompt change, scheduling, retraining, contact approval or business-specific improvement claim is added. Saved STOP/hold/preference/destination limitations remain explicit. The original V1 artifact/algorithm/reports remain intact; the UI uses only a compact snapshot. ARCHITECTURE.md and DEMO.md document actual responsibilities and a testable walkthrough.
 
 Stop after automated verification and branch push. Browser/UI acceptance belongs to Akshay, with the checklist in DEMO.md. Broader journey verification/final demonstration and any optional hosting assessment remain pending; the policy preview is not an automated outreach engine or a claim that Phase 5 is fully accepted.
+
+### Phase 5C checkpoint: final automated verification and readiness
+
+- Result: verify the cross-business SDK/persistence/guard behavior at the agreed portfolio boundary and state acceptance limits clearly.
+- Work: fill concrete integration gaps, fix only reproduced bugs, and map requirements to actual evidence.
+- Check: scripted SDK responses with isolated PostgreSQL, preserved V1/V2 gates, and explicit pending manual/live evidence.
+
+Delivered: fourteen new SDK-to-storage journeys cover all twelve clients plus each business's prior-payment recognition authority. Direct reads avoid specialists; intent updates delegate to Account Resolution; linked business evidence uses Business Verification before resolution/review. Reconnect, peer/tester isolation, changed contact intent, STOP, duplicate effects and receipt provenance pass. These extend DB coverage from 167 to 181 checks, alongside 755 offline checks, types/lint/build/CSS and both replay gates. All 188 model invocations in the new journeys are scripted; no paid calls, browser test or application-code change occurred. Two self-review passes found no application bug; details and requirement qualifications are in [READINESS.md](READINESS.md).
+
+Stop after this branch checkpoint. Akshay's Phase 5B UI acceptance is still required; broader current-model demonstrations or hosting are optional separate decisions. This is not unrestricted production acceptance, evidence of real collection lift or permission to deploy.
 
 ## Decisions for Akshay's review
 

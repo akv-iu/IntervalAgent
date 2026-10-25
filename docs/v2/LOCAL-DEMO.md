@@ -1,7 +1,7 @@
 # V2 local demo: supervised payments and evaluated learning
 
 Worktree: `D:\Projects\IntervalAgent-v1-rebuild`, branch `v2-rebuild`.
-Open **http://127.0.0.1:3012/v2**. Phases 3 and 4 are complete at the bounded demo scope; Phase 5A offline replay/reporting is delivered; Phase 5B outreach-preview/architecture/walkthrough is implemented with UI acceptance pending. Akshay owns this checkpoint's manual testing. See [STATUS.md](STATUS.md) for exact results, spending and limits.
+Open **http://127.0.0.1:3012/v2**. Phases 1-4 and Phase 5's automated checkpoints are complete at the bounded demo scope. Phase 5C passed 755 offline and 181 isolated DB checks; no paid calls or browser test occurred. **Phase 5B UI acceptance remains pending with Akshay.** See [READINESS.md](READINESS.md) for requirement-by-requirement evidence/limits and [STATUS.md](STATUS.md) for results and spending. No further implementation phase starts automatically.
 
 No migration/reset is needed. Refresh the page to load new controls. Workspaces still expire after their original 24 hours; browser recovery needs the valid session. Reset clears case history, retains private learning/history/call accounting, and does not replenish spending or extend expiry. Financial decision controls make no model calls; conversation, correction retry and learning proposal/comparison use the configured paid API. The app-wide $2 cap remains removed; the separate completed test batch stayed below its $2 guard.
 

@@ -9,7 +9,12 @@ import * as store from "../../src/lib/v2/store";
 import { beginLearning, completeLearning, reserveLearningCall } from "../../src/lib/v2/store";
 import { EVALUATION_VERSION, activeLessons, type LearningEvaluation, type LearningJob, type ProposedLesson } from "../../src/lib/v2/learning";
 import { MODEL } from "../../src/lib/v2/model";
-import type { InvestigationResult, Verification } from "../../src/lib/v2/contracts";
+import { boundedModel } from "../../src/lib/v2/model";
+import { Usage, type Model, type ModelResponse } from "@openai/agents";
+import { investigateFromSource } from "../../src/lib/v2/agents";
+import { startingCases } from "../../src/lib/v2/fixtures";
+import { syntheticSource } from "../../src/lib/v2/source";
+import type { CaseUpdate, InvestigationResult, Verification } from "../../src/lib/v2/contracts";
 
 // All storage/API paths run unchanged; only the connection targets a dedicated test database.
 vi.mock("pg", async (importOriginal) => {
@@ -206,6 +211,99 @@ beforeEach(async () => {
   await v2Pool().query("TRUNCATE rebuild_v2.workspaces,rebuild_v2.admission,rebuild_v2.reservations; UPDATE rebuild_v2.budget SET used_micros=0 WHERE id=1");
 });
 afterAll(closeV2Pool);
+
+const scriptedOutput = (value: unknown): ModelResponse => ({ usage: new Usage(), output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: JSON.stringify(value) }] }] });
+const scriptedTool = (name: string, args: unknown): ModelResponse => ({ usage: new Usage(), output: [{ type: "function_call", callId: randomUUID(), name, arguments: JSON.stringify(args) }] });
+async function completeScripted(token: string, job: Job, model: Model) {
+  const bounded = boundedModel({ apiKey: "scripted-no-provider", model, reserve: (id) => reserveLive(id, { token, job }), start: (call) => startLive(call, { token, job }), record: (call) => recordLive(call, { token, job }) });
+  const run = await investigateFromSource(job.input, syntheticSource([job.input.facts]), bounded);
+  await commitResult(token, { ...job, input: run.input }, run.result);
+  return run.result;
+}
+
+test.each(startingCases(new Date("2026-10-24T12:00:00Z")).map((facts) => facts.id))("%s SDK-to-storage journey preserves source money, changing contact intent, isolation and STOP", async (caseId) => {
+  const { token } = await createWorkspace(), other = await createWorkspace(), initial = await readWorkspace(token);
+  const original = structuredClone(initial.cases[caseId].facts), foreign = original.businessId === "northside" ? "Cedar Home Services" : "Northside Fitness";
+  const turns = ["record", "commitment", "preference", "appointment"] as const;
+  for (const turn of turns) {
+    const text = turn === "record" ? `What balance is recorded for ${original.invoiceId}?` : turn === "commitment" ? "I promise to pay $50 tomorrow. Call me tomorrow afternoon." : turn === "preference" ? "Do not call. Email instead; I have not chosen a time." : "Please email tomorrow afternoon using my saved email.";
+    const value = { id: randomUUID(), action: "customer" as const, caseId, text }, job = requireJob(await beginCommand(token, value));
+    const date = localDate(new Date(job.input.now), original.timezone, 1);
+    const updates: CaseUpdate[] = turn === "record" ? [] : turn === "commitment" ? [{ kind: "promise", amountCents: 5000, date, sourceMessageId: job.id }, { kind: "contact_requested", channel: "call", date, window: "afternoon", sourceMessageId: job.id }]
+      : turn === "preference" ? [{ kind: "contact_preference", channel: "email", sourceMessageId: job.id }] : [{ kind: "contact_requested", channel: "email", date, window: "afternoon", sourceMessageId: job.id }];
+    let customerCalls = 0; const roles: string[] = [];
+    const model: Model = { async getResponse(request) {
+      const role = String(request.modelSettings.providerData?.metadata?.agent_role); roles.push(role);
+      expect(JSON.stringify(request.input)).toContain(original.invoiceId); expect(JSON.stringify(request.input)).not.toContain(foreign);
+      if (role === "reviewer") return scriptedOutput({ accepted: true, reasons: [] });
+      if (role === "account_resolution") return scriptedOutput({ summary: "Record requested intent without executing contact or receiving money.", needsOperator: false, updates });
+      if (role !== "customer") throw new Error("Unexpected role in a non-verification journey");
+      if (++customerCalls === 1 && updates.length) return scriptedTool("account_resolution", { input: "Interpret the current customer request and propose its supported case updates." });
+      return scriptedOutput({ reply: turn === "record" ? `The dated record for ${original.invoiceId} shows $${(original.balanceCents / 100).toFixed(2)}. No later payment is confirmed.` : "Your request is recorded; no contact or payment has executed.", needsOperator: false });
+    }, async *getStreamedResponse() { throw new Error("unused"); } };
+    const result = await completeScripted(token, job, model);
+    expect(roles).toEqual(turn === "record" ? ["customer", "reviewer"] : ["customer", "account_resolution", "customer", "reviewer"]);
+    expect(await beginCommand(token, value)).toBeNull(); await expect(commitResult(token, job, result)).rejects.toMatchObject({ status: 409 });
+    const saved = (await readWorkspace(token)).cases[caseId];
+    expect(saved.facts).toEqual(original); expect(saved.audit.at(-1)?.after).toEqual(saved.updates);
+    expect(saved.lastRun?.calls).toBe(turn === "record" ? 2 : 4);
+    if (turn === "commitment") expect(saved.events).toMatchObject([{ channel: "call", state: "planned", date }]);
+    if (turn === "preference") { expect(saved.preferredChannel).toBe("email"); expect(saved.events).toMatchObject([{ channel: "call", state: "superseded" }]); }
+  }
+  await closeV2Pool(); const reloaded = await readWorkspace(token), saved = reloaded.cases[caseId];
+  expect(saved.turns).toBe(4); expect(saved.audit).toHaveLength(4); expect(saved.events.map((e) => e.state)).toEqual(["superseded", "planned"]);
+  expect(saved.updates.filter((u) => u.kind === "promise")).toHaveLength(1); expect(saved.facts).toEqual(original);
+  for (const [id, state] of Object.entries(initial.cases)) if (id !== caseId) expect(reloaded.cases[id]).toEqual(state);
+  expect((await readWorkspace(other.token)).cases).toEqual(other.view.cases);
+  const calls = (await budgetUsage()).calls; expect(calls).toBe(14);
+  expect(await beginCommand(token, { id: randomUUID(), caseId, action: "customer", text: "STOP" })).toBeNull();
+  await expect(beginCommand(token, { id: randomUUID(), caseId, action: "retry" })).rejects.toMatchObject({ status: 409 });
+  expect((await readWorkspace(token)).cases[caseId].events.map((e) => e.state)).toEqual(["superseded", "blocked"]);
+  expect((await budgetUsage()).calls).toBe(calls);
+});
+
+test.each(["late-payment", "cedar-late-payment"])("%s business-evidence SDK journey obeys automatic versus operator financial authority", async (caseId) => {
+  const { token } = await createWorkspace(), original = (await readWorkspace(token)).cases[caseId].facts;
+  const claim = requireJob(await beginCommand(token, { id: randomUUID(), caseId, action: "customer", text: `I paid $50 today for ${original.invoiceId}. Please verify receipt.` }));
+  const date = localDate(new Date(claim.input.now), original.timezone);
+  for (const stage of ["request", "reply"] as const) {
+    let job = claim;
+    if (stage === "reply") {
+      const saved = (await readWorkspace(token)).cases[caseId], foreignId = caseId === "late-payment" ? "cedar-late-payment" : "late-payment";
+      expect(saved.status).toBe("awaiting_business"); expect(saved.facts).toEqual(original);
+      await expect(beginCommand(token, { id: randomUUID(), caseId: foreignId, action: "business", requestId: saved.requestId!, text: "Yes" })).rejects.toMatchObject({ status: 409 });
+      job = requireJob(await beginCommand(token, { id: randomUUID(), caseId, action: "business", requestId: saved.requestId!, text: `Yes, we received and settled $50 today for ${original.invoiceId}.` }));
+    }
+    const operator = original.recognitionPolicy === "operator_review"; let customerCalls = 0;
+    const roles: string[] = [], evidence: Verification = { claimMessageId: claim.id, outcome: stage === "request" ? "awaiting_business" : "business_confirmed", businessMessage: stage === "request" ? `Was the $50 for ${original.invoiceId} received and settled on ${date}?` : null, summary: stage === "request" ? "Awaiting linked business evidence" : "The linked business reply confirmed the scoped payment", amountCents: 5000, invoiceId: original.invoiceId, paymentDate: date, reference: null, settlementStatus: stage === "request" ? "unknown" : "settled", missingFacts: stage === "request" ? ["receipt"] : [] };
+    const model: Model = { async getResponse(request) {
+      const role = String(request.modelSettings.providerData?.metadata?.agent_role); roles.push(role);
+      expect(JSON.stringify(request.input)).toContain(original.invoiceId);
+      if (role === "reviewer") return scriptedOutput({ accepted: true, reasons: [] });
+      if (role === "business_verification") return scriptedOutput(evidence);
+      if (role === "account_resolution") return scriptedOutput({ summary: operator ? "Complete evidence needs operator approval under this business policy." : "Propose recording the exact linked business-confirmed payment.", needsOperator: operator, updates: operator ? [] : [{ kind: "payment_recognized", amountCents: 5000, date, invoiceId: original.invoiceId, reference: null, sourceMessageId: claim.id, businessMessageId: job.id }] });
+      if (role !== "customer") throw new Error("Unexpected role");
+      if (++customerCalls === 1) return scriptedTool("business_verification", { claimMessageId: claim.id });
+      if (stage === "reply" && customerCalls === 2) return scriptedTool("account_resolution", { input: "Assess this business-confirmed payment using the configured recognition policy." });
+      return scriptedOutput({ reply: stage === "request" ? "I requested business verification; receipt is not confirmed." : operator ? "The business confirmed $50; an operator must approve recording it. The balance is unchanged." : `The business-confirmed $50 was recorded for ${original.invoiceId}; $${((original.balanceCents - 5000) / 100).toFixed(2)} remains.`, needsOperator: stage === "reply" && operator });
+    }, async *getStreamedResponse() { throw new Error("unused"); } };
+    await completeScripted(token, job, model);
+    expect(roles).toEqual(stage === "request" ? ["customer", "business_verification", "customer", "reviewer"] : ["customer", "business_verification", "customer", "account_resolution", "customer", "reviewer"]);
+  }
+  let saved = (await readWorkspace(token)).cases[caseId];
+  if (original.recognitionPolicy === "operator_review") {
+    expect(saved.facts).toEqual(original); expect(saved.status).toBe("needs_review");
+    await beginCommand(token, { id: randomUUID(), caseId, action: "takeover" }); saved = (await readWorkspace(token)).cases[caseId];
+    const approval = { id: randomUUID(), caseId, action: "approve_recognition" as const, revision: saved.revision, targetAuditId: saved.audit.at(-1)!.id, evidenceReference: "scripted-5c-business-evidence", note: "Scripted test operator inspected the complete linked synthetic business evidence." };
+    const calls = (await budgetUsage()).calls;
+    expect(await beginCommand(token, approval)).toBeNull(); expect(await beginCommand(token, approval)).toBeNull();
+    expect((await budgetUsage()).calls).toBe(calls);
+  }
+  await closeV2Pool(); saved = (await readWorkspace(token)).cases[caseId];
+  expect(saved.facts.balanceCents).toBe(original.balanceCents - 5000); expect(saved.facts.payments).toHaveLength(1);
+  expect(saved.facts.payments[0]).toMatchObject({ amountCents: 5000, invoiceId: original.invoiceId, includedInBalance: true, provenance: original.recognitionPolicy === "operator_review" ? "operator_decision" : "business_confirmation" });
+  expect(saved.operations).toBeUndefined(); expect((await budgetUsage()).calls).toBe(10);
+});
 
 test("same-case histories are private across tester workspaces; foreign IDs fail", async () => {
   const a = await createWorkspace(), b = await createWorkspace();
