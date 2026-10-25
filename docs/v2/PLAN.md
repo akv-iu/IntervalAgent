@@ -1,6 +1,6 @@
 # IntervalAgent V2 rebuild: plan for review
 
-Status: Phases 3 and 4 are implemented and verified on `v2-rebuild`; production V1 stays on `main`. Akshay approved completing both without another approval pause and delegated testing, with a separate $2 total live-test budget. Delivery includes supervised financial corrections and scoped, evaluated instruction improvement with explicit activation/rollback. Phase 5 has not started. See [STATUS.md](STATUS.md) for evidence and limits and [LOCAL-DEMO.md](LOCAL-DEMO.md) for the walkthrough.
+Status: Phases 3 and 4 are implemented and verified on `v2-rebuild`; production V1 stays on `main`. Akshay approved completing both without another approval pause and delegated testing, with a separate $2 total live-test budget. Delivery includes supervised financial corrections and scoped, evaluated instruction improvement with explicit activation/rollback. Phase 5A offline saved-output replay/reporting is now delivered; the rest of Phase 5 remains pending. See [STATUS.md](STATUS.md) for evidence and limits and [LOCAL-DEMO.md](LOCAL-DEMO.md) for the walkthrough.
 Date: October 23, 2026. Branch: `v2-rebuild`, based on V1 commit `7a6c6c8`.
 Acceptance requirements: [SPEC.md](SPEC.md). The original root `SPEC.md` remains the V1 contract.
 
@@ -242,6 +242,18 @@ Requirements: FR-14 through FR-22; NFR-01, NFR-04, NFR-06 through NFR-13.
 
 Done when: the operator demonstrates varied conversations, human review, simulated operations and evaluated improvement; the same four agents serve both businesses; V1 gates and new reports are reproducible.
 Review with Akshay: final walkthrough, evidence-backed resume claims and stopping point. Do not claim real collection lift or superiority over one agent without supporting comparison.
+
+### Phase 5A checkpoint: saved-output replay and reporting
+
+> **Result:** Selected live development evidence can be checked and reported without keys, database or new model calls.\
+> **Work:** Pin both suite-2 role comparisons and an unsafe suggestion, reuse the existing scorer, and report outcomes/usage/latency with explicit provenance.\
+> **Check:** Reproduce both gains and the failed Reviewer candidate; fail closed on missing/tampered/incompatible evidence or accounting mismatch, and retain V1's replay gate.
+
+Delivered: `npm run eval:v2:replay` creates Markdown/JSON reports from the checked-in synthetic archive. Its manifest pins hashes, model/role/suite/SDK versions and the closeout configuration reference. The artifact retains instructions, actual outputs, tool requests and individual usage/latency without workspace tokens/credentials. Replay independently rescores outputs and recomputes eligibility; it does not trust archived pass/eligible flags. It has no live/database/mock fallback and does not activate lessons. Eight paired rows across customer/Reviewer contexts and one unsafe suggestion reproduce their recorded outcomes, including the ineligible Reviewer candidate.
+
+This is saved-output replay, not exact provider-request or orchestration replay: those raw requests were never recorded. Scoring context is reconstructed only from the declared fixture and captured comparison date. Selected development evidence is not a final holdout; per-call latency is not total user wait, and known-token accounting is not billing. Missing customer/ledger outcomes stay unavailable rather than inferred from prose. See STATUS.md for counts and self-review evidence.
+
+Stop at this checkpoint. Remaining Phase 5 work includes broader journey coverage, presenting the preserved V1 learned outreach strategy in V2, architecture/final demonstration material and any optional hosting check. No UI change, paid call, production merge/deployment or hosting work is part of 5A.
 
 ## Decisions for Akshay's review
 

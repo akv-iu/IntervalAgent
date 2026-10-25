@@ -1,9 +1,17 @@
 # V2 local demo: supervised payments and evaluated learning
 
 Worktree: `D:\Projects\IntervalAgent-v1-rebuild`, branch `v2-rebuild`.
-Open **http://127.0.0.1:3012/v2**. Phases 3 and 4 are complete at the bounded demo scope; Phase 5 has not started. Akshay delegated this batch's testing. See [STATUS.md](STATUS.md) for exact results, spending and limits.
+Open **http://127.0.0.1:3012/v2**. Phases 3 and 4 are complete at the bounded demo scope; Phase 5A offline replay/reporting is delivered; remaining Phase 5 work is pending. Akshay delegated this batch's testing. See [STATUS.md](STATUS.md) for exact results, spending and limits.
 
 No migration/reset is needed. Refresh the page to load new controls. Workspaces still expire after their original 24 hours; browser recovery needs the valid session. Reset clears case history, retains private learning/history/call accounting, and does not replenish spending or extend expiry. Financial decision controls make no model calls; conversation, correction retry and learning proposal/comparison use the configured paid API. The app-wide $2 cap remains removed; the separate completed test batch stayed below its $2 guard.
+
+## Phase 5A: offline evidence report
+
+From this worktree run `npm run eval:v2:replay`, then open `results/v2-replay/report.md` (or `report.json` for row evidence/metrics). No server, API key, database, browser test or paid call is required. The command has no live mode. V1 remains separately reproducible with `npm run eval:replay`.
+
+Expect **replay PASS**, customer **2/4 -> 4/4, eligible**, Reviewer **2/4 -> 3/4, ineligible**, and the unsafe suggestion **rejected**. PASS means saved evidence/scoring reproduces; it does not approve the failed candidate. The report includes sample size, per-role/check outcomes, known/unknown token usage, conservative historical accounting, individual-call latency and observed delegation/escalation events. Uncaptured ledger outcomes are explicitly unavailable.
+
+The checked-in archive under `fixtures/v2/learning-20261024-1` contains only selected synthetic live outputs/instructions/usage, with hashes and model/configuration references. Exact provider requests were not captured; this command rechecks saved outputs rather than rerunning orchestration or a model. No lesson or financial record changes. A missing/tampered/incompatible file, malformed output or call-count mismatch fails closed. This is a small development selection, not final holdout or all-client acceptance. No manual/UI testing is needed for this checkpoint.
 
 ## Phase 3: financial supervision
 

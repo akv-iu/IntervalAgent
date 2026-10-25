@@ -14,6 +14,7 @@
     "eval": "tsx scripts/eval.ts",
     "picker": "tsx scripts/picker.ts",
     "eval:replay": "tsx scripts/eval.ts --provider replay --gate",
+    "eval:v2:replay": "tsx scripts/v2-eval-replay.ts",
     "test:db": "vitest run --config vitest.db.config.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",

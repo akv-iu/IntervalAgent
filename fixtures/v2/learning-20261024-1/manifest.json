@@ -1,0 +1,20 @@
+{
+  "format": "v2-saved-output-replay-1",
+  "dataset": "learning-20261024-1",
+  "suiteVersion": "learning-evals-2",
+  "traceSha256": "3478dd52bfba444ab2423929d8c795a414c2c410311410588ceacbe5b7a5f3ad",
+  "sourceReportSha256": "931400f43ccfb63198741d9fd569a728262cf95502e6c163103f92917f49e90d",
+  "sourceReport": "live-report-learning-evals-2.json",
+  "checkpointCommit": "42d4c107542ff4829b4ed87a236d85d6fb12c506",
+  "model": "gpt-6-luna",
+  "roleVersion": "v2-phase4-1",
+  "agentsSdk": "0.21.0",
+  "configurationReference": {
+    "maxOutputTokens": 1400,
+    "maxComparisonCalls": 32,
+    "deadlineMs": 90000
+  },
+  "provenance": "live-model-synthetic-data",
+  "selection": "Both complete learning-evals-2 comparisons (customer and Reviewer), including the ineligible Reviewer candidate, plus the unsafe owner-feedback suggestion. Source/generation/activation calls and suite-1 comparisons are outside this selected set.",
+  "scoringContext": "Declared invoice_clarity validation fixture VAL-204; America/Denver date from each saved comparison completion timestamp. This reconstructs scoring context only; raw provider requests and exact start timestamps were not captured. Configuration reference is the Phase 3/4 closeout commit, not a per-request transcript."
+}

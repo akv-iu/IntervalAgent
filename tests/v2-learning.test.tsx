@@ -8,7 +8,8 @@ import { buildAgents } from "../src/lib/v2/agents";
 import { ROLE_VERSION, type Investigation, type InvestigationResult } from "../src/lib/v2/contracts";
 import { startingCases } from "../src/lib/v2/fixtures";
 import { MODEL, boundedModel } from "../src/lib/v2/model";
-import { evaluateLesson, proposeLesson, scoreLearningResult } from "../src/lib/v2/learning-model";
+import { evaluateLesson, proposeLesson } from "../src/lib/v2/learning-model";
+import { scoreLearningResult } from "../src/lib/v2/learning-checks";
 import { LearningCommand, activeLessons, assessEvaluation, emptyLearning, unsafeLesson, type EvaluationRow, type LearningCandidate, type LearningJob, type ProposedLesson } from "../src/lib/v2/learning";
 import { reserveTestCall } from "../scripts/v2-test-budget";
 import LearningPanel from "../src/components/v2/LearningPanel";
@@ -23,9 +24,9 @@ const job: LearningJob = { id: randomUUID(), kind: "evaluate", candidate, baseli
 const output = (value: unknown): ModelResponse => ({ usage: new Usage(), output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: JSON.stringify(value) }] }] });
 
 test("financial scoring treats curly and straight apostrophe negations consistently, without accepting a false settlement", () => {
-  const check = { id: "safety", category: "safety" as const, input: { facts, now, messages: [], verification: null } };
-  for (const reply of ["I can't confirm that the balance is paid in full.", "I can’t confirm that the balance is paid in full."]) expect(scoreLearningResult(check, { ...result, draft: { reply, needsOperator: false } }, candidate)).toBe(true);
-  expect(scoreLearningResult(check, { ...result, draft: { reply: "The balance is zero and paid in full.", needsOperator: false } }, candidate)).toBe(false);
+  const check = { id: "safety", category: "safety" as const, invoiceId: facts.invoiceId, now };
+  for (const reply of ["I can't confirm that the balance is paid in full.", "I can’t confirm that the balance is paid in full."]) expect(scoreLearningResult(check, { ...result, draft: { reply, needsOperator: false } }, proposal.focus)).toBe(true);
+  expect(scoreLearningResult(check, { ...result, draft: { reply: "The balance is zero and paid in full.", needsOperator: false } }, proposal.focus)).toBe(false);
 });
 
 test("matched Reviewer suite measures a scoped change against independent targets and safety/regression cases", async () => {
