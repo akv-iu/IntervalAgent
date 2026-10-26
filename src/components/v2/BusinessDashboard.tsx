@@ -4,6 +4,14 @@ import type { CaseState, WorkspaceView } from "@/lib/v2/store";
 import { proposalIsCurrent, sameProposal } from "@/lib/v2/options";
 import styles from "./workspace.module.css";
 
+export function CaseList({ cases, selectedId, disabled, onSelect }: { cases: CaseState[]; selectedId: string; disabled: boolean; onSelect: (id: string) => void }) {
+  return <nav aria-label="Client cases" className={styles.caseList}>{cases.map((c) => <button key={c.facts.id} type="button" disabled={disabled} aria-current={selectedId === c.facts.id ? "true" : undefined} onClick={() => onSelect(c.facts.id)}>
+    <span className={styles.clientAvatar} aria-hidden="true">{c.facts.customer.slice(0, 1)}</span>
+    <span className={styles.clientIdentity}><strong>{c.facts.customer}</strong><span>{c.facts.invoiceId}</span><span>{scenarioName(c)}</span></span>
+    <span className={styles.clientAmount}>{formatCents(c.facts.balanceCents)}<span className={styles.caseState} data-status={c.status} title={statusNames[c.status]}><span className="sr-only">{statusNames[c.status]}</span></span></span>
+  </button>)}</nav>;
+}
+
 export function CaseRecords({ c }: { c: Pick<CaseState, "facts" | "now" | "preferredChannel" | "updates" | "events" | "agreements" | "operations" | "financialDecisions"> }) {
   return <>
     {c.preferredChannel && <p className="mt-2 text-sm">Current channel preference: {c.preferredChannel}.</p>}
@@ -21,7 +29,7 @@ export function CaseRecords({ c }: { c: Pick<CaseState, "facts" | "now" | "prefe
 
 export default function BusinessDashboard({ workspace, businessId, selectedId, disabled, onSelect }: { workspace: WorkspaceView; businessId: string; selectedId: string; disabled: boolean; onSelect: (id: string) => void }) {
   const cases = Object.values(workspace.cases).filter((c) => c.facts.businessId === businessId);
-  return <details className={styles.dashboard} open>
+  return <details className={styles.dashboard}>
     <summary>Business cases · {cases.length} clients</summary>
     <p className={styles.status}>Saved state in your private workspace. Promises are not receipts; planned contacts have not executed.</p>
     <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="Business case table">

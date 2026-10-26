@@ -4,7 +4,7 @@ Use the `v2-rebuild` worktree at `D:\Projects\IntervalAgent-v1-rebuild`. Follow 
 
 ## 1. Start from the customer's view
 
-Choose Northside / Alex. A fresh case starts with the business's labelled synthetic outreach message. You play Alex; the adjacent inbox lets you play the business, and the lower pane lets you play the operator. These actors have separate channels and permissions in the application even though one tester can play them.
+Choose Northside / Alex in the client navigation. A fresh case starts with labelled synthetic business outreach. You play Alex in the central chat; **Business** opens the separate inbox, **Review** opens operator controls, and **Details** opens source policy/outreach/records. These actors retain separate channels and permissions even though one tester can play them. Actual activity is above the composer; **View steps** expands its call history.
 
 Say `I have paid`. The orchestrator should collect missing invoice/payment details. Then give the matching invoice, amount and today's date, for example `It was INV-101, $129 today by card`. When the dated snapshot cannot establish receipt, inspect the model-selected Business Verification request and handoff light. There is no model process left polling while the business is silent. Runtime shows actual calls/tool requests and retains the latest run until the next message/retry.
 
@@ -32,7 +32,7 @@ For a free, reproducible evidence demonstration run `npm run eval:v2:replay` and
 
 ## 5. Connect the preserved V1 outreach experiment
 
-Open **Outreach strategy: V1 policy preview** below the selected case's source/policy disclosure. There is deliberately no default overdue age because V2 records do not contain one. Pick a hypothetical group:
+Open **Details**, then **Outreach strategy: V1 policy preview** below the source/policy disclosure. There is deliberately no default overdue age because V2 records do not contain one. Pick a hypothetical group:
 
 | Days overdue in the preview | Frozen channel | Local time | Tone |
 | --- | --- | --- | --- |
@@ -45,7 +45,7 @@ Inspect **Policy provenance**: source run, version, seeds, synthetic reward basi
 
 ## Phase 5B manual/UI acceptance for Akshay
 
-1. Refresh `/v2`, create a workspace only if the old one expired, and open the outreach disclosure. Confirm no recommendation appears until you choose an age group.
+1. Refresh `/v2`, create a workspace only if the old one expired, choose **Details** and open the outreach disclosure. Confirm no recommendation appears until you choose an age group.
 2. Choose **31-60** then **61-90** and compare the time/tone with the table. Expand provenance and verify it says synthetic V1 training with the frozen source run, not new training for this business.
 3. Change client/business. Confirm the age selection clears and saved customer/business history, balances and events remain unchanged. A case already stopped/held should show the corresponding notice after choosing a group.
 4. Check the select/disclosures/link by keyboard and at narrow width; confirm text/hash fits. `/picker` is an existing V1 reporting page and needs its own imported V1 dataset.

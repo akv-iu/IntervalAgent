@@ -1,14 +1,28 @@
 # V2 status
 
-October 24, 2026. Work is local on `v2-rebuild` in `D:\Projects\IntervalAgent-v1-rebuild`.
+October 26, 2026. Work is on `v2-rebuild` in `D:\Projects\IntervalAgent-v1-rebuild`.
 
-Product direction update: Akshay is developing an independent project and is no longer preparing an Interval AI presentation. The medium scope and existing agent/evaluation requirements remain. He accepted the latest functional correction, finalized the UI preview and explicitly approved implementing the Daylight checkpoint with current Codex usage unknown. The Daylight UI is now implemented locally; the other two themes remain previews.
+Product direction update: Akshay is developing an independent project. The medium scope and existing agent/evaluation requirements remain. The approved October 26 conversation-first ink/cobalt/teal refresh supersedes Daylight; earlier theme files remain historical previews. UI acceptance is still pending with Akshay.
 
 Current spending policy: Akshay explicitly chose **Remove the $2 cap for local testing** on October 23. The local aggregate dollar ceiling is removed from the app/database and checkpoint fallback. Historical usage and reservations remain; manual/live calls bill the configured OpenAI API account. Earlier $2 figures below are historical, not the current policy. Per-run, turn, workspace, STOP and financial-review guards remain enforced.
 
 **Phases 1-4 and Phase 5's automated checkpoints are complete on `v2-rebuild` at the agreed medium-sized synthetic-demo boundary. Phase 5B outreach-preview/documentation is implemented; its UI acceptance remains pending with Akshay. Phase 5C final automated verification passed; see [READINESS.md](READINESS.md) for requirement-by-requirement evidence and limits. Production `main` remains V1 (`2827779`); no production merge, deployment, V1 database write or external payment/message occurred.** The branch log identifies each checkpoint; the earlier Phase 3B checkpoint was `3f40f46`.
 
 Akshay explicitly approved finishing both phases without another approval pause and delegated automated/browser/live testing, with **up to $2 total API testing spend**. This separate test guard does not restore the removed app-wide cap. At October 24, 1:09 PM Mountain, fresh Codex allowance was 100% five-hour / 53% weekly. Before Phase 4, the 1:19 PM observation was 90% / 52%; reset times were October 24, 6:07 PM and October 30, 11:55 AM Mountain. These are observations, not current remaining usage.
+
+### October 26: conversation-first UI refresh
+
+Akshay approved the ink/cobalt/teal direction with “lets work on ui,” deferring the context-file refactor. Usage observed October 26 at 5:00 PM Mountain, checked 5:05 PM: 94% five-hour / 99% weekly remaining; recorded resets October 26 at 9:45 PM / November 2 at 3:45 PM. These are historical observations. This layout supersedes Daylight; earlier preview files are historical.
+
+Added V2-scoped gradient navigation and IBM Plex Sans, a compact client list, central chat/composer and Business/Review/Details panels. Required parties receive the existing attention cue and a chat-adjacent handoff action. Source policy, outreach preview, commitments and history are under Details; financial controls, corrections and learning remain under Review. The full case table is collapsed. Existing API/action contracts, model routing, permissions and persistence are unchanged; no new framework or migration.
+
+Actual active role, elapsed time and recent observed handoffs now appear above the composer; View steps expands call/tool history. Consecutive calls by the same role are grouped only in the compact flow. Only observed roles appear; completed activity remains until another run starts. Fresh progress cannot borrow the previous run's steps/failure. Waiting on a business reply is not presented as an active model run.
+
+Two self-review passes: (1) traced action callbacks, scope and runtime metadata; added stale-progress and no-invented-pipeline regressions. (2) sampled desktop/390px renders and Details/Review/takeover/resume in a new synthetic workspace. Fixed mobile page overflow from a positioned accessibility label, a panel jump during submission, and client order changing after JSONB reload. Selected text/background contrast ratios are 5.08:1–7.03:1. This is self-review with sampled visual/control checks, not a full accessibility audit or live-model acceptance.
+
+Verification: **758 offline tests / 49 files** passed; final focused runtime/dashboard/correction/outreach checks passed **31 tests / 4 files**. Type checking, lint, production build, served/built CSS and both replay gates passed. Existing V1 build-tracing warnings and Vite notice remain. DB tests were not rerun: domain/storage code did not change. Existing Docker/V2 container and app were started without migration/reset. No paid model calls, deployment or production merge. The visual-review workspace's takeover was explicitly resumed. Screenshots are in ignored `results/v2-ui-refresh/desktop.png` and `mobile.png`.
+
+Stop at this branch checkpoint. Final UI/live-conversation acceptance remains Akshay's; follow the updated LOCAL-DEMO.md. Prior Phase 5B checks now use the Details panel.
 
 ### Phase 5C: final automated journeys and readiness evidence
 

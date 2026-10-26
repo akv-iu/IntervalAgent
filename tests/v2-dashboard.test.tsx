@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import BusinessDashboard, { CaseRecords } from "../src/components/v2/BusinessDashboard";
+import BusinessDashboard, { CaseList, CaseRecords } from "../src/components/v2/BusinessDashboard";
 import { startingCases } from "../src/lib/v2/fixtures";
 import type { CaseState, WorkspaceView } from "../src/lib/v2/store";
 import { calculateProposal } from "../src/lib/v2/options";
@@ -21,6 +21,17 @@ test("dashboard shows only the selected business, with actual case status and wo
   expect(html).not.toContain("Alex"); expect(html).not.toContain("Northside Fitness"); expect(html).not.toContain("INV-101");
   const processing = renderToStaticMarkup(<BusinessDashboard workspace={view} businessId="cedar" selectedId="cedar-late-payment" disabled onSelect={() => {}} />);
   expect(processing).not.toContain('href="#v2-case"'); expect(processing).toContain("Available after this action");
+});
+
+test("client navigation shows scoped balances, current selection and attention status without hidden record details", () => {
+  const cases = Object.values(workspace().cases).filter((c) => c.facts.businessId === "cedar");
+  cases[0].status = "awaiting_business";
+  const html = renderToStaticMarkup(<CaseList cases={cases} selectedId={cases[0].facts.id} disabled={false} onSelect={() => {}} />);
+  expect(html).toContain('aria-label="Client cases"'); expect(html.match(/aria-current="true"/g)).toHaveLength(1);
+  for (const name of ["Riley", "Jamie", "Drew", "Avery", "Robin", "Quinn", "CED-201", "$185.00", "Waiting for the business"]) expect(html).toContain(name);
+  expect(html).not.toContain("Alex"); expect(html).not.toContain("Northside");
+  const blocked = renderToStaticMarkup(<CaseList cases={cases} selectedId={cases[0].facts.id} disabled onSelect={() => {}} />);
+  expect(blocked.match(/disabled=""/g)).toHaveLength(6);
 });
 
 test("dashboard and case records distinguish saved promises, requests and event states from executed actions", () => {

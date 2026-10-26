@@ -1,5 +1,7 @@
 # IntervalAgent V2 rebuild: plan for review
 
+October 26 UI update: the approved conversation-first ink/cobalt/teal refresh is implemented. Inline agent activity, contextual panels and compact client navigation supersede the earlier Daylight layout. Final UI/live-conversation acceptance remains pending; agent/domain architecture is unchanged.
+
 Status: Phases 1-4 and Phase 5's automated checkpoints are complete on `v2-rebuild`; production V1 stays on `main`. Delivery includes supervised financial corrections, scoped evaluated instruction improvement with explicit activation/rollback, saved-output replay, a preserved outreach-policy preview and architecture/demo documentation. Phase 5C final automated verification passed; Phase 5B UI acceptance remains pending with Akshay. See [READINESS.md](READINESS.md) for requirements/evidence/limits, [STATUS.md](STATUS.md) for checkpoint results and [LOCAL-DEMO.md](LOCAL-DEMO.md) for the walkthrough. No next implementation phase starts automatically.
 Date: October 23, 2026. Branch: `v2-rebuild`, based on V1 commit `7a6c6c8`.
 Acceptance requirements: [SPEC.md](SPEC.md). The original root `SPEC.md` remains the V1 contract.
@@ -274,6 +276,14 @@ Stop after automated verification and branch push. Browser/UI acceptance belongs
 Delivered: fourteen new SDK-to-storage journeys cover all twelve clients plus each business's prior-payment recognition authority. Direct reads avoid specialists; intent updates delegate to Account Resolution; linked business evidence uses Business Verification before resolution/review. Reconnect, peer/tester isolation, changed contact intent, STOP, duplicate effects and receipt provenance pass. These extend DB coverage from 167 to 181 checks, alongside 755 offline checks, types/lint/build/CSS and both replay gates. All 188 model invocations in the new journeys are scripted; no paid calls, browser test or application-code change occurred. Two self-review passes found no application bug; details and requirement qualifications are in [READINESS.md](READINESS.md).
 
 Stop after this branch checkpoint. Akshay's Phase 5B UI acceptance is still required; broader current-model demonstrations or hosting are optional separate decisions. This is not unrestricted production acceptance, evidence of real collection lift or permission to deploy.
+
+### October 26 UI checkpoint
+
+- Result: make the conversation primary, with visible actual progress while waiting and concise action-specific context.
+- Work: page-scoped typography/gradient, stable client navigation, chat-adjacent activity, Business/Review/Details panels and fewer repeated instructions.
+- Check: runtime/isolation/rendering regressions, build/types/lint/CSS/replays, sampled desktop/narrow self-review; final acceptance remains Akshay's.
+
+Delivered with 758 offline checks passing and 31 focused UI checks passing. The runtime shows observed handoffs only and retains the last run; a new run cannot borrow old progress/errors. No model, tool, financial or storage contracts changed. No paid model calls or deployment. Context-file extraction remains deferred. See STATUS.md and the current UI checklist in LOCAL-DEMO.md; stop after this checkpoint.
 
 ## Decisions for Akshay's review
 

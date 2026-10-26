@@ -1,5 +1,7 @@
 # V2 readiness and acceptance evidence
 
+October 26 addendum: the approved UI refresh passed 758 offline checks (including three new runtime/navigation regressions), with 31 focused checks rerun, build/types/lint/CSS/replays and sampled desktop/390px visual review. Business/Review/Details navigation supersedes the earlier layout; use the updated DEMO.md checklist. No new paid calls, DB integration run or full browser/live-model acceptance is claimed. The matrix below records the October 24 baseline; [STATUS.md](STATUS.md) records the UI checkpoint and remaining acceptance.
+
 October 24, 2026. Phase 5C is the final **automated** verification checkpoint for the agreed portfolio scope. The implementation supports a controlled demonstration; **Phase 5B browser/UI acceptance remains pending with Akshay**. This document is an evidence map, not a claim that every functional/non-functional requirement has unrestricted production acceptance.
 
 ## What ran in Phase 5C

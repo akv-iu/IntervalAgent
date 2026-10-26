@@ -32,7 +32,9 @@ async function main() {
   assert.ok(styles.includes(".bg-accent-ink"), "Shared Tailwind utilities were lost");
   const pageClass = classNames.find((name) => /(?:^|[_-])page$/.test(name));
   assert.ok(pageClass && styles.replace(/\s+/g, "").includes(`main:has(>.${pageClass})`), "V2's full-width page rule is missing");
-  assert.match(styles, /grid-template-columns:\s*minmax\(0,\s*1\.12fr\)/, "The two-column workspace layout was lost");
-  console.log(`PASS (${built ? "build artifacts" : "served assets"}): CSS-module class and selector match; design tokens, two-column grid and shared Tailwind utilities exist. No browser or model calls.`);
+  assert.match(styles, /grid-template-columns:\s*216px\s+minmax\(0,\s*1fr\)/, "The client navigation/workspace grid was lost");
+  assert.match(styles, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+360px/, "The conversation/context grid was lost");
+  assert.ok(styles.includes("prefers-reduced-motion"), "Activity motion must respect reduced motion");
+  console.log(`PASS (${built ? "build artifacts" : "served assets"}): CSS-module selectors, client/conversation/context grids, reduced motion and shared utilities exist. No browser or model calls.`);
 }
 main().catch((error: unknown) => { console.error(error instanceof Error ? error.message : "Stylesheet check failed"); process.exitCode = 1; });

@@ -1,13 +1,20 @@
 # V2 local demo: supervised payments and evaluated learning
 
 Worktree: `D:\Projects\IntervalAgent-v1-rebuild`, branch `v2-rebuild`.
-Open **http://127.0.0.1:3012/v2**. Phases 1-4 and Phase 5's automated checkpoints are complete at the bounded demo scope. Phase 5C passed 755 offline and 181 isolated DB checks; no paid calls or browser test occurred. **Phase 5B UI acceptance remains pending with Akshay.** See [READINESS.md](READINESS.md) for requirement-by-requirement evidence/limits and [STATUS.md](STATUS.md) for results and spending. No further implementation phase starts automatically.
+Open **http://127.0.0.1:3012/v2**. The October 26 UI refresh is implemented: client navigation, central conversation, inline agent activity and Business/Review/Details panels. **Final UI/live-conversation acceptance remains with Akshay.** The refresh passed 758 offline tests and sampled desktop/narrow visual checks without paid calls. Earlier Phase 5C's 181 isolated DB checks remain historical evidence. See [STATUS.md](STATUS.md) for exact checks and [READINESS.md](READINESS.md) for requirement limits.
 
 No migration/reset is needed. Refresh the page to load new controls. Workspaces still expire after their original 24 hours; browser recovery needs the valid session. Reset clears case history, retains private learning/history/call accounting, and does not replenish spending or extend expiry. Financial decision controls make no model calls; conversation, correction retry and learning proposal/comparison use the configured paid API. The app-wide $2 cap remains removed; the separate completed test batch stayed below its $2 guard.
 
+## Current UI: quick acceptance check
+
+1. Choose a business and client in the left navigation. Confirm incoming business outreach and separate case histories. Narrow screens use a horizontal client list and show case tools below chat.
+2. Send your next test message. Agent activity appears **above the composer**: actual role, elapsed time and recent observed handoffs. **View steps** expands call/tool history. The finished result remains until another run starts. Sending messages uses the configured paid API.
+3. When verification needs a business reply, the **Business** panel and chat action highlight it. **Open business request** brings the inbox into view; the model run ends while waiting. **Review** holds operator/financial/correction/learning controls; **Details** holds policy, outreach, commitments and history.
+4. Check your usual viewport and keyboard controls. The desktop composer stays visible within chat. Confirm takeover pauses replies and resume retains STOP. Report awkward handoffs or unreadable states; sampled visual review is not full acceptance.
+
 ## Phase 5B: please check the outreach preview
 
-Refresh `/v2` and open **Outreach strategy: V1 policy preview** below the selected case's source/policy disclosure. No age is assumed. Select **31-60** for SMS at 18:00/friendly tone, then **61-90** for SMS at 10:00/formal tone (America/Denver). Inspect **Policy provenance**, change client/business to check that selection clears, and confirm chat, balances/preferences/events remain unchanged. This requires no paid model calls or workspace reset. If the old workspace expired, start your own new one subject to existing limits.
+Refresh `/v2`, select **Details**, and open **Outreach strategy: V1 policy preview** below the source/policy disclosure. No age is assumed. Select **31-60** for SMS at 18:00/friendly tone, then **61-90** for SMS at 10:00/formal tone (America/Denver). Inspect **Policy provenance**, change client/business to check that selection clears, and confirm chat, balances/preferences/events remain unchanged. This requires no paid model calls or workspace reset. If the old workspace expired, start your own new one subject to existing limits.
 
 Please perform the keyboard/narrow-layout and disclosure/link checks in [DEMO.md](DEMO.md#phase-5b-manualui-acceptance-for-akshay). Automated/source checks passed; no browser acceptance is claimed. [ARCHITECTURE.md](ARCHITECTURE.md) explains the four roles, durable handoffs, guarded effects and separate outreach/instruction learning loops. The `/picker` link opens the existing V1 reporting page, which needs its own imported V1 dataset and may show a different latest run.
 

@@ -2,6 +2,8 @@
 
 Status: updated October 24, 2026. Phases 1-4 and Phase 5's automated checkpoints are delivered within the synthetic/private-workspace boundary. Phase 5C final automated verification passed; Phase 5B outreach-preview UI acceptance remains pending with Akshay. The app-wide $2 cap remains removed; the separately approved Phases 3/4 live-test budget was $2 and was enforced independently. Usage/per-run/workspace guards remain. Phase 5C used only scripted responses and an isolated test database; earlier browser delegation applied to its named batch. See [READINESS.md](READINESS.md) for qualified requirements evidence and [STATUS.md](STATUS.md) for checkpoint results.
 Read [PLAN.md](PLAN.md) for five phases with three-line briefs. The original root `SPEC.md` continues to describe V1.
+
+October 26 UI delivery: the conversation-first refresh places active role/elapsed time/recent observed handoffs above the composer, with expandable per-call history and retained completion/failure. New runs cannot inherit old steps/errors. Business/Review/Details panels retain all existing actions and attention semantics; the compact client list uses stable invoice order. V2-only gradient/typography and narrow layout replace Daylight without changing agent, source, financial, learning or persistence contracts. 758 offline checks pass; final UI/live-conversation acceptance remains pending. STATUS.md identifies sampled visual checks and limits.
 Delivery paragraphs record each checkpoint's original boundary; later delivery sections supersede earlier statements about unavailable controls.
 
 ## Product and architecture contract
