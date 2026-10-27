@@ -26,7 +26,8 @@ export function validatePaymentClaim(value: unknown, input: Investigation): Paym
     let customerEvidence = false;
     for (const ref of slot.evidence) {
       const index = input.messages.findIndex((m) => m.id === ref.messageId), message = input.messages[index];
-      if (!message || index > through || message.channel !== "customer" || message.disposition === "late") throw new Error(`${field} evidence ${ref.messageId} is missing, future or outside the customer conversation`);
+      const linkedReport = message?.channel === "business" && message.speaker === "business" && message.id === claim.reportResponse?.businessMessageId && message.requestId === input.requestId;
+      if (!message || index > through || message.channel !== "customer" && !linkedReport || message.disposition === "late") throw new Error(`${field} evidence ${ref.messageId} is missing, future or outside the customer conversation and linked report`);
       if (!message.text.includes(ref.quote)) throw new Error(`${field} evidence ${ref.messageId} quotation is not verbatim; copy the exact text from that message`);
       if (message.speaker === "customer" && index >= start) customerEvidence = true;
     }

@@ -33,6 +33,14 @@ test.each(["foreign-business", "later-business", "wrong-amount", "stale-context"
   expect(() => validateCurrentClaim(fresh, input)).toThrow();
 });
 
+test("agreement can cite the linked business report plus the customer's contextual confirmation, never a report alone", () => {
+  const input = samReconciliation(), claim = agreedSamClaim(input);
+  claim.amount.evidence.push({ messageId: claim.reportResponse.businessMessageId, quote: "40 dollars paid" });
+  expect(validateCurrentClaim(claim, input).amount.value).toBe(4000);
+  claim.amount.evidence = claim.amount.evidence.filter((e) => e.messageId !== claim.throughMessageId);
+  expect(() => validateCurrentClaim(claim, input)).toThrow("customer evidence");
+});
+
 test("agreement goes back to the business for only the missing financial facts, then complete confirmation supports one $40 recognition", async () => {
   const input = samReconciliation(), fresh = agreedSamClaim(input), roles: string[] = [];
   const followup = { ...input.verification!, outcome: "needs_facts" as const, businessMessage: "Was the $40 received and settled today, 2026-10-26, after the snapshot, and not already included in the $79 balance or its $50 receipt?" };
