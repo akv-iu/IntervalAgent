@@ -1,0 +1,404 @@
+{
+  "version": "reconciliation-20261026-1",
+  "revision": "560b6820666407baed6b8439599f5fdab623a3c6",
+  "roleVersion": "v2-reconciliation-1",
+  "model": "gpt-6-luna",
+  "at": "2026-10-27T01:13:28.699Z",
+  "budget": {
+    "capCents": 100,
+    "path": "results/v2-reconciliation-20261026-1/budget.json",
+    "reservationCents": 2
+  },
+  "rows": [
+    {
+      "id": "sam-agrees",
+      "input": {
+        "facts": {
+          "businessId": "northside",
+          "businessName": "Northside Fitness",
+          "balanceCents": 7900,
+          "balanceAsOf": "2026-10-25T23:17:13.391Z",
+          "sourceVersion": "synthetic-v2-2",
+          "recognitionPolicy": "business_confirmation",
+          "timezone": "America/Denver",
+          "phone": "+1 202-555-0101",
+          "email": "sam@example.test",
+          "id": "fresh-record",
+          "scenario": "partial_payment",
+          "customer": "Sam",
+          "invoiceId": "INV-102",
+          "payments": [
+            {
+              "id": "receipt-102",
+              "invoiceId": "INV-102",
+              "amountCents": 5000,
+              "date": "2026-10-25",
+              "status": "settled",
+              "includedInBalance": true
+            }
+          ],
+          "accountNotes": [
+            "The $50 payment is already included in the $79 remaining balance."
+          ]
+        },
+        "now": "2026-10-27T00:52:17.573Z",
+        "requestId": "dd132526-bed1-486a-afd2-26f6d39e08cd",
+        "messages": [
+          {
+            "id": "opening-fresh-record",
+            "channel": "customer",
+            "speaker": "agent",
+            "origin": "synthetic_opening",
+            "at": "2026-10-26T23:17:13.391Z",
+            "text": "Hi Sam, this is Northside Fitness. Our records as of 2026-10-25 show $79.00 for invoice INV-102. Have you already paid, or would you like to discuss options?"
+          },
+          {
+            "id": "fda73d9a-1efc-4106-93ec-eca1cad1b2eb",
+            "speaker": "customer",
+            "channel": "customer",
+            "text": "I have paid to the same invoice full amount",
+            "at": "2026-10-27T00:52:17.573Z"
+          },
+          {
+            "id": "fda73d9a-1efc-4106-93ec-eca1cad1b2eb-business",
+            "speaker": "agent",
+            "channel": "business",
+            "text": "Please check invoice INV-102 and let us know the amount paid and the payment date.",
+            "at": "2026-10-27T00:52:17.573Z",
+            "requestId": "dd132526-bed1-486a-afd2-26f6d39e08cd"
+          },
+          {
+            "id": "fda73d9a-1efc-4106-93ec-eca1cad1b2eb-reply",
+            "speaker": "agent",
+            "channel": "customer",
+            "text": "Thanks for letting us know. We’ve asked Northside Fitness to check the payment for invoice INV-102; it hasn’t been confirmed yet.",
+            "at": "2026-10-27T00:52:17.573Z"
+          },
+          {
+            "id": "8af15f74-e2f5-4a98-bbce-92f9082f7428",
+            "speaker": "business",
+            "channel": "business",
+            "text": "40 dollars paid",
+            "at": "2026-10-27T00:52:17.573Z",
+            "requestId": "dd132526-bed1-486a-afd2-26f6d39e08cd"
+          },
+          {
+            "id": "8af15f74-e2f5-4a98-bbce-92f9082f7428-reply",
+            "speaker": "agent",
+            "channel": "customer",
+            "text": "Northside Fitness reports a $40.00 payment for invoice INV-102. If that amount is incorrect, you can dispute the report here.",
+            "at": "2026-10-27T00:52:17.573Z"
+          },
+          {
+            "id": "91cfd3c3-f9e7-4d3d-9bc8-c3e4dd76a05b",
+            "speaker": "customer",
+            "channel": "customer",
+            "text": "No that is correct i have paid 40 only",
+            "at": "2026-10-27T00:52:17.573Z"
+          }
+        ],
+        "paymentClaim": {
+          "businessId": "northside",
+          "caseId": "fresh-record",
+          "sourceVersion": "synthetic-v2-2",
+          "intent": "payment_claim",
+          "claimMessageId": "fda73d9a-1efc-4106-93ec-eca1cad1b2eb",
+          "throughMessageId": "fda73d9a-1efc-4106-93ec-eca1cad1b2eb",
+          "invoice": {
+            "value": "INV-102",
+            "evidence": [
+              {
+                "messageId": "opening-fresh-record",
+                "quote": "INV-102"
+              },
+              {
+                "messageId": "fda73d9a-1efc-4106-93ec-eca1cad1b2eb",
+                "quote": "I have paid to the same invoice full amount"
+              }
+            ]
+          },
+          "amount": {
+            "value": 7900,
+            "evidence": [
+              {
+                "messageId": "opening-fresh-record",
+                "quote": "$79.00"
+              },
+              {
+                "messageId": "fda73d9a-1efc-4106-93ec-eca1cad1b2eb",
+                "quote": "I have paid to the same invoice full amount"
+              }
+            ]
+          },
+          "date": {
+            "value": null,
+            "evidence": []
+          },
+          "uncertainties": [
+            "Payment date is unknown"
+          ]
+        },
+        "verification": {
+          "claimMessageId": "fda73d9a-1efc-4106-93ec-eca1cad1b2eb",
+          "outcome": "business_reported",
+          "summary": "Northside Fitness reports $40 paid for invoice INV-102; payment date and settlement are unknown.",
+          "amountCents": 4000,
+          "paymentDate": null,
+          "invoiceId": "INV-102",
+          "reference": null,
+          "settlementStatus": "unknown",
+          "businessMessage": null,
+          "missingFacts": [
+            "payment date",
+            "settlement status"
+          ]
+        }
+      },
+      "expected": "Refresh claim to 4000/agrees; business follow-up for receipt details; no operator or money yet",
+      "elapsedMs": 28733,
+      "calls": [
+        {
+          "id": "52c84a6b-88da-410e-9f4c-ffdf58f01d73",
+          "result": {
+            "id": "52c84a6b-88da-410e-9f4c-ffdf58f01d73",
+            "inputTokens": 4641,
+            "outputTokens": 335,
+            "usageKnown": true,
+            "latencyMs": 2793,
+            "tools": [
+              "business_verification"
+            ],
+            "role": "customer"
+          },
+          "role": "customer"
+        },
+        {
+          "id": "568d564d-3c5a-4379-90dc-587fdebe3f9d",
+          "result": {
+            "id": "568d564d-3c5a-4379-90dc-587fdebe3f9d",
+            "inputTokens": 5000,
+            "outputTokens": 438,
+            "usageKnown": true,
+            "latencyMs": 3344,
+            "tools": [
+              "account_resolution"
+            ],
+            "role": "customer"
+          },
+          "role": "customer"
+        },
+        {
+          "id": "b12363ee-6c6c-4c16-af1d-b3e3cc82b4c7",
+          "result": {
+            "id": "b12363ee-6c6c-4c16-af1d-b3e3cc82b4c7",
+            "inputTokens": 5461,
+            "outputTokens": 383,
+            "usageKnown": true,
+            "latencyMs": 3319,
+            "tools": [],
+            "role": "customer"
+          },
+          "role": "customer"
+        },
+        {
+          "id": "5f213c3a-d478-4bcd-bc67-b5430e4876c8",
+          "result": {
+            "id": "5f213c3a-d478-4bcd-bc67-b5430e4876c8",
+            "inputTokens": 2965,
+            "outputTokens": 157,
+            "usageKnown": true,
+            "latencyMs": 2712,
+            "tools": [],
+            "role": "reviewer"
+          },
+          "role": "reviewer"
+        },
+        {
+          "id": "722b1944-9e6e-4eeb-9107-d8f6d0126cd3",
+          "result": {
+            "id": "722b1944-9e6e-4eeb-9107-d8f6d0126cd3",
+            "inputTokens": 5297,
+            "outputTokens": 14,
+            "usageKnown": true,
+            "latencyMs": 1310,
+            "tools": [
+              "read_case"
+            ],
+            "role": "customer"
+          },
+          "role": "customer"
+        },
+        {
+          "id": "6d9e96b8-8e9d-40bf-ae7a-123562ff74fa",
+          "result": {
+            "id": "6d9e96b8-8e9d-40bf-ae7a-123562ff74fa",
+            "inputTokens": 5539,
+            "outputTokens": 346,
+            "usageKnown": true,
+            "latencyMs": 3460,
+            "tools": [
+              "business_verification"
+            ],
+            "role": "customer"
+          },
+          "role": "customer"
+        },
+        {
+          "id": "6da5ea65-b478-4aaa-afa5-7e0dc6be08f2",
+          "result": {
+            "id": "6da5ea65-b478-4aaa-afa5-7e0dc6be08f2",
+            "inputTokens": 5909,
+            "outputTokens": 455,
+            "usageKnown": true,
+            "latencyMs": 4142,
+            "tools": [
+              "account_resolution"
+            ],
+            "role": "customer"
+          },
+          "role": "customer"
+        },
+        {
+          "id": "561beff1-030b-4c0f-b920-4bd3c1507885",
+          "result": {
+            "id": "561beff1-030b-4c0f-b920-4bd3c1507885",
+            "inputTokens": 6387,
+            "outputTokens": 386,
+            "usageKnown": true,
+            "latencyMs": 4630,
+            "tools": [],
+            "role": "customer"
+          },
+          "role": "customer"
+        },
+        {
+          "id": "82d7aeae-29fa-47e9-a2f4-6ad410488bfe",
+          "result": {
+            "id": "82d7aeae-29fa-47e9-a2f4-6ad410488bfe",
+            "inputTokens": 2964,
+            "outputTokens": 131,
+            "usageKnown": true,
+            "latencyMs": 2894,
+            "tools": [],
+            "role": "reviewer"
+          },
+          "role": "reviewer"
+        }
+      ],
+      "checks": [
+        "Review blocked",
+        "Stale customer interpretation",
+        "Missing targeted business follow-up"
+      ],
+      "result": {
+        "draft": {
+          "reply": "Thanks for confirming that the $40 report is correct. We’ll ask Northside Fitness to confirm the payment date and settlement; the $79 balance still reflects our current records, including the previously recorded $50 payment.",
+          "needsOperator": false
+        },
+        "verification": {
+          "claimMessageId": "fda73d9a-1efc-4106-93ec-eca1cad1b2eb",
+          "outcome": "business_reported",
+          "summary": "Northside Fitness reports $40 paid for invoice INV-102; payment date and settlement are unknown.",
+          "amountCents": 4000,
+          "paymentDate": null,
+          "invoiceId": "INV-102",
+          "reference": null,
+          "settlementStatus": "unknown",
+          "businessMessage": null,
+          "missingFacts": [
+            "payment date",
+            "settlement status"
+          ]
+        },
+        "resolution": null,
+        "paymentClaim": {
+          "businessId": "northside",
+          "caseId": "fresh-record",
+          "sourceVersion": "synthetic-v2-2",
+          "intent": "payment_claim",
+          "claimMessageId": "fda73d9a-1efc-4106-93ec-eca1cad1b2eb",
+          "throughMessageId": "fda73d9a-1efc-4106-93ec-eca1cad1b2eb",
+          "invoice": {
+            "value": "INV-102",
+            "evidence": [
+              {
+                "messageId": "opening-fresh-record",
+                "quote": "INV-102"
+              },
+              {
+                "messageId": "fda73d9a-1efc-4106-93ec-eca1cad1b2eb",
+                "quote": "I have paid to the same invoice full amount"
+              }
+            ]
+          },
+          "amount": {
+            "value": 7900,
+            "evidence": [
+              {
+                "messageId": "opening-fresh-record",
+                "quote": "$79.00"
+              },
+              {
+                "messageId": "fda73d9a-1efc-4106-93ec-eca1cad1b2eb",
+                "quote": "I have paid to the same invoice full amount"
+              }
+            ]
+          },
+          "date": {
+            "value": null,
+            "evidence": []
+          },
+          "uncertainties": [
+            "Payment date is unknown"
+          ]
+        },
+        "review": {
+          "accepted": false,
+          "reasons": [
+            "amount evidence 8af15f74-e2f5-4a98-bbce-92f9082f7428 is missing, future or outside the customer conversation",
+            "The customer’s latest message confirms the business-reported $40 amount is correct; it resolves the earlier amount discrepancy and is not a dispute. The draft needlessly asks the customer to dispute it again.",
+            "The reported $40 is attributed to invoice INV-102, but its date and settlement remain unknown. A targeted business follow-up is needed; the draft does not request that investigation.",
+            "The $79 balance can be described as the current recorded balance, including the prior $50 payment, but it must not imply that the newly reported $40 has been credited or independently verified."
+          ]
+        },
+        "activity": [
+          {
+            "role": "business_verification",
+            "action": "blocked_claim",
+            "summary": "amount evidence 8af15f74-e2f5-4a98-bbce-92f9082f7428 is missing, future or outside the customer conversation"
+          },
+          {
+            "role": "customer",
+            "action": "invalid_claim",
+            "summary": "amount evidence 8af15f74-e2f5-4a98-bbce-92f9082f7428 is missing, future or outside the customer conversation"
+          },
+          {
+            "role": "reviewer",
+            "action": "rejected",
+            "summary": "amount evidence 8af15f74-e2f5-4a98-bbce-92f9082f7428 is missing, future or outside the customer conversation; The customer explicitly agrees that Northside’s reported $40 payment is correct and says they paid only $40. This resolves the earlier full-balance claim; it is not a dispute.; The draft wrongly asks for settlement and balance-reflection details before recognizing the business’s reported amount. Business attribution is supported, while settlement remains unknown and no balance change is authorized.; The $40 report is not yet reflected in the saved balance: the existing $50 receipt is already included in the $79 balance, and there is no new receipt or financial decision. Acknowledge the customer’s agreement and, if further verification is needed, request it from the business rather than asking a; repeated customer question."
+          },
+          {
+            "role": "customer",
+            "action": "read_case",
+            "summary": "Read the scoped source snapshot"
+          },
+          {
+            "role": "business_verification",
+            "action": "blocked_claim",
+            "summary": "amount evidence 8af15f74-e2f5-4a98-bbce-92f9082f7428 is missing, future or outside the customer conversation"
+          },
+          {
+            "role": "customer",
+            "action": "invalid_claim",
+            "summary": "amount evidence 8af15f74-e2f5-4a98-bbce-92f9082f7428 is missing, future or outside the customer conversation"
+          },
+          {
+            "role": "reviewer",
+            "action": "rejected",
+            "summary": "amount evidence 8af15f74-e2f5-4a98-bbce-92f9082f7428 is missing, future or outside the customer conversation; The customer’s latest message confirms the business-reported $40 amount is correct; it resolves the earlier amount discrepancy and is not a dispute. The draft needlessly asks the customer to dispute it again.; The reported $40 is attributed to invoice INV-102, but its date and settlement remain unknown. A targeted business follow-up is needed; the draft does not request that investigation.; The $79 balance can be described as the current recorded balance, including the prior $50 payment, but it must not imply that the newly reported $40 has been credited or independently verified."
+          }
+        ]
+      }
+    }
+  ]
+}
