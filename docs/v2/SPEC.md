@@ -62,6 +62,8 @@ The factory combines reusable roles, versioned business configuration, scoped to
 
 ## Functional requirements
 
+October 26 semantic evidence: nine live matched cases produced 5/9 previous and 6/9 checkpoint-1 structured passes; coding-agent semantic assessment produced 3/9 and 6/9. A bounded correction pass clarified integer cents and review of invoice scope/business acknowledgement at `v2-claim-2`. Two known failures passed development retest; the vague-business-reply retest stopped before final review at the reservation cap. This is partial FR-04/05/06/07 validation, not full acceptance or a general latency claim. See [frozen evidence](../../fixtures/v2/semantic-20261026-1/SUMMARY.md). Financial authority is unchanged. Older role lessons require evaluation on the current version; no lesson was activated by this batch.
+
 | ID | Requirement | Acceptance evidence |
 | --- | --- | --- |
 | FR-01 | Configure business branding/tone, contact preferences, policies, capabilities, adapter, verification/manual-follow-up rules and lesson versions. | Two businesses share agents but have different eligible options/review needs. Requests reach only the permitted business contact in that workspace. |

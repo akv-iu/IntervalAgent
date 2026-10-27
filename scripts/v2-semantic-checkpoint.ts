@@ -55,7 +55,10 @@ async function main() {
       try {
         row.result = await (variant === "baseline" ? baseline.investigate : investigate)(structuredClone(semanticInput(sample)), model, signal);
         row.failures = semanticChecks(sample, row.result, variant !== "baseline");
-      } catch (error) { row.error = describeFailure(error); row.failures = ["Run incomplete; no fallback or automatic retry"]; }
+      } catch (error) {
+        row.error = error instanceof Error && error.message.startsWith("Approved $2 Phase 3/4 test budget") ? { kind: "test_budget", message: "The approved test reservation cap stopped the run before another provider call." } : describeFailure(error);
+        row.failures = ["Run incomplete; no fallback or automatic retry"];
+      }
       row.elapsedMs = Date.now() - start; save();
       console.log(sample.id, variant, row.failures.length ? "FAIL" : "STRUCTURED CHECKS PASS", `${row.calls.length} calls`, `${row.elapsedMs}ms`);
       if (row.error) { console.log("Stopped on run failure; inspect saved evidence before retry."); process.exitCode = 1; return; }

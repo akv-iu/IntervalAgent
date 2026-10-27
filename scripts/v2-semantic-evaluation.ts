@@ -36,6 +36,6 @@ export function semanticChecks(sample: SemanticSample, result: InvestigationResu
     if (interpreted && (result.paymentClaim?.invoice.value !== semanticInput(sample).facts.invoiceId || result.paymentClaim?.amount.value !== sample.expected.amountCents || result.paymentClaim?.date.value !== sample.expected.paymentDate)) failures.push("Grounded interpretation does not preserve supported values and unknowns");
   } else if (sample.expected.action === "do_not_investigate") {
     if (delegated || v) failures.push("A denial, future intention, different invoice or ambiguity triggered business verification");
-  } else if (!v || !["needs_facts", "business_reported"].includes(v.outcome) || v.amountCents !== null || v.paymentDate !== null || v.settlementStatus !== "unknown") failures.push("A vague business yes invented missing payment terms or did not investigate the reply");
+  } else if (!v || v.outcome !== "needs_facts" || v.amountCents !== null || v.paymentDate !== null || v.settlementStatus !== "unknown") failures.push("A vague business yes invented missing payment terms or did not investigate the reply");
   return failures;
 }

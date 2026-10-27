@@ -1,6 +1,6 @@
 # IntervalAgent V2 rebuild: plan for review
 
-October 26 semantic-interpretation update: checkpoint 1 replaces the literal invoice gate with a bounded, evidence-backed payment-claim argument on the existing business delegation. Four roles and financial authority rules remain. Offline/scripted verification is complete; checkpoint 2 (matched live behavior evaluation) needs separate approval and an API budget. No context-file refactor is included.
+October 26 semantic-interpretation update: checkpoint 1 replaced the literal invoice gate with evidence-backed arguments on the existing delegation. Checkpoint 2 ran nine live matched cases and one bounded correction/retest pass under the separately approved $2 guard. Current role version is `v2-claim-2`; two regressions passed retest, while a vague-business-reply retest remains incomplete after the reservation cap. Do not claim full live acceptance or general latency improvement. Four roles/financial guards remain; the context-file refactor stays deferred. See the [comparison evidence](../../fixtures/v2/semantic-20261026-1/SUMMARY.md).
 
 October 26 UI update: the approved conversation-first ink/cobalt/teal refresh is implemented. Inline agent activity, contextual panels and compact client navigation supersede the earlier Daylight layout. Final UI/live-conversation acceptance remains pending; agent/domain architecture is unchanged.
 
