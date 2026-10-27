@@ -1,5 +1,9 @@
 # V2 local demo: supervised payments and evaluated learning
 
+**Current checkpoint warning:** role version `v2-business-confirmation-3` has automated engineering checks but failed/incomplete live behavior acceptance. Do not treat the paid-today/Jordan conversation as fixed. Your saved balance/history was not changed. The latest separate $1 testing ledger is closed; no further agent-run tests are authorized by that batch. Current [failed evidence](../../fixtures/v2/business-confirmation-20261026-1/SUMMARY.md) supersedes earlier checkpoint acceptance notes below.
+
+Intended business flow: a confirmed received amount is recorded without another customer approval; a later correction replaces that same receipt's amount. Example: $129 outstanding, business confirms $80 → $49; same receipt corrected to $50 → $79. Code preserves the original receipt and reversal link and rejects duplicate/unrelated corrections. The Business inbox permits a correction after an eligible local receipt is recorded. These ledger paths passed isolated DB tests; the live model did not reliably reach them. No reset/migration is needed to load code changes. Browser acceptance remains Akshay's and is not requested as a substitute for failed live acceptance.
+
 Worktree: `D:\Projects\IntervalAgent-v1-rebuild`, branch `v2-rebuild`.
 Open **http://127.0.0.1:3012/v2**. The October 26 UI refresh is implemented: client navigation, central conversation, inline agent activity and Business/Review/Details panels. **Final UI/live-conversation acceptance remains with Akshay.** The refresh passed 758 offline tests and sampled desktop/narrow visual checks without paid calls. Earlier Phase 5C's 181 isolated DB checks remain historical evidence. See [STATUS.md](STATUS.md) for exact checks and [READINESS.md](READINESS.md) for requirement limits.
 

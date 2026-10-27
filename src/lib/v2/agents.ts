@@ -4,7 +4,7 @@ import { localDate } from "../time";
 import { effectiveOperations } from "./payments";
 import { calculateProposal, paymentOptions, ProposalTerms } from "./options";
 import { loadSourceInput, syntheticSource, type AccountSource } from "./source";
-import { Draft, Resolution, Review, Verification, validateUpdates, validateVerification, type Activity, type Investigation, type InvestigationResult } from "./contracts";
+import { BusinessFinding, Draft, Resolution, Review, Verification, validateUpdates, validateVerification, type Activity, type Investigation, type InvestigationResult } from "./contracts";
 export { ROLE_VERSION } from "./contracts";
 import { ROLE_VERSION } from "./contracts";
 import { PaymentClaim, requireInvestigableClaim, validateCurrentClaim } from "./claim";
@@ -65,7 +65,7 @@ export function buildAgents(input: Investigation, model: Model) {
     activity.push({ role: "account_resolution", action: "proposal_calculated", summary: `Calculated ${proposal.count} payment(s); no agreement or payment executed` });
     return proposal;
   } });
-  const business = new Agent({ name: "Business Verification", model, modelSettings: roleSettings("business_verification"), outputType: Verification,
+  const business = new Agent({ name: "Business Verification", model, modelSettings: roleSettings("business_verification"), outputType: BusinessFinding,
     instructions: instructions("business_verification", `${BASE} ${roleInstructions.business_verification}`),
   });
   const account = new Agent({ name: "Account Resolution", model, modelSettings: roleSettings("account_resolution"), outputType: Resolution,
@@ -93,10 +93,6 @@ export function buildAgents(input: Investigation, model: Model) {
         businessCompleted++;
         businessAvailable = false;
         activity.push({ role: "business_verification", action: verification.outcome, summary: verification.summary });
-        if (verification.outcome === "business_reported") {
-          // The customer agent needs the attributable report; full evidence stays available to resolution and review.
-          return JSON.stringify({ outcome: verification.outcome, claimMessageId: verification.claimMessageId, source: input.facts.businessName, invoiceId: verification.invoiceId, amountCents: verification.amountCents, canAttribute: true, canRecognizePayment: false });
-        }
         return JSON.stringify(verification);
       } }),
       account.asTool({ toolName: "account_resolution", parameters: AccountRequest, isEnabled: () => resolutionAvailable, toolDescription: "Interpret commitments/contact requests, calculate payment options/proposals, or reconcile verified payment evidence. Does not write records.", inputBuilder: ({ params }) => { refreshClaim(params.paymentClaim); resolutionAttempts++; activity.push({ role: "account_resolution", action: "delegated", summary: "Resolution requested; completion is recorded separately" }); return JSON.stringify({ task: params.input, paymentClaim, facts: input.facts, ...dates, paymentOptions: policy, workPerformed: workPerformed(), reviewFeedback, operatorFeedback: input.operatorFeedback, messages: datedMessages, agreements: input.agreements ?? [], operations: effectiveOperations(input.operations, input.financialDecisions), originalOperations: input.operations ?? [], financialDecisions: input.financialDecisions ?? [], paymentAction: input.paymentAction, requestId: input.requestId, verification, recordedUpdates: input.caseUpdates ?? [], recognitionPreview: verification?.outcome === "business_confirmed" && verification.amountCents !== null ? { amountCents: verification.amountCents, receiptId: recordedReceipt?.id ?? null, recordedAmountCents: recordedReceipt?.amountCents ?? 0, balanceAfterCents: input.facts.balanceCents - (verification.amountCents - (recordedReceipt?.amountCents ?? 0)) } : null }); }, runConfig, runOptions: { maxTurns: 4 }, customOutputExtractor: async (result) => {

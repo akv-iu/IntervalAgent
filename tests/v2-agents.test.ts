@@ -1,6 +1,6 @@
 import { Usage, type Model, type ModelRequest, type ModelResponse } from "@openai/agents";
 import { buildAgents, investigate } from "../src/lib/v2/agents";
-import { CaseCommand, CaseUpdate, Verification, validateUpdates, validateVerification, type Investigation } from "../src/lib/v2/contracts";
+import { BusinessFinding, CaseCommand, CaseUpdate, Verification, validateUpdates, validateVerification, type Investigation } from "../src/lib/v2/contracts";
 import { startingCases } from "../src/lib/v2/fixtures";
 import { scriptedClaim } from "./helpers/v2-claim";
 import { boundedModel } from "../src/lib/v2/model";
@@ -127,22 +127,11 @@ describe("V2 role and write boundaries", () => {
     expect(result.verification?.outcome).toBe("awaiting_business");
     expect(result.activity.filter((a) => a.action !== "delegated").map((a) => a.role)).toEqual(["business_verification", "reviewer"]);
   });
-  test("a business report gives the customer agent attribution scope rather than a settlement checklist", async () => {
-    const report = { claimMessageId: "c1", outcome: "business_reported" as const, businessMessage: null, summary: "The business reports $50; date and settlement are unknown.", amountCents: 5000, paymentDate: null, invoiceId: "INV-101", reference: null, settlementStatus: "unknown" as const, missingFacts: ["date", "settlement"] };
-    const correlated = { ...input, requestId: "r1", verification: { ...report, outcome: "awaiting_business" as const }, messages: input.messages.map((m) => m.speaker === "business" ? { ...m, requestId: "r1" } : m) };
-    let customerCalls = 0;
-    const model = fakeModel((request) => {
-      if (request.systemInstructions?.includes("Own the separate business")) return textResult(report);
-      if (request.systemInstructions?.includes("Independently challenge")) return textResult({ accepted: true, reasons: [] });
-      if (++customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "report-1", name: "business_verification", arguments: JSON.stringify({ paymentClaim: input.paymentClaim }) }] };
-      expect(JSON.stringify(request.input)).toContain("canAttribute");
-      expect(JSON.stringify(request.input)).toContain("canRecognizePayment");
-      return textResult({ reply: "The business reports $50 for INV-101. Would you like to dispute that report?", needsOperator: false });
-    });
-    const result = await investigate(correlated, model);
-    expect(result.verification?.settlementStatus).toBe("unknown");
-    expect(result.verification?.missingFacts).toEqual(["date", "settlement"]);
-    expect(result.review.accepted).toBe(true);
+  test("legacy reports remain readable but are excluded from new business-agent findings", () => {
+    const report = { claimMessageId: "c1", outcome: "business_reported", businessMessage: null, summary: "Historical report; date and receipt unknown", amountCents: 5000, paymentDate: null, invoiceId: "INV-101", reference: null, settlementStatus: "unknown", missingFacts: ["date", "receipt"] };
+    expect(Verification.safeParse(report).success).toBe(true);
+    expect(BusinessFinding.safeParse(report).success).toBe(false);
+    expect(BusinessFinding.safeParse({ ...report, outcome: "needs_facts", businessMessage: "What was the payment date?" }).success).toBe(true);
   });
   test("two rejected reviews remain rejected instead of accepting a fallback", async () => {
     const model = fakeModel((request) => request.systemInstructions?.includes("Independently challenge")

@@ -5,7 +5,7 @@ import { SimulationOutcome, type FinancialDecision, type PaymentAgreement, type 
 import type { LessonInstruction } from "./learning";
 import { requireInvestigableClaim, type PaymentClaim } from "./claim";
 
-export const ROLE_VERSION = "v2-business-confirmation-2";
+export const ROLE_VERSION = "v2-business-confirmation-3";
 
 const CommandIdentity = { id: z.uuid(), caseId: z.string().regex(/^[a-z-]{1,60}$/) };
 const Revision = z.number().int().nonnegative();
@@ -51,6 +51,7 @@ export const Verification = z.object({
   missingFacts: z.array(z.string().max(100)).max(8),
 }).strict();
 export type Verification = z.infer<typeof Verification>;
+export const BusinessFinding = Verification.extend({ outcome: Verification.shape.outcome.exclude(["business_reported"]) });
 
 export const Resolution = z.object({
   summary: Text,

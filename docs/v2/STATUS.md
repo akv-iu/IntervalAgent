@@ -1,5 +1,19 @@
 # V2 status
 
+### October 26: business confirmations, engineering delivered but LIVE ACCEPTANCE FAILED
+
+Akshay approved one bounded fix plus up to $1 additional live testing after the 8:25 PM Mountain usage check reported five-hour/weekly remaining/reset metadata unknown. Scope stayed on `v2-rebuild`, with no production merge, deployment, browser test, saved user-balance change or application-budget write.
+
+Reproduced the report-reference bug and, offline, Jordan's two-request context-overflow pattern. The exact saved provider arguments were unavailable, so the reproduction is not proof of the original rejected arguments. Reusable nullable claim arguments and shorter coherent role instructions keep the captured live Jordan requests below 32 KB; classification now identifies local context/call limits instead of a generic error. Per-message local dates are computed in code. Only Business Verification/Reviewer use low reasoning effort; four roles and existing model/token/request/run limits remain. Current role version `v2-business-confirmation-3` excludes the obsolete report-only outcome from new business findings while retaining old stored records.
+
+Automatic recognition needs no customer agreement. For a same-payment amount correction, guarded `replacesReceiptId` preserves the old receipt/reversal link, applies only the net difference, updates source generation and records reply/effects/audit atomically. PostgreSQL tests prove $129→$49 after $80, then $49→$79 after correcting that receipt to $50, without another customer turn. Rejection/duplicate replay cannot partially change it. No agent test altered Akshay's saved workspace.
+
+**The actual user-visible goal remains unaccepted.** Initial live paid-today and exact Jordan checks failed at `e434e82` (13 and 12 calls). Unknown-date/pending safety checks made no financial effects but retained needless work. The revised paid-today attempt at `bbcb585` stopped after seven calls at the reservation cap, before final review; Business Verification still questioned invoice context already present in the linked request. Final version 3's schema restriction is offline-only. Receipt correction was not exercised live because its recognition prerequisite failed. No combined pass rate or latency improvement is claimed. See [all captures and assessment](../../fixtures/v2/business-confirmation-20261026-1/SUMMARY.md).
+
+The new ledger closed at 50 attempts / $1 reserved, all usage known: 166,775 input / 4,821 output tokens, $0.046534 estimated reported-token accounting, not an invoice. The reservation cap is intentionally distinguished from actual billing. Both older test batches remain closed. No more paid calls occurred after this stop.
+
+Two self-review passes checked (1) scope/chronology, corrected-total arithmetic, source generation, historical compatibility and transaction/duplicate boundaries; (2) tool context/settings, actual failed outputs, budget/provenance and truthful acceptance status. These are self-reviews. Automated checks: 823 offline tests / 56 files and 188 isolated PostgreSQL tests / 2 files pass; type checking, targeted lint, production build, built stylesheet delivery and both preserved replay gates pass. Existing Vite configuration and V1 filesystem-tracing warnings remain. They do not establish successful live semantics. Next work should isolate the verifier's evidence interpretation before more workflow/plumbing changes; no new phase starts automatically.
+
 ### October 26: customer/business agreement reconciliation
 
 Approved after the 6:56 PM Mountain usage observation (checked 6:57 PM): 28% five-hour / 89% weekly remaining, recorded resets October 26 at 9:45 PM / November 2 at 3:45 PM. These are historical observations. Scope: Sam's exact regression, isolated PostgreSQL checks and up to $1 additional live testing; no production/browser/user-balance change.
