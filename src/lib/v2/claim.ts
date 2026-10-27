@@ -7,7 +7,7 @@ export const PaymentClaim = z.object({
   intent: z.enum(["payment_claim", "unclear", "not_payment_claim"]),
   claimMessageId: z.string().min(1).max(100), throughMessageId: z.string().min(1).max(100),
   invoice: z.object({ value: z.string().min(1).max(80).nullable(), evidence: Evidence }).strict(),
-  amount: z.object({ value: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable(), evidence: Evidence }).strict(),
+  amount: z.object({ value: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable().describe("Customer-claimed amount in integer US cents, never dollars; null when unknown."), evidence: Evidence }).strict(),
   date: z.object({ value: z.iso.date().nullable(), evidence: Evidence }).strict(),
   uncertainties: z.array(z.string().min(1).max(200)).max(4),
 }).strict();
