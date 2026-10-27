@@ -12,9 +12,11 @@ import { MODEL } from "../../src/lib/v2/model";
 import { boundedModel } from "../../src/lib/v2/model";
 import { Usage, type Model, type ModelResponse } from "@openai/agents";
 import { investigateFromSource } from "../../src/lib/v2/agents";
+import { scriptedClaim } from "../helpers/v2-claim";
+import type { PaymentClaim } from "../../src/lib/v2/claim";
 import { startingCases } from "../../src/lib/v2/fixtures";
 import { syntheticSource } from "../../src/lib/v2/source";
-import type { CaseUpdate, InvestigationResult, Verification } from "../../src/lib/v2/contracts";
+import { ROLE_VERSION, type CaseUpdate, type InvestigationResult, type Verification } from "../../src/lib/v2/contracts";
 
 // All storage/API paths run unchanged; only the connection targets a dedicated test database.
 vi.mock("pg", async (importOriginal) => {
@@ -37,6 +39,56 @@ const verification: Verification = { claimMessageId: "placeholder", outcome: "aw
 const c = async (token: string) => (await readWorkspace(token)).cases["late-payment"];
 const requireJob = (job: Job | null): Job => { if (!job) throw new Error("Expected a new job"); return job; };
 const requireLearning = (job: LearningJob | null): LearningJob => { if (!job) throw new Error("Expected a learning job"); return job; };
+
+test.each([true, false])("contextual SDK investigation persists reviewed interpretation and only publishes a business request when accepted=%s", async (accepted) => {
+  const { token } = await createWorkspace();
+  const first = requireJob(await beginCommand(token, command("customer", "I have already made a payment")));
+  await commitResult(token, first, approved("Was the payment for INV-101?"));
+  const confirmation = requireJob(await beginCommand(token, command("customer", "That's the one")));
+  await commitResult(token, confirmation, approved("What amount did you pay?"));
+  const job = requireJob(await beginCommand(token, command("customer", "I paid the full amount")));
+  const before = await c(token), opening = before.messages[0];
+  const paymentClaim: PaymentClaim = { businessId: before.facts.businessId, caseId: before.facts.id, sourceVersion: before.facts.sourceVersion, intent: "payment_claim", claimMessageId: first.id, throughMessageId: job.id,
+    invoice: { value: "INV-101", evidence: [{ messageId: `${first.id}-reply`, quote: "Was the payment for INV-101?" }, { messageId: confirmation.id, quote: "That's the one" }] },
+    amount: { value: 12900, evidence: [{ messageId: opening.id, quote: "$129.00" }, { messageId: job.id, quote: "I paid the full amount" }] }, date: { value: null, evidence: [] }, uncertainties: ["Payment date is unknown"] };
+  const pending: Verification = { ...verification, claimMessageId: first.id, invoiceId: "INV-101", amountCents: 12900, businessMessage: "Could you check the claimed $129 payment for INV-101? The payment date is unknown." };
+  let customerCalls = 0;
+  const roles: string[] = [];
+  const model: Model = { async getResponse(request) {
+    const role = String(request.modelSettings.providerData?.metadata?.agent_role); roles.push(role);
+    if (role === "reviewer") return scriptedOutput({ accepted, reasons: accepted ? [] : ["Scripted rejection: interpretation needs clarification"] });
+    if (role === "business_verification") return scriptedOutput(pending);
+    if (++customerCalls === 1) return scriptedTool("business_verification", paymentClaim);
+    return scriptedOutput({ reply: "I asked the business to check the claimed payment for INV-101; receipt is not confirmed.", needsOperator: false });
+  }, async *getStreamedResponse() { throw new Error("unused"); } };
+  await completeScripted(token, job, model);
+  await closeV2Pool();
+  const saved = await c(token);
+  expect(saved.facts).toEqual(before.facts); expect(saved.updates).toEqual([]); expect(saved.turns).toBe(3);
+  expect(saved.audit.at(-1)).toMatchObject({ paymentClaim, roleVersion: ROLE_VERSION, review: { accepted } });
+  expect(saved.lastReview?.paymentClaim).toEqual(paymentClaim);
+  if (accepted) {
+    expect(roles).toEqual(["customer", "business_verification", "customer", "reviewer"]);
+    expect(saved.paymentClaim).toEqual(paymentClaim); expect(saved.status).toBe("awaiting_business");
+    expect(saved.messages.at(-2)).toMatchObject({ channel: "business", speaker: "agent", requestId: saved.requestId, text: pending.businessMessage });
+    const reply = requireJob(await beginCommand(token, { ...command("business", "We only received $50"), requestId: saved.requestId! }));
+    expect(reply.input.paymentClaim).toEqual(paymentClaim);
+  } else {
+    expect(saved.status).toBe("needs_review"); expect(saved.requestId).toBeNull(); expect(saved.paymentClaim).toBeNull();
+    expect(saved.messages.some((m) => m.channel === "business")).toBe(false);
+    const learning = requireLearning(await beginLearning(token, { id: randomUUID(), action: "propose_lesson", caseId: job.caseId, revision: saved.revision, targetAuditId: job.id, targetRole: "customer", scope: "scenario" }));
+    expect(learning.candidate.evidence.messages.map((m) => m.id)).toContain(`${first.id}-reply`);
+    expect(learning.candidate.evidence.messages.map((m) => m.id)).toContain(opening.id);
+  }
+});
+
+test("commit refuses forged interpretation even if a scripted Reviewer accepted the business request", async () => {
+  const { token } = await createWorkspace(), job = requireJob(await beginCommand(token, command("customer", "I paid INV-101")));
+  const before = await c(token), paymentClaim = scriptedClaim(job.input);
+  paymentClaim.invoice.evidence[0].quote = "a quotation that was never said";
+  await expect(commitResult(token, job, { ...approved(), paymentClaim, verification: { ...verification, claimMessageId: job.id } })).rejects.toThrow("evidence");
+  expect(await c(token)).toEqual(before);
+});
 const lessonProposal: ProposedLesson = { reusable: true, diagnosis: "instructions", focus: "invoice_clarity", rationale: "The owner wants the current invoice identified in financial communication.", instruction: "Name the current invoice in financial replies; never infer payment receipt from a claim." };
 async function learningCase(role: "customer" | "reviewer" = "customer") {
   const { token, original } = await correctionCase();
@@ -283,7 +335,7 @@ test.each(["late-payment", "cedar-late-payment"])("%s business-evidence SDK jour
       if (role === "business_verification") return scriptedOutput(evidence);
       if (role === "account_resolution") return scriptedOutput({ summary: operator ? "Complete evidence needs operator approval under this business policy." : "Propose recording the exact linked business-confirmed payment.", needsOperator: operator, updates: operator ? [] : [{ kind: "payment_recognized", amountCents: 5000, date, invoiceId: original.invoiceId, reference: null, sourceMessageId: claim.id, businessMessageId: job.id }] });
       if (role !== "customer") throw new Error("Unexpected role");
-      if (++customerCalls === 1) return scriptedTool("business_verification", { claimMessageId: claim.id });
+      if (++customerCalls === 1) return scriptedTool("business_verification", scriptedClaim(job.input, { claimMessageId: claim.id, amountCents: 5000, date }));
       if (stage === "reply" && customerCalls === 2) return scriptedTool("account_resolution", { input: "Assess this business-confirmed payment using the configured recognition policy." });
       return scriptedOutput({ reply: stage === "request" ? "I requested business verification; receipt is not confirmed." : operator ? "The business confirmed $50; an operator must approve recording it. The balance is unchanged." : `The business-confirmed $50 was recorded for ${original.invoiceId}; $${((original.balanceCents - 5000) / 100).toFixed(2)} remains.`, needsOperator: stage === "reply" && operator });
     }, async *getStreamedResponse() { throw new Error("unused"); } };
@@ -456,7 +508,7 @@ test("invalid source data reaches the app as a safe source failure before reserv
 test("new business evidence invalidates a saved correction, and STOP forbids a new one", async () => {
   const { token } = await createWorkspace();
   const job = requireJob(await beginCommand(token, command("customer", "I paid today for INV-101")));
-  await commitResult(token, job, { ...approved(), verification: { ...verification, claimMessageId: job.id } });
+  await commitResult(token, job, { ...approved(), paymentClaim: scriptedClaim(job.input, { claimMessageId: job.id }), verification: { ...verification, claimMessageId: job.id } });
   await saveCorrection(token);
   const saved = await c(token);
   await beginCommand(token, { ...command("business", "Only $50 was received"), requestId: saved.requestId! });
@@ -491,7 +543,7 @@ test("existing workspaces gain twelve scoped cases without rewriting saved work,
 test("business request IDs cannot be used in another business case or tester workspace", async () => {
   const a = await createWorkspace(), b = await createWorkspace();
   const job = requireJob(await beginCommand(a.token, command("customer", "I paid $129 today for INV-101")));
-  await commitResult(a.token, job, { ...approved("I asked the business to verify."), verification: { ...verification, claimMessageId: job.id } });
+  await commitResult(a.token, job, { ...approved("I asked the business to verify."), paymentClaim: scriptedClaim(job.input, { claimMessageId: job.id }), verification: { ...verification, claimMessageId: job.id } });
   const saved = await readWorkspace(a.token), requestId = saved.cases["late-payment"].requestId!;
   const reply = { ...command("business", "Yes"), requestId };
   await expect(beginCommand(a.token, { ...reply, caseId: "cedar-late-payment" })).rejects.toMatchObject({ status: 409 });
@@ -605,7 +657,7 @@ test("business replies require a current linked request and remain durable", asy
   const { token } = await createWorkspace();
   await expect(beginCommand(token, { ...command("business", "Yes"), requestId: randomUUID() })).rejects.toMatchObject({ status: 409 });
   const job = requireJob(await beginCommand(token, command("customer", "I paid today for INV-101")));
-  await commitResult(token, job, { ...approved("Verification is pending"), verification: { ...verification, claimMessageId: job.id } });
+  await commitResult(token, job, { ...approved("Verification is pending"), paymentClaim: scriptedClaim(job.input, { claimMessageId: job.id }), verification: { ...verification, claimMessageId: job.id } });
   const requestId = (await c(token)).requestId!;
   expect((await c(token)).status).toBe("awaiting_business");
   await expect(beginCommand(token, { ...command("business", "Yes"), requestId: randomUUID() })).rejects.toMatchObject({ status: 409 });
@@ -654,7 +706,7 @@ test("missing usage keeps its reservation even when the SDK supplies normalized 
 
 test("business evidence received during takeover keeps its request linkage for explicit resumption", async () => {
   const { token } = await createWorkspace(); const job = requireJob(await beginCommand(token, command("customer", "I paid today for INV-101")));
-  await commitResult(token, job, { ...approved("Verification pending"), verification: { ...verification, claimMessageId: job.id } });
+  await commitResult(token, job, { ...approved("Verification pending"), paymentClaim: scriptedClaim(job.input, { claimMessageId: job.id }), verification: { ...verification, claimMessageId: job.id } });
   const requestId = (await c(token)).requestId!;
   await beginCommand(token, command("takeover"));
   expect((await c(token)).lastRun).toMatchObject({ id: job.id, outcome: "completed", calls: 0 });
@@ -667,10 +719,10 @@ test("business evidence received during takeover keeps its request linkage for e
 
 test("new claims receive a new business request; old request replies cannot attach", async () => {
   const { token } = await createWorkspace(); const first = requireJob(await beginCommand(token, command("customer", "I paid $50 yesterday for INV-101")));
-  await commitResult(token, first, { ...approved("Verification pending"), verification: { ...verification, claimMessageId: first.id } });
+  await commitResult(token, first, { ...approved("Verification pending"), paymentClaim: scriptedClaim(first.input, { claimMessageId: first.id }), verification: { ...verification, claimMessageId: first.id } });
   const oldRequest = (await c(token)).requestId!;
   const next = requireJob(await beginCommand(token, command("customer", "I made another payment today for INV-101")));
-  await commitResult(token, next, { ...approved("Checking the new payment"), verification: { ...verification, claimMessageId: next.id, businessMessage: "Please check the new payment" } });
+  await commitResult(token, next, { ...approved("Checking the new payment"), paymentClaim: scriptedClaim(next.input, { claimMessageId: next.id }), verification: { ...verification, claimMessageId: next.id, businessMessage: "Please check the new payment" } });
   expect((await c(token)).requestId).not.toBe(oldRequest);
   expect(await beginCommand(token, { ...command("business", "Yes"), requestId: oldRequest })).toBeNull();
   const saved = await c(token);
@@ -691,7 +743,7 @@ async function recognitionJob(amountCents = 5000) {
   const claim = requireJob(await beginCommand(token, command("customer", "I paid $129 today for INV-101")));
   const date = localDate(new Date(claim.input.now), claim.input.facts.timezone);
   const pending: Verification = { ...verification, claimMessageId: claim.id, amountCents: 12900, invoiceId: "INV-101", paymentDate: date, businessMessage: `Was $129 received and settled today, ${date}, for INV-101?` };
-  await commitResult(token, claim, { ...approved("Checking with the business"), verification: pending });
+  await commitResult(token, claim, { ...approved("Checking with the business"), paymentClaim: scriptedClaim(claim.input, { amountCents: pending.amountCents, date: pending.paymentDate }), verification: pending });
   const requestId = (await c(token)).requestId!;
   const job = requireJob(await beginCommand(token, { ...command("business", `Only $${amountCents / 100}; other details are correct.`), requestId }));
   const confirmed: Verification = { ...pending, outcome: "business_confirmed", amountCents, settlementStatus: "settled", missingFacts: [], businessMessage: null };
@@ -987,7 +1039,7 @@ test("reviewed proposals persist with the reply/audit, without a promise, receip
   expect(saved.updates).toEqual([proposal]); expect(saved.facts).toEqual(job.input.facts);
   expect(saved.events).toEqual([]); expect(saved.status).toBe("ready"); expect(saved.reviewHold).toBe(false);
   expect(saved.messages.at(-1)?.text).toBe(result.draft.reply);
-  expect(saved.audit.at(-1)).toMatchObject({ after: [proposal], balanceBeforeCents: 12900, balanceAfterCents: 12900, sourceVersion: job.input.facts.sourceVersion, roleVersion: "v2-phase4-1" });
+  expect(saved.audit.at(-1)).toMatchObject({ after: [proposal], balanceBeforeCents: 12900, balanceAfterCents: 12900, sourceVersion: job.input.facts.sourceVersion, roleVersion: ROLE_VERSION });
   expect((await readWorkspace(token)).cases["cedar-late-payment"].updates).toEqual([]);
   expect((await c((await createWorkspace()).token)).updates).toEqual([]);
 });
@@ -1057,7 +1109,7 @@ async function operatorRecognitionCase() {
   const claim = requireJob(await beginCommand(token, { ...command("customer", "I paid $50 today for CED-201"), caseId }));
   const date = localDate(new Date(claim.input.now), "America/Denver");
   const pending: Verification = { ...verification, claimMessageId: claim.id, amountCents: 5000, invoiceId: "CED-201", paymentDate: date, businessMessage: `Did $50 settle today ${date} for CED-201?` };
-  await commitResult(token, claim, { ...approved("Checking the business"), verification: pending });
+  await commitResult(token, claim, { ...approved("Checking the business"), paymentClaim: scriptedClaim(claim.input, { amountCents: pending.amountCents, date: pending.paymentDate }), verification: pending });
   const requestId = (await readWorkspace(token)).cases[caseId].requestId!;
   const reply = requireJob(await beginCommand(token, { ...command("business", "Yes"), caseId, requestId }));
   await commitResult(token, reply, { ...approved("Business confirmation needs operator approval before the balance changes."), draft: { reply: "The business confirms $50; an operator must approve recording it.", needsOperator: true }, verification: { ...pending, outcome: "business_confirmed", businessMessage: null, settlementStatus: "settled", missingFacts: [] } });

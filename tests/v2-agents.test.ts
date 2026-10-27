@@ -2,10 +2,12 @@ import { Usage, type Model, type ModelRequest, type ModelResponse } from "@opena
 import { buildAgents, investigate } from "../src/lib/v2/agents";
 import { CaseCommand, CaseUpdate, Verification, validateUpdates, validateVerification, type Investigation } from "../src/lib/v2/contracts";
 import { startingCases } from "../src/lib/v2/fixtures";
+import { scriptedClaim } from "./helpers/v2-claim";
 import { boundedModel } from "../src/lib/v2/model";
 
 const now = "2026-10-23T18:00:00.000Z";
-const input: Investigation = { facts: startingCases(new Date(now))[0], now, verification: null, messages: [{ id: "c1", channel: "customer", speaker: "customer", text: "I paid today for INV-101", at: now }, { id: "b1", channel: "business", speaker: "business", text: "Yes", at: now }] };
+const input: Investigation = { facts: startingCases(new Date(now))[0], now, verification: null, messages: [{ id: "c1", channel: "customer", speaker: "customer", text: "I paid $129 today for INV-101", at: now }, { id: "b1", channel: "business", speaker: "business", text: "Yes", at: now }] };
+input.paymentClaim = scriptedClaim(input, { amountCents: 12900, date: "2026-10-23" });
 function textResult(value: unknown): ModelResponse {
   return { usage: new Usage({ requests: 1, inputTokens: 100, outputTokens: 20 }), output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: JSON.stringify(value) }] }] };
 }
@@ -33,7 +35,7 @@ describe("V2 role and write boundaries", () => {
       }
       if (request.systemInstructions?.includes("Interpret commitments")) { specialistCalls++; return textResult({ summary: "No unsupported payment proposal", needsOperator: false, updates: [] }); }
       if (request.systemInstructions?.includes("Independently challenge")) { reviewCalls++; return textResult({ accepted: true, reasons: [] }); }
-      if (++customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "correct-role", name: targetRole, arguments: JSON.stringify(targetRole === "business_verification" ? { claimMessageId: "c1" } : { input: "Reassess the original explanation using the operator's feedback" }) }] };
+      if (++customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "correct-role", name: targetRole, arguments: JSON.stringify(targetRole === "business_verification" ? input.paymentClaim : { input: "Reassess the original explanation using the operator's feedback" }) }] };
       return textResult({ reply: "The payment is not confirmed. I can explain what evidence is still missing.", needsOperator: false });
     });
     const result = await investigate({ ...input, messages: input.messages.filter((m) => m.channel === "customer"), operatorFeedback: feedback }, model);
@@ -94,14 +96,16 @@ describe("V2 role and write boundaries", () => {
     expect(() => validateVerification(verified, input)).toThrow("linked reply");
     const correlated = { ...input, requestId: "r1", verification: verified, messages: input.messages.map((m) => m.speaker === "business" ? { ...m, requestId: "r1" } : m) };
     expect(validateVerification(verified, correlated)).toEqual(verified);
-    expect(() => validateVerification({ ...verified, claimMessageId: "c2" }, { ...correlated, messages: [...correlated.messages, { ...input.messages[0], id: "c2" }] })).toThrow("linked reply");
+    const newer = { ...correlated, messages: [...correlated.messages, { ...input.messages[0], id: "c2" }] };
+    expect(() => validateVerification({ ...verified, claimMessageId: "c2" }, { ...newer, paymentClaim: scriptedClaim(newer, { claimMessageId: "c2" }) })).toThrow("linked reply");
     expect(() => validateVerification({ ...verified, invoiceId: "WRONG" }, correlated)).toThrow("matching");
   });
-  test("a new business request requires a customer-supplied matching invoice", () => {
+  test("a new business request requires a current evidence-backed matching invoice", () => {
     const pending = { claimMessageId: "c1", outcome: "awaiting_business" as const, businessMessage: "Did this payment reach INV-101?", summary: "Awaiting business", amountCents: 12900, paymentDate: "2026-10-23", invoiceId: "INV-101", reference: null, settlementStatus: "unknown" as const, missingFacts: ["receipt"] };
-    expect(() => validateVerification(pending, { ...input, messages: [{ ...input.messages[0], text: "I paid today" }] })).toThrow("customer invoice");
-    expect(() => validateVerification(pending, { ...input, messages: [{ ...input.messages[0], text: "My invoice is INV-1010" }] })).toThrow("customer invoice");
-    expect(validateVerification(pending, { ...input, messages: [...input.messages, { ...input.messages[0], id: "c2", text: "Invoice INV-101." }] })).toEqual(pending);
+    expect(() => validateVerification(pending, { ...input, paymentClaim: null })).toThrow();
+    expect(() => validateVerification(pending, { ...input, paymentClaim: scriptedClaim(input, { invoice: "INV-1010" }) })).toThrow("matching invoice");
+    const clarified = { ...input, messages: [...input.messages, { ...input.messages[0], id: "c2", text: "Invoice INV-101." }] };
+    expect(validateVerification(pending, { ...clarified, paymentClaim: scriptedClaim(clarified, { amountCents: 12900, date: "2026-10-23" }) })).toEqual(pending);
   });
   test("a recognition proposal needs correlated reviewed business evidence, not a promise", () => {
     const update = { kind: "payment_recognized", amountCents: 5000, date: "2026-10-23", invoiceId: "INV-101", reference: null, sourceMessageId: "c1", businessMessageId: "b1" };
@@ -114,7 +118,7 @@ describe("V2 role and write boundaries", () => {
     const model = boundedModel({ apiKey: "unused", reserve: async () => { calls++; }, record: () => {}, model: fakeModel((request) => {
       if (request.systemInstructions?.includes("Independently challenge")) return textResult({ accepted: true, reasons: [] });
       if (request.systemInstructions?.includes("Own the separate business")) return textResult(verification);
-      if (calls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "delegate-1", name: "business_verification", arguments: JSON.stringify({ claimMessageId: "c1" }) }] };
+      if (calls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "delegate-1", name: "business_verification", arguments: JSON.stringify(input.paymentClaim) }] };
       expect(request.tools.some((t) => t.name === "business_verification")).toBe(false);
       return textResult({ reply: "We need more payment details from the business. Verification is pending.", needsOperator: false });
     }) });
@@ -130,7 +134,7 @@ describe("V2 role and write boundaries", () => {
     const model = fakeModel((request) => {
       if (request.systemInstructions?.includes("Own the separate business")) return textResult(report);
       if (request.systemInstructions?.includes("Independently challenge")) return textResult({ accepted: true, reasons: [] });
-      if (++customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "report-1", name: "business_verification", arguments: JSON.stringify({ claimMessageId: "c1" }) }] };
+      if (++customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "report-1", name: "business_verification", arguments: JSON.stringify(input.paymentClaim) }] };
       expect(JSON.stringify(request.input)).toContain("canAttribute");
       expect(JSON.stringify(request.input)).toContain("canRecognizePayment");
       return textResult({ reply: "The business reports $50 for INV-101. Would you like to dispute that report?", needsOperator: false });
@@ -154,7 +158,7 @@ describe("V2 role and write boundaries", () => {
       calls++;
       if (request.systemInstructions?.includes("Own the separate business")) throw new Error("Specialist must not run before the invoice is supplied");
       if (request.systemInstructions?.includes("Independently challenge")) return textResult({ accepted: true, reasons: [] });
-      if (calls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "too-early", name: "business_verification", arguments: JSON.stringify({ claimMessageId: "c1" }) }] };
+      if (calls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "too-early", name: "business_verification", arguments: JSON.stringify(input.paymentClaim) }] };
       return textResult({ reply: "What is your invoice number?", needsOperator: false });
     });
     const result = await investigate({ ...input, messages: [{ ...input.messages[0], text: "I paid today" }] }, model);
@@ -183,22 +187,22 @@ describe("V2 role and write boundaries", () => {
     const model = fakeModel((request) => {
       if (request.systemInstructions?.includes("Own the separate business")) throw new Error("No business agent may run for an unmatched invoice");
       if (request.systemInstructions?.includes("Interpret commitments")) {
-        expect(JSON.stringify(request.input)).toContain("blocked_invoice");
+        expect(JSON.stringify(request.input)).toContain("blocked_claim");
         return textResult({ summary: "The invoice is unmatched; no business request was sent.", updates: [], needsOperator: false });
       }
       if (request.systemInstructions?.includes("Independently challenge")) {
-        expect(JSON.stringify(request.input)).toContain("blocked_invoice");
+        expect(JSON.stringify(request.input)).toContain("blocked_claim");
         return textResult({ accepted: true, reasons: [] });
       }
       customerCalls++;
-      if (customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "blocked-1", name: "business_verification", arguments: JSON.stringify({ claimMessageId: "c1" }) }] };
+      if (customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "blocked-1", name: "business_verification", arguments: JSON.stringify(input.paymentClaim) }] };
       if (customerCalls === 2) return { usage: new Usage(), output: [{ type: "function_call", callId: "resolve-1", name: "account_resolution", arguments: JSON.stringify({ input: "What should we do next?" }) }] };
       return textResult({ reply: "This account shows INV-101. Could you confirm the invoice number?", needsOperator: false });
     });
     const result = await investigate(mismatch, model);
     expect(result.review.accepted).toBe(true);
     expect(result.verification).toBeNull();
-    expect(result.activity.some((a) => a.action === "blocked_invoice")).toBe(true);
+    expect(result.activity.some((a) => a.action === "blocked_claim")).toBe(true);
     expect(result.activity.some((a) => a.role === "business_verification" && a.action === "delegated")).toBe(false);
   });
   test("a rejected specialist summary can be revised using explicit Reviewer feedback", async () => {

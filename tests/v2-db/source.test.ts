@@ -1,6 +1,7 @@
 import { Pool } from "pg";
 import { Usage, type Model, type ModelRequest, type ModelResponse } from "@openai/agents";
 import { projectEnv } from "../../src/lib/project-env";
+import { scriptedClaim } from "../helpers/v2-claim";
 import { startingCases } from "../../src/lib/v2/fixtures";
 import { postgresSource } from "../../src/lib/v2/postgres-source";
 import { investigateFromSource } from "../../src/lib/v2/agents";
@@ -85,7 +86,7 @@ test.each(["direct", "verification"] as const)("the same %s investigation uses b
       expect(JSON.stringify(request.input)).not.toContain("connectionString");
       if (request.systemInstructions?.includes("Independently challenge")) return output({ accepted: true, reasons: [] });
       if (request.systemInstructions?.includes("Own the separate business")) return output({ claimMessageId: "customer-1", outcome: "awaiting_business", businessMessage: "Was today's $129 payment for INV-101 received and settled?", summary: "Awaiting business response", amountCents: 12900, paymentDate: "2026-10-23", invoiceId: "INV-101", reference: null, settlementStatus: "unknown", missingFacts: ["receipt"] });
-      if (journey === "verification" && ++customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "verify", name: "business_verification", arguments: JSON.stringify({ claimMessageId: "customer-1" }) }] };
+      if (journey === "verification" && ++customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "verify", name: "business_verification", arguments: JSON.stringify(scriptedClaim(input, { amountCents: 12900, date: "2026-10-23" })) }] };
       return output({ reply: journey === "direct" ? "The recorded $50 is included; $79 remains on the dated snapshot." : "I requested business verification; the payment is not yet confirmed.", needsOperator: false });
     }, async *getStreamedResponse() { throw new Error("unused"); } };
     const run = await investigateFromSource(input, source, model);

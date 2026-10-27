@@ -1,5 +1,6 @@
 import { loadSourceInput, sourceRecord, syntheticSource, type AccountSource } from "../src/lib/v2/source";
 import { sourceContract } from "./helpers/v2-source-contract";
+import { scriptedClaim } from "./helpers/v2-claim";
 import { startingCases } from "../src/lib/v2/fixtures";
 import { isGlobalStop } from "../src/lib/v2/contact";
 import { validateUpdates, type Investigation } from "../src/lib/v2/contracts";
@@ -84,7 +85,7 @@ test("the second business cannot automatically recognize a payment even with com
     { id: "claim", channel: "customer", speaker: "customer", text: "I paid $185 today for CED-201", at: "2026-10-23T12:00:00Z" },
     { id: "reply", channel: "business", speaker: "business", text: "Yes, received and settled", at: "2026-10-23T12:00:01Z", requestId: "cedar-request" },
   ], verification: { claimMessageId: "claim", outcome: "business_confirmed", businessMessage: null, summary: "Confirmed by Cedar", amountCents: 18500, paymentDate: "2026-10-23", invoiceId: "CED-201", reference: null, settlementStatus: "settled", missingFacts: [] } };
-  expect(() => validateUpdates([{ kind: "payment_recognized", sourceMessageId: "claim", businessMessageId: "reply", amountCents: 18500, date: "2026-10-23", invoiceId: "CED-201", reference: null }], input)).toThrow("operator approval");
+  expect(() => validateUpdates([{ kind: "payment_recognized", sourceMessageId: "claim", businessMessageId: "reply", amountCents: 18500, date: "2026-10-23", invoiceId: "CED-201", reference: null }], { ...input, paymentClaim: scriptedClaim(input, { amountCents: 18500, date: "2026-10-23" }) })).toThrow("operator approval");
 });
 
 test("adapter scopes duplicate case identifiers by business and retains dated provenance", async () => {

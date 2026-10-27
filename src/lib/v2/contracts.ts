@@ -3,8 +3,9 @@ import { localDate } from "../time";
 import { PaymentProposal, proposalIsCurrent } from "./options";
 import { SimulationOutcome, type FinancialDecision, type PaymentAgreement, type PaymentOperation } from "./payments";
 import type { LessonInstruction } from "./learning";
+import { requireInvestigableClaim, type PaymentClaim } from "./claim";
 
-export const ROLE_VERSION = "v2-phase4-1";
+export const ROLE_VERSION = "v2-claim-1";
 
 const CommandIdentity = { id: z.uuid(), caseId: z.string().regex(/^[a-z-]{1,60}$/) };
 const Revision = z.number().int().nonnegative();
@@ -73,14 +74,14 @@ export type CaseFacts = {
   accountNotes?: string[];
 };
 export type Investigation = {
-  facts: CaseFacts; messages: Message[]; now: string; verification: Verification | null; requestId?: string | null; caseUpdates?: CaseUpdate[];
+  facts: CaseFacts; messages: Message[]; now: string; verification: Verification | null; paymentClaim?: PaymentClaim | null; requestId?: string | null; caseUpdates?: CaseUpdate[];
   agreements?: PaymentAgreement[]; operations?: PaymentOperation[]; financialDecisions?: FinancialDecision[]; paymentAction?: { kind: "agreement_confirmed" | "payment_attempted" | "financial_decided"; id: string };
   operatorFeedback?: { correctionId: string; targetAuditId: string; targetRole: z.infer<typeof CorrectionRole>; text: string; original: InvestigationResult };
   lessons?: LessonInstruction[];
 };
 export type Activity = { role: "customer" | "business_verification" | "account_resolution" | "reviewer"; action: string; summary: string };
 export type InvestigationResult = {
-  draft: Draft; verification: Verification | null; resolution: Resolution | null;
+  draft: Draft; verification: Verification | null; resolution: Resolution | null; paymentClaim?: PaymentClaim | null;
   review: z.infer<typeof Review>; activity: Activity[];
 };
 
@@ -110,17 +111,12 @@ export function validateUpdates(updates: CaseUpdate[], input: Investigation): Ca
   });
 }
 
-export function hasCustomerInvoice(input: Investigation, claimMessageId?: string): boolean {
-  const claimIndex = claimMessageId ? input.messages.findIndex((m) => m.id === claimMessageId) : 0;
-  if (claimIndex < 0) return false;
-  const invoice = input.facts.invoiceId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return input.messages.slice(claimIndex).some((m) => m.speaker === "customer" && new RegExp(`(?:^|[^A-Z0-9-])${invoice}(?=$|[^A-Z0-9-])`, "i").test(m.text));
-}
-
 export function validateVerification(value: Verification, input: Investigation): Verification {
   if (!input.messages.some((m) => m.id === value.claimMessageId && m.speaker === "customer")) throw new Error("Verification requires a claim from this customer conversation");
-  if (!hasCustomerInvoice(input, value.claimMessageId)) throw new Error("Verification requires a matching customer invoice");
-  const replyExists = input.verification?.claimMessageId === value.claimMessageId && input.requestId && input.messages.some((m) => m.channel === "business" && m.speaker === "business" && m.requestId === input.requestId);
+  const claim = requireInvestigableClaim(input.paymentClaim, input);
+  if (claim.intent !== "payment_claim" || claim.claimMessageId !== value.claimMessageId || claim.invoice.value !== input.facts.invoiceId) throw new Error("Verification requires an evidence-backed matching customer invoice and payment claim");
+  if (value.outcome === "awaiting_business" && (value.amountCents !== null && value.amountCents !== claim.amount.value || value.paymentDate !== null && value.paymentDate !== claim.date.value || value.invoiceId !== null && value.invoiceId !== claim.invoice.value)) throw new Error("A business question cannot invent missing customer payment terms");
+  const replyExists = input.verification?.claimMessageId === value.claimMessageId && input.requestId && input.messages.some((m) => m.channel === "business" && m.speaker === "business" && m.requestId === input.requestId && m.disposition !== "late");
   if (value.outcome !== "awaiting_business" && !replyExists) throw new Error("Business evidence requires an actual linked reply");
   if (value.outcome === "business_reported" && (value.amountCents === null || value.amountCents <= 0 || value.invoiceId !== input.facts.invoiceId || value.businessMessage !== null)) throw new Error("A business report needs a matching invoice and amount; no further questionnaire is sent");
   if (value.outcome === "business_confirmed" && (value.amountCents === null || value.amountCents <= 0 || !value.paymentDate || value.invoiceId !== input.facts.invoiceId || value.settlementStatus !== "settled")) throw new Error("Business confirmation needs complete matching settled evidence");

@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { roleNames } from "@/lib/v2/presentation";
-import { EVALUATION_VERSION, type LearningState, type LearningCommand } from "@/lib/v2/learning";
-import type { Activity } from "@/lib/v2/contracts";
+import { EVALUATION_VERSION, activeLessons, type LearningState, type LearningCommand } from "@/lib/v2/learning";
+import { ROLE_VERSION, type Activity } from "@/lib/v2/contracts";
 import type { CaseState } from "@/lib/v2/store";
 
 type LearningRequest<T = LearningCommand> = T extends unknown ? Omit<T, "id" | "caseId"> : never;
@@ -30,18 +30,19 @@ export default function LearningPanel({ c, state, busy, seconds, onAction }: { c
     </div>
     {!source && <p className="mt-2 text-sm">Save a correction for this role, or select a role with a rejected review, before proposing a lesson.</p>}
     {(busy || pending) && <p className="mt-2 text-sm" role="status">Learning work is running · {seconds}s. Customer dialogue and financial actions are separate. Refresh restores saved progress.</p>}
-    <p className="mt-2 text-sm">Learning calls reserved: {state?.calls ?? 0}/64. Active versions: {state?.active.filter((a) => a.scope.businessId === c.facts.businessId).map((a) => `${roleNames[a.scope.role]} ${a.candidateId.slice(0, 8)}`).join(", ") || "base instructions"}.</p>
+    <p className="mt-2 text-sm">Learning calls reserved: {state?.calls ?? 0}/64. Applied to this case: {activeLessons(state, c.facts).map((l) => `${roleNames[l.role]} ${l.id.slice(0, 8)}`).join(", ") || "base instructions"}.</p>
     <label className="mt-3 block text-sm">Activation/rejection/rollback assessment<textarea className="mt-1 block min-h-24 w-full rounded-md border border-line p-2" value={note} maxLength={1200} minLength={10} disabled={blocked} onChange={(event) => setNote(event.target.value)} /></label>
     <div className="mt-3 space-y-3">{candidates.map((candidate) => <details className="rounded-md border border-line p-3 text-sm" key={candidate.id}>
       <summary>{roleNames[candidate.scope.role]} · {candidate.scope.scenario ?? "business-wide"} · {candidate.status} · {candidate.id.slice(0, 8)}</summary>
       <p className="mt-2">Source case {candidate.sourceCaseId}, review {candidate.sourceAuditId}. Base {candidate.baseVersion}; prior lesson {candidate.baseCandidateId ?? "none"}.</p>
+      {candidate.baseVersion !== ROLE_VERSION && <p className="mt-2">Historical baseline: this instruction is not applied. Propose and evaluate a new version for the current agents.</p>}
       {candidate.proposal && <><p className="mt-2">Diagnosis: {candidate.proposal.diagnosis} · {candidate.proposal.focus}. {candidate.proposal.rationale}</p><p className="mt-2 whitespace-pre-wrap">{candidate.proposal.instruction ?? "No reusable instruction proposed."}</p></>}
       {candidate.error && <p className="mt-2">{candidate.error}</p>}
       {!!candidate.evaluationHistory?.length && <details className="mt-2"><summary>Earlier comparison reports</summary><pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words" tabIndex={0}>{JSON.stringify(candidate.evaluationHistory, null, 2)}</pre></details>}
       {candidate.evaluation && <div className="mt-2"><p>{candidate.evaluation.provenance} comparison · {candidate.evaluation.version} · {candidate.evaluation.calls} calls. Baseline {candidate.evaluation.rows.filter((r) => r.baselinePassed).length}/{candidate.evaluation.rows.length}; candidate {candidate.evaluation.rows.filter((r) => r.candidatePassed).length}/{candidate.evaluation.rows.length}.</p><p>{candidate.evaluation.reason}</p><ul className="mt-2 list-inside list-disc">{candidate.evaluation.rows.map((row) => <li key={row.id}>{row.id} ({row.category}): baseline {row.baselinePassed ? "pass" : "fail"}, candidate {row.candidatePassed ? "pass" : "fail"}{row.error ? ` · ${row.error}` : ""}</li>)}</ul><details className="mt-2"><summary>Comparison evidence</summary><pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words" tabIndex={0}>{JSON.stringify(candidate.evaluation.rows, null, 2)}</pre></details></div>}
       <div className="mt-3 flex flex-wrap gap-2">
-        <button className="rounded-md border border-line px-3 py-2 disabled:opacity-50" disabled={blocked || callsExhausted || !(candidate.status === "ready" || candidate.status === "evaluated" && candidate.evaluation?.version !== EVALUATION_VERSION)} onClick={() => { if (state) void onAction({ action: "evaluate_lesson", learningRevision: state.revision, candidateId: candidate.id }); }}>Compare with baseline</button>
-        <button className="rounded-md border border-line px-3 py-2 disabled:opacity-50" disabled={blocked || candidate.status !== "evaluated" || !candidate.evaluation?.eligible || candidate.evaluation.version !== EVALUATION_VERSION || candidate.evaluation.provenance !== "live" || note.trim().length < 10} onClick={() => void decide("activate_lesson", candidate.id)}>Activate evaluated lesson</button>
+        <button className="rounded-md border border-line px-3 py-2 disabled:opacity-50" disabled={blocked || callsExhausted || candidate.baseVersion !== ROLE_VERSION || !(candidate.status === "ready" || candidate.status === "evaluated" && candidate.evaluation?.version !== EVALUATION_VERSION)} onClick={() => { if (state) void onAction({ action: "evaluate_lesson", learningRevision: state.revision, candidateId: candidate.id }); }}>Compare with baseline</button>
+        <button className="rounded-md border border-line px-3 py-2 disabled:opacity-50" disabled={blocked || candidate.baseVersion !== ROLE_VERSION || candidate.status !== "evaluated" || !candidate.evaluation?.eligible || candidate.evaluation.version !== EVALUATION_VERSION || candidate.evaluation.provenance !== "live" || note.trim().length < 10} onClick={() => void decide("activate_lesson", candidate.id)}>Activate evaluated lesson</button>
         <button className="rounded-md border border-line px-3 py-2 disabled:opacity-50" disabled={blocked || candidate.status === "active" || candidate.status === "rejected" || note.trim().length < 10} onClick={() => void decide("reject_lesson", candidate.id)}>Reject candidate</button>
         <button className="rounded-md border border-line px-3 py-2 disabled:opacity-50" disabled={blocked || candidate.status !== "active" || note.trim().length < 10} onClick={() => void decide("rollback_lesson", candidate.id)}>Roll back this version</button>
       </div>

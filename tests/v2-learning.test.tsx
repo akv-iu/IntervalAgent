@@ -71,6 +71,17 @@ test("active lessons are isolated by business, role and scenario; exact scenario
   expect(agents.reviewer.instructions).toContain(instruction); expect(agents.customer.instructions).not.toContain(instruction); expect(agents.account.instructions).not.toContain(instruction);
 });
 
+test("historical role lessons remain archived but cannot shadow or enter the new runtime baseline", () => {
+  const state = emptyLearning(), current = { ...candidate, status: "active" as const };
+  const historical = { ...current, id: randomUUID(), baseVersion: "v2-phase4-1", scope: { ...current.scope, scenario: facts.scenario! } };
+  state.candidates.push(current, historical);
+  state.active.push({ scope: current.scope, candidateId: current.id }, { scope: historical.scope, candidateId: historical.id });
+  expect(activeLessons(state, facts).map((l) => l.id)).toEqual([current.id]);
+  state.candidates[0].baseVersion = "v2-phase4-1";
+  expect(activeLessons(state, facts)).toEqual([]);
+  expect(state.candidates).toHaveLength(2); expect(state.active).toHaveLength(2);
+});
+
 test("stale or foreign lesson instructions never enter a role prompt", () => {
   const fake = { getResponse: async () => output(result.draft), async *getStreamedResponse() { throw new Error("unused"); } };
   const lessons = [{ ...candidate.scope, id: candidate.id, baseVersion: "old", instruction }, { ...candidate.scope, businessId: "cedar", id: randomUUID(), baseVersion: ROLE_VERSION, instruction }];
@@ -105,4 +116,14 @@ test("learning UI distinguishes case correction, paid comparison, explicit asses
   const c = { facts, now, corrections: [], audit: [], stopped: false, run: null } as unknown as CaseState;
   const html = renderToStaticMarkup(<LearningPanel c={c} busy={false} seconds={0} onAction={async () => true} />);
   expect(html).toContain("Case corrections affect this case"); expect(html).toContain("64 learning model calls"); expect(html).toContain("base instructions"); expect(html).toContain("Save a correction");
+});
+
+test("learning UI does not label a historical baseline lesson as applied or offer comparison/activation", () => {
+  const c = { facts, now, corrections: [], audit: [], stopped: false, run: null } as unknown as CaseState;
+  const state = emptyLearning(), historical = { ...candidate, baseVersion: "v2-phase4-1", status: "ready" as const };
+  state.candidates.push(historical); state.active.push({ scope: historical.scope, candidateId: historical.id });
+  const html = renderToStaticMarkup(<LearningPanel c={c} state={state} busy={false} seconds={0} onAction={async () => true} />);
+  expect(html).toContain("Applied to this case: base instructions"); expect(html).toContain("Historical baseline");
+  expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Compare with baseline<\/button>/);
+  expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Activate evaluated lesson<\/button>/);
 });

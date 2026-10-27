@@ -11,6 +11,7 @@ import { MODEL, type ModelCall } from "./model";
 import type { RunFailure } from "./failures";
 import { confirmPlan, effectiveOperations, paymentHold, simulatePayment } from "./payments";
 import { decideFinancial, type FinancialCommand } from "./financial";
+import { validatePaymentClaim } from "./claim";
 import { EVALUATION_VERSION, LearningCommand, ProposedLesson, LearningEvaluationSchema, assessEvaluation, activeLessons, baselineCandidate, emptyLearning, sameScope, unsafeLesson, type LearningJob, type LearningState, type LearningEvaluation } from "./learning";
 const isFinancial = (command: Command): command is FinancialCommand => ["approve_recognition", "reconcile_payment", "approve_credit", "approve_extension", "reverse_receipt", "reconcile_record"].includes(command.action);
 
@@ -29,7 +30,7 @@ export type CaseState = Investigation & {
   updates: CaseUpdate[]; events: PlannedEvent[]; activity: Activity[];
   preferredChannel: "call" | "email" | null;
   commands: { id: string; fingerprint: string }[]; retries: number;
-  audit: { id: string; at: string; before: CaseUpdate[]; after: CaseUpdate[]; balanceBeforeCents?: number; balanceAfterCents?: number; review: InvestigationResult["review"]; roleVersion: string; sourceVersion: string; sourceMessageIds: string[]; replyId: string | null; runtime?: FinishedRun; correctionId?: string; paymentAction?: Investigation["paymentAction"]; lessonVersions?: string[] }[];
+  audit: { id: string; at: string; before: CaseUpdate[]; after: CaseUpdate[]; balanceBeforeCents?: number; balanceAfterCents?: number; review: InvestigationResult["review"]; roleVersion: string; sourceVersion: string; sourceMessageIds: string[]; replyId: string | null; runtime?: FinishedRun; correctionId?: string; paymentAction?: Investigation["paymentAction"]; paymentClaim?: Investigation["paymentClaim"]; lessonVersions?: string[] }[];
   lastReview: InvestigationResult | null;
 };
 type Workspace = { cases: Record<string, CaseState>; resets: number; learning?: LearningState };
@@ -157,7 +158,7 @@ export async function resetWorkspace(token: string) {
 }
 
 function investigationInput(c: CaseState, operatorFeedback?: Investigation["operatorFeedback"], learning?: LearningState): Investigation {
-  return structuredClone({ facts: c.facts, messages: c.messages, now: c.now, verification: c.verification, requestId: c.requestId, caseUpdates: c.updates,
+  return structuredClone({ facts: c.facts, messages: c.messages, now: c.now, verification: c.verification, paymentClaim: c.paymentClaim ?? null, requestId: c.requestId, caseUpdates: c.updates,
     ...(c.agreements ? { agreements: c.agreements } : {}), ...(c.operations ? { operations: c.operations } : {}), ...(c.financialDecisions ? { financialDecisions: c.financialDecisions } : {}), ...(c.paymentAction ? { paymentAction: c.paymentAction } : {}), ...(operatorFeedback ? { operatorFeedback } : {}), ...(learning ? { lessons: activeLessons(learning, c.facts) } : {}) });
 }
 
@@ -299,6 +300,8 @@ export async function commitResult(token: string, job: Job, result: Investigatio
     c.lastReview = result; c.activity.push(...result.activity, { role: "customer", action: "run_complete", summary: `${c.run.calls ?? 0} model calls completed in ${((Date.now() - Date.parse(c.run.startedAt)) / 1000).toFixed(1)}s.` }); c.activity = c.activity.slice(-150); finishRun(c, result.review.accepted ? "completed" : "blocked");
     const audit: CaseState["audit"][number] = { id: job.id, at: new Date().toISOString(), before: [...c.updates], after: [...c.updates], balanceBeforeCents: c.facts.balanceCents, balanceAfterCents: c.facts.balanceCents, review: result.review, roleVersion: ROLE_VERSION, sourceVersion: job.input.facts.sourceVersion, sourceMessageIds: job.input.messages.filter((m) => m.speaker !== "agent").map((m) => m.id), replyId: result.review.accepted ? `${job.id}-reply` : null };
     c.audit.push(audit);
+    const paymentClaim = result.paymentClaim === undefined ? job.input.paymentClaim ?? null : result.paymentClaim;
+    audit.paymentClaim = paymentClaim;
     if (job.input.paymentAction) audit.paymentAction = job.input.paymentAction;
     audit.lessonVersions = (job.input.lessons ?? []).map((lesson) => lesson.id);
     audit.runtime = c.lastRun;
@@ -308,9 +311,11 @@ export async function commitResult(token: string, job: Job, result: Investigatio
       correction.result = structuredClone(result); audit.correctionId = correction.correctionId;
     }
     if (!result.review.accepted) { c.status = "needs_review"; return; }
+    if (paymentClaim && !isDeepStrictEqual(paymentClaim, job.input.paymentClaim)) validatePaymentClaim(paymentClaim, job.input);
     if ([result.draft.reply, result.verification?.businessMessage ?? ""].some((text) => findThreats(text).length > 0)) throw new V2Error(409, "Communication failed the preserved threat/false-claim guard.");
-    if (result.verification) validateVerification(result.verification, job.input);
-    const updates = validateUpdates(result.resolution?.updates ?? [], { ...job.input, facts: c.facts, now: c.now, verification: result.verification });
+    // Unchanged findings remain historical; new investigations and financial effects require current grounded evidence.
+    if (result.verification && (!isDeepStrictEqual(result.verification, job.input.verification) || !isDeepStrictEqual(paymentClaim, job.input.paymentClaim ?? null))) validateVerification(result.verification, { ...job.input, paymentClaim });
+    const updates = validateUpdates(result.resolution?.updates ?? [], { ...job.input, facts: c.facts, now: c.now, verification: result.verification, paymentClaim });
     if (job.input.operatorFeedback && updates.some((u) => u.kind === "payment_recognized")) throw new V2Error(409, "A correction retry cannot record or replay a payment. Use the normal evidence workflow.");
     if (updates.some((u) => u.kind === "payment_recognized") && (result.draft.needsOperator || result.resolution?.needsOperator)) throw new V2Error(409, "Operator approval is required before this payment can be recognized.");
     for (const update of updates) {
@@ -338,6 +343,7 @@ export async function commitResult(token: string, job: Job, result: Investigatio
     audit.balanceAfterCents = c.facts.balanceCents;
     if (result.verification?.claimMessageId !== c.verification?.claimMessageId) c.requestId = null;
     c.verification = result.verification;
+    c.paymentClaim = paymentClaim;
     if (result.verification?.businessMessage) {
       c.requestId ??= randomUUID();
       if (c.messages.filter((m) => m.channel === "business" && m.speaker === "agent").at(-1)?.text !== result.verification.businessMessage)
@@ -432,8 +438,10 @@ export async function beginLearning(token: string, command: LearningCommand): Pr
       const correction = command.correctionId ? c.corrections?.find((x) => x.correctionId === command.correctionId && x.targetAuditId === audit.id && x.targetRole === command.targetRole) : undefined;
       if (!correction && (command.correctionId || audit.review.accepted || audit.id !== c.audit.at(-1)?.id)) throw new V2Error(409, "A saved role correction or current rejected Reviewer finding is required.");
       const scope = { businessId: c.facts.businessId, role: command.targetRole, scenario: command.scope === "scenario" ? c.facts.scenario ?? null : null };
+      const interpretation = audit.paymentClaim;
+      const evidenceIds = new Set([...audit.sourceMessageIds.slice(-6), ...(interpretation ? [interpretation.claimMessageId, ...[interpretation.invoice, interpretation.amount, interpretation.date].flatMap((s) => s.evidence.map((e) => e.messageId))] : [])]);
       const candidate = { id: command.id, scope, sourceCaseId: command.caseId, sourceAuditId: audit.id, sourceRevision: c.revision, ...(correction ? { correctionId: correction.correctionId } : {}), baseVersion: ROLE_VERSION, sourceRoleVersion: audit.roleVersion, baseCandidateId: baselineCandidate(state, scope), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), status: "proposing" as const,
-        evidence: { facts: structuredClone(c.facts), messages: c.messages.filter((m) => audit.sourceMessageIds.includes(m.id)).slice(-6).map((m) => ({ ...m, text: m.text.slice(0, 400) })), result: structuredClone(correction?.original ?? c.lastReview!), feedback: correction?.text ?? audit.review.reasons.join("; "), targetRole: command.targetRole } };
+        evidence: { facts: structuredClone(c.facts), messages: c.messages.filter((m) => evidenceIds.has(m.id)).map((m) => ({ ...m })), result: structuredClone(correction?.original ?? c.lastReview!), feedback: correction?.text ?? audit.review.reasons.join("; "), targetRole: command.targetRole } };
       if (!candidate.evidence.result) throw new V2Error(409, "Reviewed source result is unavailable.");
       state.candidates.push(candidate); state.revision++;
       return { id: command.id, kind: "propose", candidate: structuredClone(candidate), baseline: activeLessons(state, c.facts) };

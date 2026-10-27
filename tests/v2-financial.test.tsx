@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Usage, type Model, type ModelResponse } from "@openai/agents";
 import { CaseCommand, type Investigation, type InvestigationResult } from "../src/lib/v2/contracts";
+import { scriptedClaim } from "./helpers/v2-claim";
 import { startingCases } from "../src/lib/v2/fixtures";
 import { calculateProposal } from "../src/lib/v2/options";
 import { confirmPlan, effectiveOperations, nextPayment, paymentHold, simulatePayment } from "../src/lib/v2/payments";
@@ -60,6 +61,7 @@ function businessEvidence() {
   const requestId = randomUUID();
   const verification: NonNullable<Investigation["verification"]> = { claimMessageId: "claim", outcome: "business_confirmed", businessMessage: null, summary: "The business confirms $50 received and settled today", amountCents: 5000, paymentDate: "2026-10-24", invoiceId: scoped.invoiceId, reference: "business-receipt", settlementStatus: "settled", missingFacts: [] };
   const input: Investigation = { facts: scoped, now, requestId, verification, messages: [{ id: "claim", channel: "customer", speaker: "customer", text: `I paid $50 today for ${scoped.invoiceId}`, at: now }, { id: "reply", channel: "business", speaker: "business", text: "Yes, $50 settled today", at: now, requestId }] };
+  input.paymentClaim = scriptedClaim(input, { amountCents: 5000, date: "2026-10-24" });
   const reviewed: InvestigationResult = { verification, draft: { reply: "Operator approval is required before recording this payment.", needsOperator: true }, resolution: { summary: "Approval required", needsOperator: true, updates: [] }, review: { accepted: true, reasons: [] }, activity: [] };
   const command = { id: randomUUID(), caseId: scoped.id, action: "approve_recognition" as const, revision: 1, targetAuditId: randomUUID(), ...evidence };
   return { input, reviewed, command };
@@ -76,6 +78,14 @@ test("operator approval keeps matching/duplicate/date guards and distinct receip
   expect(() => recognitionCandidate(input, { ...reviewed, review: { accepted: false, reasons: ["Unverified"] } })).toThrow();
   input.verification!.paymentDate = "2099-01-01";
   expect(() => recognitionCandidate(input, reviewed)).toThrow();
+});
+
+test("a historical confirmation without grounded interpretation stays readable but cannot grant fresh financial authority", () => {
+  const { input, reviewed } = businessEvidence();
+  delete input.paymentClaim;
+  expect(() => recognitionCandidate(input, reviewed)).toThrow("Review this payment again");
+  expect(reviewed.verification?.outcome).toBe("business_confirmed");
+  expect(input.facts.payments).toHaveLength(0);
 });
 
 test("financial command inputs cannot forge amounts, receipts, authority or unsettled outcomes", () => {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Activity, CaseFacts, InvestigationResult, Message } from "./contracts";
+import { ROLE_VERSION } from "./contracts";
 
 export const LEARNING_VERSION = "learning-1";
 export const EVALUATION_VERSION = "learning-evals-2";
@@ -38,7 +39,7 @@ export const sameScope = (a: LessonScope, b: LessonScope) => a.businessId === b.
 export function activeLessons(state: LearningState | undefined, facts: Pick<CaseFacts, "businessId" | "scenario">): LessonInstruction[] {
   if (!state) return [];
   return Role.options.flatMap((role) => {
-    const matches = state.active.filter((a) => a.scope.role === role && a.scope.businessId === facts.businessId && (a.scope.scenario === null || a.scope.scenario === facts.scenario));
+    const matches = state.active.filter((a) => a.scope.role === role && a.scope.businessId === facts.businessId && (a.scope.scenario === null || a.scope.scenario === facts.scenario) && state.candidates.some((c) => c.id === a.candidateId && c.baseVersion === ROLE_VERSION));
     const active = matches.find((a) => a.scope.scenario === facts.scenario) ?? matches.find((a) => a.scope.scenario === null);
     const candidate = state.candidates.find((c) => c.id === active?.candidateId);
     return candidate?.proposal?.instruction ? [{ ...candidate.scope, id: candidate.id, instruction: candidate.proposal.instruction, baseVersion: candidate.baseVersion }] : [];

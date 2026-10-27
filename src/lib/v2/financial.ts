@@ -16,7 +16,7 @@ export function recognitionCandidate(input: Investigation, reviewed: Investigati
   if (!reply) throw new Error("A linked business reply is required.");
   const update = { kind: "payment_recognized" as const, amountCents: v.amountCents!, date: v.paymentDate!, invoiceId: v.invoiceId!, reference: v.reference, sourceMessageId: v.claimMessageId, businessMessageId: reply.id };
   // Operator authority replaces only the policy gate; matching, duplicate, date and balance guards still apply.
-  validateUpdates([update], { ...input, paymentAction: undefined, verification: v, facts: { ...input.facts, recognitionPolicy: "business_confirmation" } });
+  validateUpdates([update], { ...input, paymentAction: undefined, verification: v, paymentClaim: reviewed.paymentClaim ?? input.paymentClaim, facts: { ...input.facts, recognitionPolicy: "business_confirmation" } });
   return update;
 }
 
