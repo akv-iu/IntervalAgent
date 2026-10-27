@@ -5,7 +5,7 @@ import { SimulationOutcome, type FinancialDecision, type PaymentAgreement, type 
 import type { LessonInstruction } from "./learning";
 import { requireInvestigableClaim, type PaymentClaim } from "./claim";
 
-export const ROLE_VERSION = "v2-reconciliation-2";
+export const ROLE_VERSION = "v2-reconciliation-3";
 
 const CommandIdentity = { id: z.uuid(), caseId: z.string().regex(/^[a-z-]{1,60}$/) };
 const Revision = z.number().int().nonnegative();

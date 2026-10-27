@@ -1,11 +1,12 @@
 import { Usage, type Model, type ModelResponse } from "@openai/agents";
+import { randomUUID } from "node:crypto";
 import { investigate } from "../src/lib/v2/agents";
 import { validateCurrentClaim } from "../src/lib/v2/claim";
 import { validateUpdates } from "../src/lib/v2/contracts";
 import { samReconciliation, agreedSamClaim } from "./helpers/v2-reconciliation";
 
 const output = (value: unknown): ModelResponse => ({ usage: new Usage(), output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: JSON.stringify(value) }] }] });
-const tool = (name: string, args: unknown): ModelResponse => ({ usage: new Usage(), output: [{ type: "function_call", name, callId: `${name}-call`, arguments: JSON.stringify(args) }] });
+const tool = (name: string, args: unknown): ModelResponse => ({ usage: new Usage(), output: [{ type: "function_call", name, callId: randomUUID(), arguments: JSON.stringify(args) }] });
 
 test("Sam's agreement refreshes the stale full-balance claim before review without an extra model call", async () => {
   const input = samReconciliation(), fresh = agreedSamClaim(input), roles: string[] = [];
@@ -39,6 +40,26 @@ test("agreement can cite the linked business report plus the customer's contextu
   expect(validateCurrentClaim(claim, input).amount.value).toBe(4000);
   claim.amount.evidence = claim.amount.evidence.filter((e) => e.messageId !== claim.throughMessageId);
   expect(() => validateCurrentClaim(claim, input)).toThrow("customer evidence");
+});
+
+test("SDK tool feedback exposes a mistyped report ID for repair instead of its generic error", async () => {
+  const input = samReconciliation(), fresh = agreedSamClaim(input);
+  let calls = 0;
+  const model: Model = { async getResponse(request) {
+    const role = request.modelSettings.providerData?.metadata?.agent_role;
+    if (role === "business_verification") return output({ ...input.verification!, outcome: "needs_facts", businessMessage: "Was the $40 new and settled after the snapshot, and on what date?" });
+    if (role === "reviewer") return output({ accepted: true, reasons: [] });
+    if (++calls === 1) return tool("business_verification", { ...fresh, reportResponse: { ...fresh.reportResponse, businessMessageId: "mistyped-uuid" } });
+    if (calls === 2) {
+      expect(JSON.stringify(request.input)).toContain("Report response must cite");
+      expect(JSON.stringify(request.input)).toContain(fresh.reportResponse.businessMessageId);
+      return tool("business_verification", fresh);
+    }
+    return output({ reply: "Thank you; we asked the business for the remaining receipt details.", needsOperator: false, paymentClaim: fresh });
+  }, async *getStreamedResponse() { throw new Error("unused"); } };
+  const result = await investigate(input, model);
+  expect(result.review.accepted).toBe(true); expect(result.paymentClaim).toEqual(fresh);
+  expect(result.activity.filter((a) => a.action === "delegated")).toHaveLength(1);
 });
 
 test("agreement goes back to the business for only the missing financial facts, then complete confirmation supports one $40 recognition", async () => {
