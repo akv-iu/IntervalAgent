@@ -795,6 +795,21 @@ async function recognitionJob(amountCents = 5000) {
   return { token, job, result, claim };
 }
 
+test("new customer interpretation can retain historical business evidence but cannot use it to recognize a denied payment", async () => {
+  const { token, job, result } = await recognitionJob();
+  await commitResult(token, job, { ...result, resolution: null });
+  const next = requireJob(await beginCommand(token, command("customer", "Correction: I did not make a payment.")));
+  const paymentClaim = { ...scriptedClaim(next.input), intent: "not_payment_claim" as const };
+  const before = await c(token);
+  await expect(commitResult(token, next, { ...result, paymentClaim })).rejects.toThrow("Clarify the payment claim");
+  expect((await c(token)).facts).toEqual(before.facts);
+  await commitResult(token, next, { ...approved("Thank you for correcting the earlier claim."), paymentClaim, verification: next.input.verification });
+  const saved = await c(token);
+  expect(saved.paymentClaim?.intent).toBe("not_payment_claim");
+  expect(saved.verification).toEqual(next.input.verification);
+  expect(saved.facts.balanceCents).toBe(12900); expect(saved.facts.payments).toEqual([]);
+});
+
 test("operator feedback cannot recognize a payment, even with a valid reviewed confirmation", async () => {
   const { token, job, result } = await recognitionJob();
   await failRun(token, job);

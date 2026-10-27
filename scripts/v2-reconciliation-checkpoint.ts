@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, openSync, closeSync, readFileSync, writeFileSync, renameSync } from "node:fs";
+import { mkdirSync, openSync, closeSync, copyFileSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 import type { Model } from "@openai/agents";
 import { investigate, ROLE_VERSION } from "../src/lib/v2/agents";
 import { validateUpdates, type Investigation, type InvestigationResult } from "../src/lib/v2/contracts";
@@ -23,7 +23,11 @@ async function main() {
   mkdirSync(directory, { recursive: true });
   const path = `${directory}/${run}.json`; closeSync(openSync(path, "wx"));
   const report = { version: "reconciliation-20261026-1", revision: git("rev-parse", "HEAD"), roleVersion: ROLE_VERSION, model: MODEL, at: new Date().toISOString(), from, budget: { capCents: 100, path: `${directory}/budget.json`, reservationCents: 2 }, rows: [] as Row[] };
-  const save = () => { writeFileSync(`${path}.tmp`, JSON.stringify(report, null, 2)); renameSync(`${path}.tmp`, path); };
+  const save = () => {
+    writeFileSync(`${path}.tmp`, JSON.stringify(report, null, 2));
+    try { renameSync(`${path}.tmp`, path); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "EPERM") throw error; copyFileSync(`${path}.tmp`, path); }
+  };
   async function evaluate(id: string, input: Investigation, expected: string, check: (r: InvestigationResult) => string[]) {
     const row: Row = { id, input, expected, elapsedMs: 0, calls: [], trace: [], checks: [] }; report.rows.push(row); save();
     const signal = AbortSignal.timeout(90_000), started = Date.now();

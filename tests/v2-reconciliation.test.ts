@@ -86,11 +86,12 @@ test("agreement goes back to the business for only the missing financial facts, 
     if (role === "account_resolution") { expect(JSON.stringify(request.input)).toContain('\\"value\\":4000'); return output({ summary: "Record the new business-confirmed $40 once", needsOperator: false, updates: [update] }); }
     if (role === "reviewer") return output({ accepted: true, reasons: [] });
     if (++calls === 1) return tool("business_verification", fresh);
-    if (calls === 2) return tool("account_resolution", { input: "Reconcile the new confirmed payment", paymentClaim: fresh });
-    return output({ reply: "The confirmed $40 payment was recorded; $39 remains for INV-102.", needsOperator: false, paymentClaim: fresh });
+    if (calls === 2) return tool("account_resolution", { input: "Reconcile the new confirmed payment", paymentClaim: null });
+    return output({ reply: "The confirmed $40 payment was recorded; $39 remains for INV-102.", needsOperator: false, paymentClaim: null });
   }, async *getStreamedResponse() { throw new Error("unused"); } };
   const result = await investigate(replyInput, resolutionModel);
   expect(result.review.accepted).toBe(true);
+  expect(result.paymentClaim).toEqual(fresh);
   expect(validateUpdates(result.resolution!.updates, { ...replyInput, verification: result.verification, paymentClaim: result.paymentClaim })).toEqual([update]);
   expect(() => validateUpdates([update], { ...replyInput, verification: followup })).toThrow("business confirmation");
   expect(() => validateUpdates([update], { ...replyInput, verification: confirmed, facts: { ...input.facts, balanceCents: 3900 } })).toThrow("exceeds");
