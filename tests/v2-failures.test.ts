@@ -16,3 +16,7 @@ test("classification handles provider metadata and wrapped SDK errors without ex
   expect(describeFailure({ status: 503 }).kind).toBe("provider");
   expect(describeFailure(new Error("arbitrary private tool output"))).toEqual({ kind: "unknown", message: expect.any(String) });
 });
+
+test.each([["Agent context limit reached", "context_limit"], ["Agent call/deadline limit reached", "run_limit"]])("local %s is classified without exposing arbitrary tool errors", (message, kind) => {
+  expect(describeFailure(new Error(message))).toMatchObject({ kind, message: expect.stringContaining("messages are saved") });
+});

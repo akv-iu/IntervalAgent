@@ -6,7 +6,7 @@ import { isGlobalStop } from "./contact";
 import { findThreats } from "../patterns";
 import { localDate, localToInstant } from "../time";
 import { openingMessage, startingCases } from "./fixtures";
-import { CaseCommand, ROLE_VERSION, validateUpdates, validateVerification, type Activity, type CaseUpdate, type Investigation, type InvestigationResult } from "./contracts";
+import { CaseCommand, ROLE_VERSION, businessReplyAllowed, recognitionBalance, validateUpdates, validateVerification, type Activity, type CaseUpdate, type Investigation, type InvestigationResult } from "./contracts";
 import { MODEL, type ModelCall } from "./model";
 import type { RunFailure } from "./failures";
 import { confirmPlan, effectiveOperations, paymentHold, simulatePayment } from "./payments";
@@ -256,7 +256,7 @@ export async function beginCommand(token: string, command: Command): Promise<Job
       for (const e of c.events) if (e.state === "planned") e.state = "blocked";
       return null;
     }
-    if (command.action === "business" && command.requestId && c.messages.some((m) => m.channel === "business" && m.speaker === "agent" && m.requestId === command.requestId) && (c.stopped || command.requestId !== c.requestId || !c.verification || !["awaiting_business", "needs_facts", "pending", "conflicting"].includes(c.verification.outcome))) {
+    if (command.action === "business" && command.requestId && c.messages.some((m) => m.channel === "business" && m.speaker === "agent" && m.requestId === command.requestId) && (c.stopped || command.requestId !== c.requestId || !businessReplyAllowed(c))) {
       if (!text) throw new V2Error(400, "A business reply is required.");
       if (c.businessReplies >= 10) throw new V2Error(429, "Business reply limit reached.");
       c.businessReplies++; c.revision++; finishRun(c, "interrupted");
@@ -272,7 +272,7 @@ export async function beginCommand(token: string, command: Command): Promise<Job
       c.turns++;
     } else if (command.action === "business") {
       if (!c.requestId || command.requestId !== c.requestId) throw new V2Error(409, "Reply must match the current verification request.");
-      if (!c.verification || !["awaiting_business", "needs_facts", "pending", "conflicting"].includes(c.verification.outcome)) throw new V2Error(409, "This request is no longer awaiting a reply.");
+      if (!businessReplyAllowed(c)) throw new V2Error(409, "This request is no longer awaiting a reply or a local receipt correction.");
       if (c.businessReplies >= 10) throw new V2Error(429, "Business reply limit reached.");
       if (!text) throw new V2Error(400, "A business reply is required.");
       c.businessReplies++;
@@ -324,8 +324,12 @@ export async function commitResult(token: string, job: Job, result: Investigatio
       if (c.updates.some((u) => isDeepStrictEqual(u, update))) continue;
       c.updates.push(update);
       if (update.kind === "payment_recognized") {
-        c.facts.payments.push({ id: `business-${c.requestId}`, invoiceId: update.invoiceId, amountCents: update.amountCents, date: update.date, status: "settled", includedInBalance: true, provenance: "business_confirmation", businessMessageId: update.businessMessageId, requestId: c.requestId!, reference: update.reference });
-        c.facts.balanceCents -= update.amountCents;
+        c.facts.balanceCents = recognitionBalance(c.facts, update);
+        const previous = update.replacesReceiptId ? c.facts.payments.find((p) => p.id === update.replacesReceiptId) : null;
+        const receiptId = update.replacesReceiptId ? `business-${job.id}` : `business-${c.requestId}`;
+        if (previous) previous.reversedBy = receiptId;
+        if (c.facts.payments.length >= 100 || c.facts.payments.some((p) => p.id === receiptId)) throw new V2Error(409, "Receipt is already recorded or the evidence limit is reached.");
+        c.facts.payments.push({ id: receiptId, invoiceId: update.invoiceId, amountCents: update.amountCents, date: update.date, status: "settled", includedInBalance: true, provenance: "business_confirmation", businessMessageId: update.businessMessageId, requestId: c.requestId!, reference: update.reference });
         c.facts.balanceAsOf = new Date().toISOString();
         c.facts.sourceVersion = `${c.facts.sourceVersion}:recognized:${c.requestId}`;
       }
@@ -343,7 +347,7 @@ export async function commitResult(token: string, job: Job, result: Investigatio
     audit.balanceAfterCents = c.facts.balanceCents;
     if (result.verification?.claimMessageId !== c.verification?.claimMessageId) c.requestId = null;
     c.verification = result.verification;
-    c.paymentClaim = paymentClaim;
+    c.paymentClaim = paymentClaim ? { ...paymentClaim, sourceVersion: c.facts.sourceVersion } : null;
     if (result.verification?.businessMessage) {
       c.requestId ??= randomUUID();
       if (c.messages.filter((m) => m.channel === "business" && m.speaker === "agent").at(-1)?.text !== result.verification.businessMessage)

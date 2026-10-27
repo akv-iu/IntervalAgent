@@ -80,7 +80,7 @@ test.each([12900, null])("the SDK passes one shared interpretation with amount %
     }
     if (role === "business_verification") return output(verification);
     if (role === "reviewer") return output({ accepted: true, reasons: [] });
-    if (++customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", name: "business_verification", callId: "interpret-and-delegate", arguments: JSON.stringify(claim) }] };
+    if (++customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", name: "business_verification", callId: "interpret-and-delegate", arguments: JSON.stringify({ paymentClaim: claim }) }] };
     return output({ reply: "I asked Northside Fitness to check the claimed payment for INV-101; receipt is not confirmed.", needsOperator: false });
   }, async *getStreamedResponse() { throw new Error("unused"); } };
   const result = await investigate(input, model);
@@ -97,7 +97,7 @@ test("Reviewer can reject a semantically wrong interpretation even when its quot
     const role = request.modelSettings.providerData?.metadata?.agent_role;
     if (role === "business_verification") return output({ ...pending, amountCents: null });
     if (role === "reviewer") { reviews++; return output({ accepted: false, reasons: ["The latest customer message denies payment; the interpretation misreads negation."] }); }
-    if (++customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", name: "business_verification", callId: "misinterpreted", arguments: JSON.stringify(incorrect) }] };
+    if (++customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", name: "business_verification", callId: "misinterpreted", arguments: JSON.stringify({ paymentClaim: incorrect }) }] };
     return output({ reply: "I asked the business to check.", needsOperator: false });
   }, async *getStreamedResponse() { throw new Error("unused"); } };
   const result = await investigate(denial, model);

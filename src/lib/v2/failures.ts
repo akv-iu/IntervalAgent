@@ -7,6 +7,8 @@ export function describeFailure(error: unknown): RunFailure {
   const status = typeof value.status === "number" && Number.isInteger(value.status) && value.status >= 400 && value.status <= 599 ? value.status : undefined;
   const code = typeof value.code === "string" && /^[a-z_]{1,70}$/.test(value.code) ? value.code : undefined;
   const metadata = { ...(status ? { status } : {}), ...(code ? { code } : {}) };
+  if (value.message === "Agent context limit reached") return { kind: "context_limit", message: "The conversation exceeded the agent context limit. Your messages are saved; no unreviewed reply or financial update was published." };
+  if (value.message === "Agent call/deadline limit reached") return { kind: "run_limit", message: "The agent reached its call or time limit. Your messages are saved; no unreviewed reply or financial update was published." };
   if (value.type === "insufficient_quota" || code && ["insufficient_quota", "credit_balance_exhausted", "organization_spend_limit_exceeded", "project_spend_limit_exceeded", "organization_usage_limit_exceeded"].includes(code))
     return { ...metadata, kind: "quota", message: "OpenAI rejected the call because of account credits or a provider-side spending/usage limit. Check the OpenAI project billing and limits before retrying." };
   if (status === 401 || status === 403) return { ...metadata, kind: "access", message: "OpenAI rejected the API credentials or project/model access. Check the local API configuration before retrying." };

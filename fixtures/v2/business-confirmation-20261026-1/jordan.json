@@ -1,0 +1,199 @@
+{
+  "facts": {
+    "id": "conflicting-payment",
+    "email": "jordan@example.test",
+    "phone": "+1 202-555-0101",
+    "customer": "Jordan",
+    "payments": [],
+    "scenario": "conflicting_reference",
+    "timezone": "America/Denver",
+    "invoiceId": "INV-103",
+    "businessId": "northside",
+    "balanceAsOf": "2026-10-25T23:17:13.391Z",
+    "accountNotes": [
+      "A $40 pending payment references INV-099; it is not allocated to INV-103."
+    ],
+    "balanceCents": 12900,
+    "businessName": "Northside Fitness",
+    "sourceVersion": "synthetic-v2-2",
+    "recognitionPolicy": "business_confirmation"
+  },
+  "messages": [
+    {
+      "at": "2026-10-26T23:17:13.391Z",
+      "id": "opening-conflicting-payment",
+      "text": "Hi Jordan, this is Northside Fitness. Our records as of 2026-10-25 show $129.00 for invoice INV-103. Have you already paid, or would you like to discuss options?",
+      "origin": "synthetic_opening",
+      "channel": "customer",
+      "speaker": "agent"
+    },
+    {
+      "at": "2026-10-27T02:15:38.052Z",
+      "id": "75276eab-365e-493e-be3b-9456a9a493d5",
+      "text": "I have paid full amount",
+      "channel": "customer",
+      "speaker": "customer"
+    },
+    {
+      "at": "2026-10-27T02:16:13.158Z",
+      "id": "75276eab-365e-493e-be3b-9456a9a493d5-business",
+      "text": "Please check invoice INV-103 and confirm whether Jordan’s reported full payment of $129.00 was received. If so, please provide the payment date and whether it is reflected in your records or receipts.",
+      "channel": "business",
+      "speaker": "agent",
+      "requestId": "4ec0762e-10ca-45e5-8311-3879f41d47c1"
+    },
+    {
+      "at": "2026-10-27T02:16:13.158Z",
+      "id": "75276eab-365e-493e-be3b-9456a9a493d5-reply",
+      "text": "Thanks for letting me know. I’ll ask Northside Fitness to check whether your full payment for invoice INV-103 was received and share the payment date; the separate $40 item is pending and does not establish payment on this invoice.",
+      "channel": "customer",
+      "speaker": "agent"
+    },
+    {
+      "at": "2026-10-27T02:16:49.355Z",
+      "id": "ca539f08-3dd0-42b2-94b9-b0c8de51b4aa",
+      "text": "Yes I see, but he paid 80 dollars today",
+      "channel": "business",
+      "speaker": "business",
+      "requestId": "4ec0762e-10ca-45e5-8311-3879f41d47c1"
+    },
+    {
+      "at": "2026-10-27T02:17:09.874Z",
+      "id": "ca539f08-3dd0-42b2-94b9-b0c8de51b4aa-reply",
+      "text": "Northside Fitness reports that $80 was paid today toward invoice INV-103. If you disagree with that report, please let me know here.",
+      "channel": "customer",
+      "speaker": "agent"
+    },
+    {
+      "at": "2026-10-27T02:17:50.075Z",
+      "id": "63c0a741-25c2-4521-ba2e-eecb68397030",
+      "text": "Yes it is kind of right i only paid 50",
+      "channel": "customer",
+      "speaker": "customer"
+    },
+    {
+      "at": "2026-10-27T02:18:03.083Z",
+      "id": "63c0a741-25c2-4521-ba2e-eecb68397030-business",
+      "text": "Please check invoice INV-103 and clarify whether the $50 Jordan says they paid refers to this invoice or a separate payment. If it was for INV-103, please confirm its payment date, whether it is settled, and whether it is reflected in your records or receipts.",
+      "channel": "business",
+      "speaker": "agent",
+      "requestId": "4ec0762e-10ca-45e5-8311-3879f41d47c1"
+    },
+    {
+      "at": "2026-10-27T02:18:03.083Z",
+      "id": "63c0a741-25c2-4521-ba2e-eecb68397030-reply",
+      "text": "I understand you’re saying you paid $50, rather than the $80 Northside reported. I’ve asked them to clarify whether your $50 was for invoice INV-103 and to confirm its date and record status; the difference remains unresolved for now.",
+      "channel": "customer",
+      "speaker": "agent"
+    },
+    {
+      "at": "2026-10-27T02:18:29.375Z",
+      "id": "d1695b3c-c04a-445f-9a15-2db50257470f",
+      "text": "I confirm",
+      "channel": "business",
+      "speaker": "business",
+      "requestId": "4ec0762e-10ca-45e5-8311-3879f41d47c1"
+    },
+    {
+      "at": "2026-10-27T02:18:47.405Z",
+      "id": "d1695b3c-c04a-445f-9a15-2db50257470f-reply",
+      "text": "I understand you dispute Northside Fitness’s report of an $80 payment and say you paid $50. Their follow-up, “I confirm,” doesn’t clarify whether the $50 was for INV-103 or confirm its date and status, so an operator will review the conflicting information.",
+      "channel": "customer",
+      "speaker": "agent"
+    },
+    {
+      "at": "2026-10-27T02:20:25.947Z",
+      "id": "e4879a5f-10f7-4ef4-a26a-70b48f419713",
+      "text": "Please verify it for me",
+      "channel": "customer",
+      "speaker": "customer"
+    },
+    {
+      "at": "2026-10-27T02:20:45.084Z",
+      "id": "e4879a5f-10f7-4ef4-a26a-70b48f419713-business",
+      "text": "Please clarify whether the $50 payment Jordan reports was for invoice INV-103 or a separate payment. If it was for INV-103, please confirm its payment date, whether it is settled, and whether it is reflected in your records or receipts.",
+      "channel": "business",
+      "speaker": "agent",
+      "requestId": "4ec0762e-10ca-45e5-8311-3879f41d47c1"
+    },
+    {
+      "at": "2026-10-27T02:20:45.084Z",
+      "id": "e4879a5f-10f7-4ef4-a26a-70b48f419713-reply",
+      "text": "Your request for verification is noted, but Northside’s “I confirm” did not clarify whether your $50 was for INV-103 or confirm its date and status. The conflicting information remains unresolved, so an operator will review it; no payment has been recognized or balance changed.",
+      "channel": "customer",
+      "speaker": "agent"
+    },
+    {
+      "at": "2026-10-27T02:21:19.295Z",
+      "id": "a8ffa418-4f3c-44c8-b2d5-b389ea1eb63b",
+      "text": "Yes it is the same invoice and I have the receipt of it",
+      "channel": "business",
+      "speaker": "business",
+      "requestId": "4ec0762e-10ca-45e5-8311-3879f41d47c1"
+    }
+  ],
+  "now": "2026-10-27T02:21:19.295Z",
+  "paymentClaim": {
+    "date": {
+      "value": null,
+      "evidence": []
+    },
+    "amount": {
+      "value": 5000,
+      "evidence": [
+        {
+          "quote": "i only paid 50",
+          "messageId": "63c0a741-25c2-4521-ba2e-eecb68397030"
+        }
+      ]
+    },
+    "caseId": "conflicting-payment",
+    "intent": "payment_claim",
+    "invoice": {
+      "value": "INV-103",
+      "evidence": [
+        {
+          "quote": "Our records as of 2026-10-25 show $129.00 for invoice INV-103.",
+          "messageId": "opening-conflicting-payment"
+        },
+        {
+          "quote": "I have paid full amount",
+          "messageId": "75276eab-365e-493e-be3b-9456a9a493d5"
+        },
+        {
+          "quote": "Yes it is kind of right i only paid 50",
+          "messageId": "63c0a741-25c2-4521-ba2e-eecb68397030"
+        }
+      ]
+    },
+    "businessId": "northside",
+    "sourceVersion": "synthetic-v2-2",
+    "uncertainties": [
+      "Customer's $50 may refer to INV-103 or a separate payment; latest business reply 'I confirm' does not clarify which payment, date, or status."
+    ],
+    "claimMessageId": "75276eab-365e-493e-be3b-9456a9a493d5",
+    "reportResponse": {
+      "stance": "disputes",
+      "businessMessageId": "d1695b3c-c04a-445f-9a15-2db50257470f"
+    },
+    "throughMessageId": "e4879a5f-10f7-4ef4-a26a-70b48f419713"
+  },
+  "verification": {
+    "outcome": "needs_facts",
+    "summary": "Northside reported $80 paid today toward INV-103, while Jordan says they paid only $50. The business’s “I confirm” does not resolve whether Jordan’s $50 was for this invoice or establish its date and status.",
+    "invoiceId": "INV-103",
+    "reference": null,
+    "amountCents": 5000,
+    "paymentDate": null,
+    "missingFacts": [
+      "whether Jordan's $50 payment refers to INV-103 or a separate payment",
+      "payment date and settlement status for any $50 payment on INV-103",
+      "whether any $50 payment is reflected in the snapshot or listed receipts"
+    ],
+    "claimMessageId": "75276eab-365e-493e-be3b-9456a9a493d5",
+    "businessMessage": "Please clarify whether the $50 payment Jordan reports was for invoice INV-103 or a separate payment. If it was for INV-103, please confirm its payment date, whether it is settled, and whether it is reflected in your records or receipts.",
+    "settlementStatus": "unknown"
+  },
+  "requestId": "4ec0762e-10ca-45e5-8311-3879f41d47c1",
+  "caseUpdates": []
+}

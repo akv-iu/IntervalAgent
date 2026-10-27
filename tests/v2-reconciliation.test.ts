@@ -6,7 +6,7 @@ import { validateUpdates } from "../src/lib/v2/contracts";
 import { samReconciliation, agreedSamClaim } from "./helpers/v2-reconciliation";
 
 const output = (value: unknown): ModelResponse => ({ usage: new Usage(), output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: JSON.stringify(value) }] }] });
-const tool = (name: string, args: unknown): ModelResponse => ({ usage: new Usage(), output: [{ type: "function_call", name, callId: randomUUID(), arguments: JSON.stringify(args) }] });
+const tool = (name: string, args: unknown): ModelResponse => ({ usage: new Usage(), output: [{ type: "function_call", name, callId: randomUUID(), arguments: JSON.stringify(name === "business_verification" ? { paymentClaim: args } : args) }] });
 
 test("Sam's agreement refreshes the stale full-balance claim before review without an extra model call", async () => {
   const input = samReconciliation(), fresh = agreedSamClaim(input), roles: string[] = [];
@@ -25,11 +25,11 @@ test("Sam's agreement refreshes the stale full-balance claim before review witho
   expect(input.paymentClaim!.amount.value).toBe(7900);
 });
 
-test.each(["foreign-business", "later-business", "wrong-amount", "stale-context"])("report agreement rejects %s evidence", (kind) => {
+test.each(["foreign-business", "later-business", "missing-confirmation", "stale-context"])("report agreement rejects %s evidence", (kind) => {
   const input = samReconciliation(), fresh = agreedSamClaim(input);
   if (kind === "foreign-business") fresh.reportResponse.businessMessageId = "other-workspace";
   if (kind === "later-business") input.messages.push({ id: fresh.reportResponse.businessMessageId = "future", channel: "business", speaker: "business", text: "40 received", requestId: input.requestId!, at: input.now });
-  if (kind === "wrong-amount") fresh.amount.value = 7900;
+  if (kind === "missing-confirmation") fresh.amount.evidence = [];
   if (kind === "stale-context") fresh.throughMessageId = input.messages[1].id;
   expect(() => validateCurrentClaim(fresh, input)).toThrow();
 });

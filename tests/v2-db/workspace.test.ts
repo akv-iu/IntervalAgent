@@ -309,7 +309,7 @@ beforeEach(async () => {
 afterAll(closeV2Pool);
 
 const scriptedOutput = (value: unknown): ModelResponse => ({ usage: new Usage(), output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: JSON.stringify(value) }] }] });
-const scriptedTool = (name: string, args: unknown): ModelResponse => ({ usage: new Usage(), output: [{ type: "function_call", callId: randomUUID(), name, arguments: JSON.stringify(args) }] });
+const scriptedTool = (name: string, args: unknown): ModelResponse => ({ usage: new Usage(), output: [{ type: "function_call", callId: randomUUID(), name, arguments: JSON.stringify(name === "business_verification" ? { paymentClaim: args } : args) }] });
 async function completeScripted(token: string, job: Job, model: Model) {
   const bounded = boundedModel({ apiKey: "scripted-no-provider", model, reserve: (id) => reserveLive(id, { token, job }), start: (call) => startLive(call, { token, job }), record: (call) => recordLive(call, { token, job }) });
   const run = await investigateFromSource(job.input, syntheticSource([job.input.facts]), bounded);
@@ -794,6 +794,43 @@ async function recognitionJob(amountCents = 5000) {
   const result: InvestigationResult = { ...approved("The business-confirmed payment was recorded in this simulated account."), verification: confirmed, resolution: { summary: "Reconcile the confirmed payment", needsOperator: false, updates: [{ kind: "payment_recognized", amountCents, date, invoiceId: "INV-101", reference: null, sourceMessageId: claim.id, businessMessageId: job.id }] } };
   return { token, job, result, claim };
 }
+
+test.each([true, false])("business receipt correction accepted=%s replaces $80 with $50 atomically, without another customer confirmation", async (accepted) => {
+  const { token, job, result } = await recognitionJob(8000);
+  await commitResult(token, job, result);
+  const before = await c(token), previous = before.facts.payments[0];
+  expect(before.facts.balanceCents).toBe(4900);
+  expect(before.paymentClaim?.sourceVersion).toBe(before.facts.sourceVersion);
+  expect(before.audit.at(-1)?.paymentClaim?.sourceVersion).toBe(job.input.facts.sourceVersion);
+  const correction = requireJob(await beginCommand(token, { ...command("business", `Correction: the same receipt was $50, not $80. It was received and settled on ${previous.date} for INV-101; this replaces the earlier amount, not an additional payment.`), requestId: before.requestId! }));
+  const v: Verification = { ...result.verification!, amountCents: 5000, summary: "Business corrects the same receipt to $50" };
+  const update = { kind: "payment_recognized" as const, amountCents: 5000, date: previous.date, invoiceId: "INV-101", reference: previous.reference ?? null, sourceMessageId: v.claimMessageId, businessMessageId: correction.id, replacesReceiptId: previous.id };
+  let calls = 0;
+  const model: Model = { async getResponse(request) {
+    const role = request.modelSettings.providerData?.metadata?.agent_role;
+    if (role === "business_verification") return scriptedOutput(v);
+    if (role === "account_resolution") return scriptedOutput({ summary: "Replace the earlier $80 with $50; restore $30", needsOperator: false, updates: [update] });
+    if (role === "reviewer") return scriptedOutput({ accepted, reasons: accepted ? [] : ["Scripted rejection; correction not established"] });
+    if (++calls === 1) return scriptedTool("business_verification", null);
+    if (calls === 2) return scriptedTool("account_resolution", { input: "Reconcile the corrected total", paymentClaim: null });
+    return scriptedOutput({ reply: "The receipt was corrected to $50; $79 remains.", needsOperator: false, paymentClaim: null });
+  }, async *getStreamedResponse() { throw new Error("unused"); } };
+  await completeScripted(token, correction, model);
+  await closeV2Pool(); const saved = await c(token);
+  expect(saved.turns).toBe(before.turns);
+  if (!accepted) {
+    expect(saved.facts).toEqual(before.facts); expect(saved.updates).toEqual(before.updates);
+    expect(saved.messages.some((m) => m.id === `${correction.id}-reply`)).toBe(false);
+  } else {
+    expect(saved.facts.balanceCents).toBe(7900); expect(saved.facts.payments).toHaveLength(2);
+    expect(saved.facts.payments[0]).toEqual({ ...previous, reversedBy: saved.facts.payments[1].id });
+    expect(saved.facts.payments[1]).toMatchObject({ amountCents: 5000, provenance: "business_confirmation", requestId: before.requestId, businessMessageId: correction.id });
+    expect(saved.audit.at(-1)).toMatchObject({ balanceBeforeCents: 4900, balanceAfterCents: 7900, review: { accepted: true } });
+    expect(saved.messages.at(-1)?.text).toContain("$79");
+    await expect(commitResult(token, correction, { ...result, verification: v, resolution: { summary: "replay", needsOperator: false, updates: [update] } })).rejects.toMatchObject({ status: 409 });
+    expect((await c(token)).facts).toEqual(saved.facts);
+  }
+});
 
 test("new customer interpretation can retain historical business evidence but cannot use it to recognize a denied payment", async () => {
   const { token, job, result } = await recognitionJob();

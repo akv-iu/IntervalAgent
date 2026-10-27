@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { formatCents } from "@/lib/format";
 import { caseAttention, roleNames, scenarioName, statusNames, type Attention } from "@/lib/v2/presentation";
 import type { CaseState, WorkspaceView } from "@/lib/v2/store";
+import { businessReplyAllowed } from "@/lib/v2/contracts";
 import BusinessDashboard, { CaseList, CaseRecords } from "./BusinessDashboard";
 import OperatorCorrections, { PausedReplyNotice } from "./OperatorCorrections";
 import PaymentPanel from "./PaymentPanel";
@@ -190,6 +191,7 @@ export default function InvestigationWorkspace() {
     if (done) { if (channel === "customer") setCustomerText(""); else setBusinessText(""); }
   }
   const awaiting = c?.requestId && c.verification && ["awaiting_business", "needs_facts", "pending", "conflicting"].includes(c.verification.outcome);
+  const canReply = c && businessReplyAllowed(c);
   const processing = busy || !!c?.run;
   const paneClass = (role: Attention) => `${styles.pane} ${attention === role ? styles.activePane : ""}`;
   const guide = c?.stopped ? "Contact stopped" : attention === "business" ? "Business reply needed" : attention === "operator" ? "Operator review needed" : processing ? "Processing your request" : c?.status === "run_failed" ? "Run failed. Inspect activity, then retry." : `You are chatting as ${c?.facts.customer ?? "the customer"}`;
@@ -255,11 +257,11 @@ export default function InvestigationWorkspace() {
               </nav>
               <div className={styles.contextBody}>
                 <section id="v2-business" hidden={panel !== "business"} className={paneClass("business")} aria-labelledby="business-title">
-                  <div className={styles.paneHead}><div><h3 id="business-title">Business inbox</h3><p>{awaiting ? "Your reply is needed" : "No reply needed"}</p></div></div>
+                  <div className={styles.paneHead}><div><h3 id="business-title">Business inbox</h3><p>{awaiting ? "Your reply is needed" : canReply ? "Receipt recorded; you can add a correction" : "No reply needed"}</p></div></div>
                   <p className={styles.role}>Reply as {c.facts.businessName}</p>
                   <Thread c={c} channel="business" />
                   <form onSubmit={(event) => void submit(event, "business")} className="space-y-2">
-                    <label htmlFor="v2-business-message" className="sr-only">Reply as the business</label><textarea id="v2-business-message" className={field} placeholder="Confirm the request or explain what differs…" value={businessText} onChange={(event) => setBusinessText(event.target.value)} maxLength={1800} required disabled={processing || !awaiting || c.stopped} /><button className={primary} disabled={processing || !awaiting || c.stopped || !businessText.trim()}>Send business reply</button>
+                    <label htmlFor="v2-business-message" className="sr-only">Reply as the business</label><textarea id="v2-business-message" className={field} placeholder="Confirm the request or explain what differs…" value={businessText} onChange={(event) => setBusinessText(event.target.value)} maxLength={1800} required disabled={processing || !canReply || c.stopped} /><button className={primary} disabled={processing || !canReply || c.stopped || !businessText.trim()}>Send business reply</button>
                   </form>
                   <p className={styles.footnote}>Simulated inbox. Your reply supplies evidence; it does not initiate a payment.</p>
                 </section>

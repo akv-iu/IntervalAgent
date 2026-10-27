@@ -5,7 +5,7 @@ import { SimulationOutcome, type FinancialDecision, type PaymentAgreement, type 
 import type { LessonInstruction } from "./learning";
 import { requireInvestigableClaim, type PaymentClaim } from "./claim";
 
-export const ROLE_VERSION = "v2-reconciliation-4";
+export const ROLE_VERSION = "v2-business-confirmation-1";
 
 const CommandIdentity = { id: z.uuid(), caseId: z.string().regex(/^[a-z-]{1,60}$/) };
 const Revision = z.number().int().nonnegative();
@@ -34,7 +34,7 @@ export const CaseUpdate = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("extension_requested"), date: DateOnly, sourceMessageId: z.string() }).strict(),
   z.object({ kind: z.literal("contact_preference"), channel: z.enum(["call", "email"]), sourceMessageId: z.string() }).strict(),
   z.object({ kind: z.literal("contact_requested"), channel: z.enum(["call", "email"]), date: DateOnly, window: z.enum(["morning", "afternoon", "evening", "unspecified"]), sourceMessageId: z.string() }).strict(),
-  z.object({ kind: z.literal("payment_recognized"), amountCents: z.number().int().positive(), date: DateOnly, invoiceId: z.string().min(1).max(80), reference: z.string().max(80).nullable(), sourceMessageId: z.string(), businessMessageId: z.string() }).strict(),
+  z.object({ kind: z.literal("payment_recognized"), amountCents: z.number().int().positive(), date: DateOnly, invoiceId: z.string().min(1).max(80), reference: z.string().max(80).nullable(), sourceMessageId: z.string(), businessMessageId: z.string(), replacesReceiptId: z.string().min(1).max(100).nullable().optional() }).strict(),
 ]);
 export type CaseUpdate = z.infer<typeof CaseUpdate>;
 
@@ -85,6 +85,15 @@ export type InvestigationResult = {
   review: z.infer<typeof Review>; activity: Activity[];
 };
 
+export function businessReplyAllowed(input: Investigation) {
+  return !!input.requestId && !!input.verification && (["awaiting_business", "needs_facts", "pending", "conflicting"].includes(input.verification.outcome) || input.verification.outcome === "business_confirmed" && input.facts.recognitionPolicy === "business_confirmation" && input.facts.payments.some((p) => p.requestId === input.requestId && p.provenance === "business_confirmation" && !p.reversedBy));
+}
+
+export function recognitionBalance(facts: CaseFacts, update: Extract<CaseUpdate, { kind: "payment_recognized" }>) {
+  const previous = update.replacesReceiptId ? facts.payments.find((p) => p.id === update.replacesReceiptId) : null;
+  return facts.balanceCents + (previous?.amountCents ?? 0) - update.amountCents;
+}
+
 export function validateUpdates(updates: CaseUpdate[], input: Investigation): CaseUpdate[] {
   if (input.paymentAction && updates.some((u) => u.kind === "payment_recognized" || u.kind === "payment_proposed")) throw new Error("Payment assessment cannot propose another payment or replay recognition; use the saved outcome.");
   if (updates.filter((u) => u.kind === "payment_recognized").length > 1) throw new Error("Only one payment can be recognized per reviewed result");
@@ -101,9 +110,16 @@ export function validateUpdates(updates: CaseUpdate[], input: Investigation): Ca
       if (input.facts.recognitionPolicy !== "business_confirmation") throw new Error("Business recognition policy requires operator approval");
       const reply = input.messages.filter((m) => m.speaker === "business" && m.requestId === input.requestId && m.disposition !== "late").at(-1);
       if (!reply || reply.id !== update.businessMessageId || update.sourceMessageId !== v.claimMessageId || update.invoiceId !== v.invoiceId || update.amountCents !== v.amountCents || update.date !== v.paymentDate || update.reference !== v.reference) throw new Error("Recognition must match current business evidence");
-      if (update.amountCents > input.facts.balanceCents) throw new Error("Recognition exceeds the current balance; operator review required");
-      if (update.date > localDate(new Date(input.now), input.facts.timezone) || update.date <= localDate(new Date(input.facts.balanceAsOf), input.facts.timezone)) throw new Error("Payment date must be after the balance snapshot and not in the future; operator review required");
-      if (input.facts.payments.some((p) => p.requestId === input.requestId || (update.reference && p.reference === update.reference) || (p.invoiceId === update.invoiceId && p.date === update.date && p.amountCents === update.amountCents))) throw new Error("Payment may already be included; operator review required");
+      const previous = update.replacesReceiptId ? input.facts.payments.find((p) => p.id === update.replacesReceiptId) : null;
+      if (update.replacesReceiptId) {
+        const previousMessage = input.messages.findIndex((m) => m.id === previous?.businessMessageId);
+        const nextMessage = input.messages.findIndex((m) => m.id === update.businessMessageId);
+        if (!previous || previous.provenance !== "business_confirmation" || previous.reversedBy || !previous.includedInBalance || previous.requestId !== input.requestId || previous.invoiceId !== update.invoiceId || previous.date !== update.date || previous.reference !== update.reference || previousMessage < 0 || nextMessage <= previousMessage || !input.caseUpdates?.some((u) => u.kind === "payment_recognized" && u.businessMessageId === previous.businessMessageId && u.sourceMessageId === update.sourceMessageId)) throw new Error("Correction requires a newer linked confirmation of the same active local business receipt");
+        if (previous.amountCents === update.amountCents) throw new Error("This amount is already recorded; no correction is needed");
+      }
+      if (!Number.isSafeInteger(recognitionBalance(input.facts, update)) || recognitionBalance(input.facts, update) < 0) throw new Error("Recognition exceeds the current balance; operator review required");
+      if (update.date > localDate(new Date(input.now), input.facts.timezone) || !previous && update.date <= localDate(new Date(input.facts.balanceAsOf), input.facts.timezone)) throw new Error("Payment date must be after the balance snapshot and not in the future; operator review required");
+      if (input.facts.payments.some((p) => !p.reversedBy && p.id !== previous?.id && (p.requestId === input.requestId || (update.reference && p.reference === update.reference) || (p.invoiceId === update.invoiceId && p.date === update.date && p.amountCents === update.amountCents)))) throw new Error("Payment may already be included; operator review required");
     }
     if (update.kind === "promise" && update.amountCents > input.facts.balanceCents) throw new Error("Promise exceeds the current balance");
     if (update.kind === "contact_requested" && !(update.channel === "call" ? input.facts.phone : input.facts.email)) throw new Error("Contact destination needs clarification");

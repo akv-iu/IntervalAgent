@@ -35,7 +35,7 @@ describe("V2 role and write boundaries", () => {
       }
       if (request.systemInstructions?.includes("Interpret commitments")) { specialistCalls++; return textResult({ summary: "No unsupported payment proposal", needsOperator: false, updates: [] }); }
       if (request.systemInstructions?.includes("Independently challenge")) { reviewCalls++; return textResult({ accepted: true, reasons: [] }); }
-      if (++customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "correct-role", name: targetRole, arguments: JSON.stringify(targetRole === "business_verification" ? input.paymentClaim : { input: "Reassess the original explanation using the operator's feedback" }) }] };
+      if (++customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "correct-role", name: targetRole, arguments: JSON.stringify(targetRole === "business_verification" ? { paymentClaim: input.paymentClaim } : { input: "Reassess the original explanation using the operator's feedback" }) }] };
       return textResult({ reply: "The payment is not confirmed. I can explain what evidence is still missing.", needsOperator: false });
     });
     const result = await investigate({ ...input, messages: input.messages.filter((m) => m.channel === "customer"), operatorFeedback: feedback }, model);
@@ -118,7 +118,7 @@ describe("V2 role and write boundaries", () => {
     const model = boundedModel({ apiKey: "unused", reserve: async () => { calls++; }, record: () => {}, model: fakeModel((request) => {
       if (request.systemInstructions?.includes("Independently challenge")) return textResult({ accepted: true, reasons: [] });
       if (request.systemInstructions?.includes("Own the separate business")) return textResult(verification);
-      if (calls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "delegate-1", name: "business_verification", arguments: JSON.stringify(input.paymentClaim) }] };
+      if (calls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "delegate-1", name: "business_verification", arguments: JSON.stringify({ paymentClaim: input.paymentClaim }) }] };
       expect(request.tools.some((t) => t.name === "business_verification")).toBe(false);
       return textResult({ reply: "We need more payment details from the business. Verification is pending.", needsOperator: false });
     }) });
@@ -134,7 +134,7 @@ describe("V2 role and write boundaries", () => {
     const model = fakeModel((request) => {
       if (request.systemInstructions?.includes("Own the separate business")) return textResult(report);
       if (request.systemInstructions?.includes("Independently challenge")) return textResult({ accepted: true, reasons: [] });
-      if (++customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "report-1", name: "business_verification", arguments: JSON.stringify(input.paymentClaim) }] };
+      if (++customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "report-1", name: "business_verification", arguments: JSON.stringify({ paymentClaim: input.paymentClaim }) }] };
       expect(JSON.stringify(request.input)).toContain("canAttribute");
       expect(JSON.stringify(request.input)).toContain("canRecognizePayment");
       return textResult({ reply: "The business reports $50 for INV-101. Would you like to dispute that report?", needsOperator: false });
@@ -158,7 +158,7 @@ describe("V2 role and write boundaries", () => {
       calls++;
       if (request.systemInstructions?.includes("Own the separate business")) throw new Error("Specialist must not run before the invoice is supplied");
       if (request.systemInstructions?.includes("Independently challenge")) return textResult({ accepted: true, reasons: [] });
-      if (calls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "too-early", name: "business_verification", arguments: JSON.stringify(input.paymentClaim) }] };
+      if (calls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "too-early", name: "business_verification", arguments: JSON.stringify({ paymentClaim: input.paymentClaim }) }] };
       return textResult({ reply: "What is your invoice number?", needsOperator: false });
     });
     const result = await investigate({ ...input, messages: [{ ...input.messages[0], text: "I paid today" }] }, model);
@@ -195,7 +195,7 @@ describe("V2 role and write boundaries", () => {
         return textResult({ accepted: true, reasons: [] });
       }
       customerCalls++;
-      if (customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "blocked-1", name: "business_verification", arguments: JSON.stringify(input.paymentClaim) }] };
+      if (customerCalls === 1) return { usage: new Usage(), output: [{ type: "function_call", callId: "blocked-1", name: "business_verification", arguments: JSON.stringify({ paymentClaim: input.paymentClaim }) }] };
       if (customerCalls === 2) return { usage: new Usage(), output: [{ type: "function_call", callId: "resolve-1", name: "account_resolution", arguments: JSON.stringify({ input: "What should we do next?" }) }] };
       return textResult({ reply: "This account shows INV-101. Could you confirm the invoice number?", needsOperator: false });
     });

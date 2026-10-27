@@ -35,9 +35,8 @@ export function validatePaymentClaim(value: unknown, input: Investigation): Paym
   }
   if (claim.reportResponse) {
     const response = input.messages.findIndex((m) => m.id === claim.reportResponse!.businessMessageId && m.channel === "business" && m.speaker === "business" && m.requestId === input.requestId && m.disposition !== "late");
-    const latest = input.messages.findLastIndex((m, i) => i < through && m.channel === "business" && m.speaker === "business" && m.requestId === input.requestId && m.disposition !== "late");
-    if (!input.requestId || response < 0 || response !== latest) throw new Error("Report response must cite the latest linked business reply preceding the customer response");
-    if (claim.reportResponse.stance === "agrees" && (input.verification?.claimMessageId !== claim.claimMessageId || claim.amount.value === null || claim.amount.value !== input.verification.amountCents || !claim.amount.evidence.some((e) => e.messageId === claim.throughMessageId))) throw new Error("Agreement must preserve the reported amount and cite the current customer confirmation");
+    if (!input.requestId || response < 0 || response >= through) throw new Error("Report response must cite a linked business reply preceding the customer response");
+    if (claim.reportResponse.stance === "agrees" && (claim.amount.value === null || !claim.amount.evidence.some((e) => input.messages.findIndex((m) => m.id === e.messageId && m.speaker === "customer") > response))) throw new Error("Agreement requires an amount with customer confirmation after the cited report");
   }
   return claim;
 }
