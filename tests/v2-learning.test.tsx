@@ -104,6 +104,17 @@ test("the independent test batch stops before $2 even when calls fail or usage i
   finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("a separate $1 test allowance cannot be reopened as $2 and stops after 50 reservations", () => {
+  const dir = mkdtempSync(join(tmpdir(), "v2-dollar-")), path = join(dir, "spend.json");
+  try {
+    reserveTestCall(path, 100);
+    expect(() => reserveTestCall(path, 200)).toThrow("invalid");
+    for (let i = 1; i < 50; i++) reserveTestCall(path, 100);
+    expect(() => reserveTestCall(path, 100)).toThrow("$1");
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ capCents: 100, reservedCents: 100, calls: 50 });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("learning model call bound extends only the requested job and leaves the ordinary limit unchanged", async () => {
   const delegate: Model = { getResponse: async () => output({ accepted: true }), async *getStreamedResponse() { throw new Error("unused"); } };
   const model = boundedModel({ apiKey: "test", model: delegate, maxCalls: 32, reserve: async () => {}, record: () => {} });

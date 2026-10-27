@@ -56,7 +56,7 @@ async function main() {
         row.result = await (variant === "baseline" ? baseline.investigate : investigate)(structuredClone(semanticInput(sample)), model, signal);
         row.failures = semanticChecks(sample, row.result, variant !== "baseline");
       } catch (error) {
-        row.error = error instanceof Error && error.message.startsWith("Approved $2 Phase 3/4 test budget") ? { kind: "test_budget", message: "The approved test reservation cap stopped the run before another provider call." } : describeFailure(error);
+        row.error = error instanceof Error && /^Approved \$[12] test budget/.test(error.message) ? { kind: "test_budget", message: "The approved test reservation cap stopped the run before another provider call." } : describeFailure(error);
         row.failures = ["Run incomplete; no fallback or automatic retry"];
       }
       row.elapsedMs = Date.now() - start; save();

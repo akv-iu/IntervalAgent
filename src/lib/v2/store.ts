@@ -11,7 +11,7 @@ import { MODEL, type ModelCall } from "./model";
 import type { RunFailure } from "./failures";
 import { confirmPlan, effectiveOperations, paymentHold, simulatePayment } from "./payments";
 import { decideFinancial, type FinancialCommand } from "./financial";
-import { validatePaymentClaim } from "./claim";
+import { validateCurrentClaim } from "./claim";
 import { EVALUATION_VERSION, LearningCommand, ProposedLesson, LearningEvaluationSchema, assessEvaluation, activeLessons, baselineCandidate, emptyLearning, sameScope, unsafeLesson, type LearningJob, type LearningState, type LearningEvaluation } from "./learning";
 const isFinancial = (command: Command): command is FinancialCommand => ["approve_recognition", "reconcile_payment", "approve_credit", "approve_extension", "reverse_receipt", "reconcile_record"].includes(command.action);
 
@@ -311,10 +311,10 @@ export async function commitResult(token: string, job: Job, result: Investigatio
       correction.result = structuredClone(result); audit.correctionId = correction.correctionId;
     }
     if (!result.review.accepted) { c.status = "needs_review"; return; }
-    if (paymentClaim && !isDeepStrictEqual(paymentClaim, job.input.paymentClaim)) validatePaymentClaim(paymentClaim, job.input);
+    if (paymentClaim && !isDeepStrictEqual(paymentClaim, job.input.paymentClaim)) validateCurrentClaim(paymentClaim, job.input);
     if ([result.draft.reply, result.verification?.businessMessage ?? ""].some((text) => findThreats(text).length > 0)) throw new V2Error(409, "Communication failed the preserved threat/false-claim guard.");
     // Unchanged findings remain historical; new investigations and financial effects require current grounded evidence.
-    if (result.verification && (!isDeepStrictEqual(result.verification, job.input.verification) || !isDeepStrictEqual(paymentClaim, job.input.paymentClaim ?? null))) validateVerification(result.verification, { ...job.input, paymentClaim });
+    if (result.verification && !isDeepStrictEqual(result.verification, job.input.verification)) validateVerification(result.verification, { ...job.input, paymentClaim });
     const updates = validateUpdates(result.resolution?.updates ?? [], { ...job.input, facts: c.facts, now: c.now, verification: result.verification, paymentClaim });
     if (job.input.operatorFeedback && updates.some((u) => u.kind === "payment_recognized")) throw new V2Error(409, "A correction retry cannot record or replay a payment. Use the normal evidence workflow.");
     if (updates.some((u) => u.kind === "payment_recognized") && (result.draft.needsOperator || result.resolution?.needsOperator)) throw new V2Error(409, "Operator approval is required before this payment can be recognized.");

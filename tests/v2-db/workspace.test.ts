@@ -13,6 +13,7 @@ import { boundedModel } from "../../src/lib/v2/model";
 import { Usage, type Model, type ModelResponse } from "@openai/agents";
 import { investigateFromSource } from "../../src/lib/v2/agents";
 import { scriptedClaim } from "../helpers/v2-claim";
+import { samReconciliation, agreedSamClaim } from "../helpers/v2-reconciliation";
 import type { PaymentClaim } from "../../src/lib/v2/claim";
 import { startingCases } from "../../src/lib/v2/fixtures";
 import { syntheticSource } from "../../src/lib/v2/source";
@@ -39,6 +40,49 @@ const verification: Verification = { claimMessageId: "placeholder", outcome: "aw
 const c = async (token: string) => (await readWorkspace(token)).cases["late-payment"];
 const requireJob = (job: Job | null): Job => { if (!job) throw new Error("Expected a new job"); return job; };
 const requireLearning = (job: LearningJob | null): LearningJob => { if (!job) throw new Error("Expected a learning job"); return job; };
+
+test("Sam's corrected $40 agreement survives reconnect and only a new settled business confirmation reduces $79 once", async () => {
+  const { token } = await createWorkspace(), caseId = "fresh-record", fixture = samReconciliation();
+  const read = async () => (await readWorkspace(token)).cases[caseId];
+  const initial = structuredClone((await read()).facts);
+  const first = requireJob(await beginCommand(token, { id: fixture.messages[1].id, caseId, action: "customer", text: fixture.messages[1].text }));
+  const originalClaim = { ...fixture.paymentClaim!, sourceVersion: first.input.facts.sourceVersion };
+  const pending: Verification = { ...fixture.verification!, outcome: "awaiting_business", amountCents: 7900, businessMessage: fixture.messages[2].text };
+  await commitResult(token, first, { ...approved("Checking your reported payment"), paymentClaim: originalClaim, verification: pending });
+  const report = requireJob(await beginCommand(token, { id: fixture.messages[4].id, caseId, action: "business", text: fixture.messages[4].text, requestId: (await read()).requestId! }));
+  await commitResult(token, report, { ...approved(fixture.messages[5].text), verification: fixture.verification });
+  const agreement = requireJob(await beginCommand(token, { id: fixture.messages[6].id, caseId, action: "customer", text: fixture.messages[6].text }));
+  const fresh = agreedSamClaim(agreement.input);
+  const followup: Verification = { ...fixture.verification!, outcome: "needs_facts", businessMessage: "Is this a new settled $40 payment after the balance snapshot, rather than part of the earlier $50 already included? Please confirm the effective date." };
+  await commitResult(token, agreement, { ...approved("Thank you; the business is checking the remaining receipt details."), paymentClaim: fresh, verification: followup });
+  await closeV2Pool();
+  const saved = await read();
+  expect(saved.paymentClaim).toEqual(fresh); expect(saved.status).toBe("awaiting_business");
+  expect(saved.facts).toEqual(initial); expect(saved.updates).toEqual([]);
+  expect(saved.audit.at(-1)?.paymentClaim?.reportResponse?.stance).toBe("agrees");
+  const date = localDate(new Date(agreement.input.now), initial.timezone);
+  const confirmed = requireJob(await beginCommand(token, { id: randomUUID(), caseId, action: "business", requestId: saved.requestId!, text: `New $40 received and settled ${date}; not included in the $79 balance or prior $50 receipt.` }));
+  const update: CaseUpdate = { kind: "payment_recognized", amountCents: 4000, date, invoiceId: initial.invoiceId, reference: null, sourceMessageId: first.id, businessMessageId: confirmed.id };
+  const businessFinding: Verification = { ...followup, outcome: "business_confirmed", businessMessage: null, paymentDate: date, settlementStatus: "settled", missingFacts: [] };
+  let calls = 0;
+  const model: Model = { async getResponse(request) {
+    const role = request.modelSettings.providerData?.metadata?.agent_role;
+    if (role === "reviewer") return scriptedOutput({ accepted: true, reasons: [] });
+    if (role === "business_verification") return scriptedOutput(businessFinding);
+    if (role === "account_resolution") return scriptedOutput({ summary: "Record the additional settled $40", needsOperator: false, updates: [update] });
+    if (++calls === 1) return scriptedTool("business_verification", fresh);
+    if (calls === 2) return scriptedTool("account_resolution", { input: "Record the confirmed new payment", paymentClaim: fresh });
+    return scriptedOutput({ reply: "$40 recorded; $39 remains.", needsOperator: false, paymentClaim: fresh });
+  }, async *getStreamedResponse() { throw new Error("unused"); } };
+  const result = await completeScripted(token, confirmed, model);
+  await closeV2Pool();
+  const paid = await read();
+  expect(paid.facts.balanceCents).toBe(3900); expect(paid.facts.payments).toHaveLength(2);
+  expect(paid.facts.payments[0]).toEqual(initial.payments[0]);
+  expect(paid.audit.at(-1)).toMatchObject({ balanceBeforeCents: 7900, balanceAfterCents: 3900, review: { accepted: true } });
+  await expect(commitResult(token, confirmed, result)).rejects.toMatchObject({ status: 409 });
+  expect((await read()).facts.balanceCents).toBe(3900);
+});
 
 test.each([true, false])("contextual SDK investigation persists reviewed interpretation and only publishes a business request when accepted=%s", async (accepted) => {
   const { token } = await createWorkspace();

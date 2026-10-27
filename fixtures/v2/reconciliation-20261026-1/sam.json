@@ -1,0 +1,14 @@
+{
+  "now": "2026-10-27T00:52:17.573Z",
+  "snapshotCreatedAt": "2026-10-26T23:17:13.391Z",
+  "caseId": "fresh-record",
+  "requestId": "dd132526-bed1-486a-afd2-26f6d39e08cd",
+  "messages": [
+    { "id": "fda73d9a-1efc-4106-93ec-eca1cad1b2eb", "speaker": "customer", "channel": "customer", "text": "I have paid to the same invoice full amount" },
+    { "id": "fda73d9a-1efc-4106-93ec-eca1cad1b2eb-business", "speaker": "agent", "channel": "business", "text": "Please check invoice INV-102 and let us know the amount paid and the payment date." },
+    { "id": "fda73d9a-1efc-4106-93ec-eca1cad1b2eb-reply", "speaker": "agent", "channel": "customer", "text": "Thanks for letting us know. We’ve asked Northside Fitness to check the payment for invoice INV-102; it hasn’t been confirmed yet." },
+    { "id": "8af15f74-e2f5-4a98-bbce-92f9082f7428", "speaker": "business", "channel": "business", "text": "40 dollars paid" },
+    { "id": "8af15f74-e2f5-4a98-bbce-92f9082f7428-reply", "speaker": "agent", "channel": "customer", "text": "Northside Fitness reports a $40.00 payment for invoice INV-102. If that amount is incorrect, you can dispute the report here." },
+    { "id": "91cfd3c3-f9e7-4d3d-9bc8-c3e4dd76a05b", "speaker": "customer", "channel": "customer", "text": "No that is correct i have paid 40 only" }
+  ]
+}
