@@ -15,7 +15,8 @@ type Row = { id: string; expected: string; input: Investigation; calls: { id: st
 async function main() {
   const args = process.argv.slice(2), run = args.find((a) => /^--run=[a-z0-9-]{1,30}$/.test(a))?.slice(6);
   if (!args.includes("--live")) { console.log("Prepared: paid-today, corrected receipt, saved Jordan history, unknown date, pending. No API calls."); return; }
-  if (args.length !== 2 || !run) throw new Error("Use --live --run=unique-name");
+  const paidOnly = args.includes("--paid-only");
+  if (args.length !== (paidOnly ? 3 : 2) || !run) throw new Error("Use --live --run=unique-name [--paid-only]");
   const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8" }).trim();
   if (git("diff", "--name-only", "HEAD", "--", "src")) throw new Error("Commit runtime before live testing");
   const key = projectEnv(".env.v2").V2_OPENAI_API_KEY;
@@ -48,6 +49,7 @@ async function main() {
     return failures;
   }
   const paid = await evaluate("business-paid-80-today", first, "Business confirms $80 received today: propose 8000 once; $49 remains, no customer agreement/operator", (r) => recognized(first, 8000, false, r));
+  if (paidOnly) { if (report.rows[0].failures.length) process.exitCode = 1; return; }
   if (paid.review.accepted && paid.resolution?.updates[0]?.kind === "payment_recognized") {
     const update = paid.resolution.updates[0], corrected = structuredClone(base);
     corrected.facts.balanceCents = recognitionBalance(first.facts, update); corrected.facts.balanceAsOf = first.now; corrected.facts.sourceVersion += ":evaluated:receipt";

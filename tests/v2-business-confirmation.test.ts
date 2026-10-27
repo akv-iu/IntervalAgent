@@ -35,6 +35,12 @@ test("a corrected total replaces the active local receipt instead of deducting a
   expect(input.facts.payments[0].amountCents).toBe(8000);
 });
 
+test("receipt correction arithmetic stays exact near the safe-integer boundary", () => {
+  const { input, update } = correctionInput();
+  input.facts.balanceCents = Number.MAX_SAFE_INTEGER - 5000;
+  expect(recognitionBalance(input.facts, update)).toBe(Number.MAX_SAFE_INTEGER - 2000);
+});
+
 test.each(["imported", "operator", "simulated", "reversed", "other-request", "wrong-date", "stale-reply", "unknown-receipt", "no-original-update", "too-large", "no-policy", "pending"])("%s cannot authorize an automatic receipt correction", (kind) => {
   const { input, update } = correctionInput(), receipt = input.facts.payments[0];
   if (kind === "imported") delete receipt.provenance;
@@ -63,6 +69,7 @@ test("Jordan's full history repairs one invalid report reference then completes 
   const scripted: Model = { async getResponse(request) {
     bytes.push(Buffer.byteLength(JSON.stringify(request), "utf8"));
     const role = String(request.modelSettings.providerData?.metadata?.agent_role); roles.push(role);
+    expect(request.modelSettings.reasoning?.effort).toBe(role === "business_verification" || role === "reviewer" ? "low" : "none");
     if (role === "business_verification") return output(v);
     if (role === "account_resolution") return output({ summary: "The business confirmed the corrected $50; $79 remains", needsOperator: false, updates: [update] });
     if (role === "reviewer") return output({ accepted: true, reasons: [] });

@@ -5,7 +5,7 @@ import { SimulationOutcome, type FinancialDecision, type PaymentAgreement, type 
 import type { LessonInstruction } from "./learning";
 import { requireInvestigableClaim, type PaymentClaim } from "./claim";
 
-export const ROLE_VERSION = "v2-business-confirmation-1";
+export const ROLE_VERSION = "v2-business-confirmation-2";
 
 const CommandIdentity = { id: z.uuid(), caseId: z.string().regex(/^[a-z-]{1,60}$/) };
 const Revision = z.number().int().nonnegative();
@@ -86,12 +86,12 @@ export type InvestigationResult = {
 };
 
 export function businessReplyAllowed(input: Investigation) {
-  return !!input.requestId && !!input.verification && (["awaiting_business", "needs_facts", "pending", "conflicting"].includes(input.verification.outcome) || input.verification.outcome === "business_confirmed" && input.facts.recognitionPolicy === "business_confirmation" && input.facts.payments.some((p) => p.requestId === input.requestId && p.provenance === "business_confirmation" && !p.reversedBy));
+  return !!input.requestId && !!input.verification && (["awaiting_business", "needs_facts", "pending", "conflicting"].includes(input.verification.outcome) || input.verification.outcome === "business_confirmed" && input.facts.recognitionPolicy === "business_confirmation" && input.facts.payments.some((p) => p.requestId === input.requestId && p.provenance === "business_confirmation" && p.status === "settled" && p.includedInBalance && !p.reversedBy));
 }
 
 export function recognitionBalance(facts: CaseFacts, update: Extract<CaseUpdate, { kind: "payment_recognized" }>) {
   const previous = update.replacesReceiptId ? facts.payments.find((p) => p.id === update.replacesReceiptId) : null;
-  return facts.balanceCents + (previous?.amountCents ?? 0) - update.amountCents;
+  return facts.balanceCents - (update.amountCents - (previous?.amountCents ?? 0));
 }
 
 export function validateUpdates(updates: CaseUpdate[], input: Investigation): CaseUpdate[] {
@@ -114,7 +114,7 @@ export function validateUpdates(updates: CaseUpdate[], input: Investigation): Ca
       if (update.replacesReceiptId) {
         const previousMessage = input.messages.findIndex((m) => m.id === previous?.businessMessageId);
         const nextMessage = input.messages.findIndex((m) => m.id === update.businessMessageId);
-        if (!previous || previous.provenance !== "business_confirmation" || previous.reversedBy || !previous.includedInBalance || previous.requestId !== input.requestId || previous.invoiceId !== update.invoiceId || previous.date !== update.date || previous.reference !== update.reference || previousMessage < 0 || nextMessage <= previousMessage || !input.caseUpdates?.some((u) => u.kind === "payment_recognized" && u.businessMessageId === previous.businessMessageId && u.sourceMessageId === update.sourceMessageId)) throw new Error("Correction requires a newer linked confirmation of the same active local business receipt");
+        if (!previous || previous.provenance !== "business_confirmation" || previous.status !== "settled" || previous.reversedBy || !previous.includedInBalance || previous.requestId !== input.requestId || previous.invoiceId !== update.invoiceId || previous.date !== update.date || previous.reference !== update.reference || previousMessage < 0 || nextMessage <= previousMessage || !input.caseUpdates?.some((u) => u.kind === "payment_recognized" && u.businessMessageId === previous.businessMessageId && u.sourceMessageId === update.sourceMessageId)) throw new Error("Correction requires a newer linked confirmation of the same active local business receipt");
         if (previous.amountCents === update.amountCents) throw new Error("This amount is already recorded; no correction is needed");
       }
       if (!Number.isSafeInteger(recognitionBalance(input.facts, update)) || recognitionBalance(input.facts, update) < 0) throw new Error("Recognition exceeds the current balance; operator review required");

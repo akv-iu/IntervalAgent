@@ -332,6 +332,7 @@ export async function commitResult(token: string, job: Job, result: Investigatio
         c.facts.payments.push({ id: receiptId, invoiceId: update.invoiceId, amountCents: update.amountCents, date: update.date, status: "settled", includedInBalance: true, provenance: "business_confirmation", businessMessageId: update.businessMessageId, requestId: c.requestId!, reference: update.reference });
         c.facts.balanceAsOf = new Date().toISOString();
         c.facts.sourceVersion = `${c.facts.sourceVersion}:recognized:${c.requestId}`;
+        if (c.facts.sourceVersion.length > 1024) throw new V2Error(409, "Source version limit reached; no payment update was committed.");
       }
       if (update.kind === "contact_preference" || update.kind === "contact_requested") {
         c.preferredChannel = update.channel;
@@ -347,7 +348,7 @@ export async function commitResult(token: string, job: Job, result: Investigatio
     audit.balanceAfterCents = c.facts.balanceCents;
     if (result.verification?.claimMessageId !== c.verification?.claimMessageId) c.requestId = null;
     c.verification = result.verification;
-    c.paymentClaim = paymentClaim ? { ...paymentClaim, sourceVersion: c.facts.sourceVersion } : null;
+    c.paymentClaim = paymentClaim && updates.some((u) => u.kind === "payment_recognized") ? { ...paymentClaim, sourceVersion: c.facts.sourceVersion } : paymentClaim;
     if (result.verification?.businessMessage) {
       c.requestId ??= randomUUID();
       if (c.messages.filter((m) => m.channel === "business" && m.speaker === "agent").at(-1)?.text !== result.verification.businessMessage)
