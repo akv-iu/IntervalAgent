@@ -1,0 +1,10 @@
+{
+    "version":  "business-confirmation-20261026-1",
+    "liveAcceptance":  "failed",
+    "files":  {
+                  "budget.json":  "6ef6a74a61936f5cdd66a1f7f48c3a70f395965b6045ad48ff49c58f00e5f134",
+                  "initial.json":  "facad4d5c325a4143e7c44d6e60eb864bac5ed98ff0948acdf09951071784695",
+                  "jordan.json":  "e46d94ef7ad9048266ea253030a916520ef187c94890f73abda6850e72c0ad01",
+                  "partial-policy-retest.json":  "15f279036d11c5554ceea657c8defcdfc0d8b5c8e765cbe4b8749bb178053148"
+              }
+}

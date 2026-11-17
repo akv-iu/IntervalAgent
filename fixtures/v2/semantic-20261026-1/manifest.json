@@ -1,0 +1,29 @@
+{
+  "version": "semantic-20261026-1",
+  "files": {
+    "cases.json": "886cae2115194ebe36ed77055774a169dcc661f238bd497108831d251b89c884",
+    "initial.json": "92a29d4dc5ef6079711ff1149751bb47bbf1ec2dda9c5e23783f09a1c12be0e3",
+    "development-retest.json": "a2fc686949e09f5db04ba30abcdb47c5096759031b9217cf38e6cac0560d4cfd",
+    "budget.json": "e748032e943121fb4c8c55516221e033ece7b6152ee93ed0a77a353afb3292ea",
+    "assessment.json": "71ccb5548b0e8e631a5f219ab492ebb364c1ca8180e5554df1f4d98ce9f337e8",
+    "RUBRIC.md": "a6eda2488b577719c8df876dba489db6775f31ff37ffcda723ffd5faa1eb3af9",
+    "RETEST.md": "22fcd676ad383a20fc2a25426beed73b66e7377697de94a261297bc9782ea8cc"
+  },
+  "capDollars": 2,
+  "attempts": 100,
+  "initialStructuredPass": {
+    "baseline": 5,
+    "candidate": 6
+  },
+  "initialAssessedPass": {
+    "baseline": 3,
+    "candidate": 6
+  },
+  "retestCompletePass": 2,
+  "retestIncomplete": 1,
+  "reportedInputTokens": 220364,
+  "reportedOutputTokens": 7020,
+  "unknownUsageCalls": 0,
+  "conservativeReportedTokenDollars": 0.062111,
+  "closeout": "test reservation cap reached; no further calls permitted in this batch; vague-business-reply retest incomplete"
+}

@@ -1,0 +1,15 @@
+{
+    "version":  "reconciliation-20261026-1",
+    "runtimeRevision":  "4c613e2",
+    "roleVersion":  "v2-reconciliation-4",
+    "files":  {
+                  "budget.json":  "6ef6a74a61936f5cdd66a1f7f48c3a70f395965b6045ad48ff49c58f00e5f134",
+                  "diagnostic.json":  "6d7541e276e7c73c2ff0233aad9d6663d1e18993445940ec647f13c90d6cfcc0",
+                  "initial.json":  "1fea9dab11ab49cfd7e850a35f73d7e6a4a749b187f32718141d76cce7888c6e",
+                  "linked-report-retest.json":  "5483d99d5ee15ecba3caa52fade0f161d3f3c6843a45cf48ce66b87c5fc31533",
+                  "repair-feedback.json":  "6fdf4dbe5a6b68f4ca6b1ce47054581be7baaf9164c5e93d046d02a911a7e145",
+                  "repair-feedback-interrupted-snapshot.json":  "848f0486e34733c58290f5d0ba7577225634a637ec3efd3d6dfc0b4b5692600a",
+                  "sam.json":  "251caaf263c37c5c8eb8e6d740993725552ad6bfd00bb5e4bc8967a10e323630",
+                  "validated-reuse.json":  "8401f0081643fd1a90baeaa1d331a37d2a16f6f5c0225e7b2c8ffe59180b52eb"
+              }
+}

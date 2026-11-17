@@ -1,0 +1,45 @@
+{
+  "version": "v1-outreach-1",
+  "sourceRunId": "picker-20261016-011624-901",
+  "sourceCreatedAt": "2026-10-16T01:16:24.901Z",
+  "sourceSha256": "44ce25fcdf8407058411ce53537daca7236f28d12ddd244e8be16d5015cd6c6b",
+  "sourceMode": "synthetic",
+  "schemaVersion": 1,
+  "scenarioVersion": 1,
+  "environmentVersion": 1,
+  "trainSeed": 11,
+  "testSeed": 22,
+  "exploreSeed": 33,
+  "counts": {
+    "trainPerSegment": 500,
+    "testPerSegment": 200
+  },
+  "epsilon": 0.1,
+  "reward": "paid ? 1 : 0",
+  "sendHours": {
+    "morning": 10,
+    "evening": 18
+  },
+  "selected": {
+    "1-30": {
+      "channel": "sms",
+      "window": "morning",
+      "tone": "friendly"
+    },
+    "31-60": {
+      "channel": "sms",
+      "window": "evening",
+      "tone": "friendly"
+    },
+    "61-90": {
+      "channel": "sms",
+      "window": "morning",
+      "tone": "formal"
+    },
+    "91-120": {
+      "channel": "sms",
+      "window": "morning",
+      "tone": "friendly"
+    }
+  }
+}

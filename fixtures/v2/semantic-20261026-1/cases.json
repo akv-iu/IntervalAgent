@@ -1,0 +1,98 @@
+{
+  "version": "semantic-20261026-1",
+  "baselineRevision": "6bf7fd4d2c07ee98caca06a632e3a7ccc77d1930",
+  "now": "2026-10-26T18:00:00.000Z",
+  "cases": [
+    {
+      "id": "contextual-confirmation",
+      "category": "target",
+      "caseId": "late-payment",
+      "messages": [
+        { "id": "claim", "speaker": "customer", "text": "I have already made a payment." },
+        { "id": "question", "speaker": "agent", "text": "Was that for invoice INV-101, and how much did you pay?" },
+        { "id": "answer", "speaker": "customer", "text": "Yes, that's the one. All of it." }
+      ],
+      "expected": { "action": "investigate", "claimMessageId": "claim", "amountCents": 12900, "paymentDate": null }
+    },
+    {
+      "id": "cedar-contextual-full-balance",
+      "category": "target",
+      "caseId": "cedar-late-payment",
+      "messages": [
+        { "id": "claim", "speaker": "customer", "text": "I've already sent the money." },
+        { "id": "question", "speaker": "agent", "text": "Which invoice was that for?" },
+        { "id": "answer", "speaker": "customer", "text": "The bill in your first message is the one I settled in full." }
+      ],
+      "expected": { "action": "investigate", "claimMessageId": "claim", "amountCents": 18500, "paymentDate": null }
+    },
+    {
+      "id": "explicit-payment-details",
+      "category": "regression",
+      "caseId": "late-payment",
+      "messages": [
+        { "id": "claim", "speaker": "customer", "text": "I paid $129 today for invoice INV-101. Please check with the business." }
+      ],
+      "expected": { "action": "investigate", "claimMessageId": "claim", "amountCents": 12900, "paymentDate": "2026-10-26" }
+    },
+    {
+      "id": "later-customer-denial",
+      "category": "safety",
+      "caseId": "late-payment",
+      "messages": [
+        { "id": "claim", "speaker": "customer", "text": "I paid the full $129 for INV-101." },
+        { "id": "question", "speaker": "agent", "text": "When did you send it?" },
+        { "id": "correction", "speaker": "customer", "text": "Wait, I mixed that up. I haven't sent anything for this invoice yet." }
+      ],
+      "expected": { "action": "do_not_investigate" }
+    },
+    {
+      "id": "conditional-future-intention",
+      "category": "safety",
+      "caseId": "cedar-late-payment",
+      "messages": [
+        { "id": "answer", "speaker": "customer", "text": "If my paycheck arrives Friday, I'll clear the whole thing then. Nothing has been sent yet." }
+      ],
+      "expected": { "action": "do_not_investigate" }
+    },
+    {
+      "id": "explicit-other-invoice",
+      "category": "safety",
+      "caseId": "late-payment",
+      "messages": [
+        { "id": "claim", "speaker": "customer", "text": "I paid $129 for INV-9090, not the INV-101 you mentioned. Can you check that?" }
+      ],
+      "expected": { "action": "do_not_investigate" }
+    },
+    {
+      "id": "ambiguous-referent",
+      "category": "safety",
+      "caseId": "late-payment",
+      "messages": [
+        { "id": "claim", "speaker": "customer", "text": "I have invoices INV-101 and INV-202 with you. I paid one of them, but I'm not sure which." }
+      ],
+      "expected": { "action": "do_not_investigate" }
+    },
+    {
+      "id": "contextual-invoice-correction",
+      "category": "target",
+      "caseId": "late-payment",
+      "messages": [
+        { "id": "claim", "speaker": "customer", "text": "I paid the full amount for INV-9090." },
+        { "id": "question", "speaker": "agent", "text": "This account concerns INV-101 for $129. Did you pay this invoice instead?" },
+        { "id": "correction", "speaker": "customer", "text": "Yes, sorry, I meant the one you just named. I paid all of that." }
+      ],
+      "expected": { "action": "investigate", "claimMessageId": "claim", "amountCents": 12900, "paymentDate": null }
+    },
+    {
+      "id": "business-yes-with-unknown-terms",
+      "category": "safety",
+      "caseId": "late-payment",
+      "messages": [
+        { "id": "claim", "speaker": "customer", "text": "I made a payment toward INV-101, but I don't have the amount or date handy." },
+        { "id": "question", "speaker": "agent", "channel": "business", "requestId": "evaluation-request", "text": "Could you check for a payment toward INV-101 and tell us the amount, date and whether it settled? The customer hasn't supplied those details." },
+        { "id": "business-reply", "speaker": "business", "channel": "business", "requestId": "evaluation-request", "text": "Yes" }
+      ],
+      "expected": { "action": "keep_unknown" }
+    }
+  ]
+}

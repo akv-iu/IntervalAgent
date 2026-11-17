@@ -1,0 +1,506 @@
+{
+  "version": "semantic-20261026-1",
+  "at": "2026-10-27T00:30:35.288Z",
+  "model": "gpt-6-luna",
+  "agentsSdk": "0.21.0",
+  "baselineRevision": "6bf7fd4d2c07ee98caca06a632e3a7ccc77d1930",
+  "candidateRevision": "5134496daaac78765b363603893f07d01c24e379",
+  "suiteHash": "886cae2115194ebe36ed77055774a169dcc661f238bd497108831d251b89c884",
+  "baselineArchiveHash": "9b3fb0621b1fe7d781686bc3faa5aeba133f638045c3edac2a52c7c09fcc23fd",
+  "transport": "existing boundedModel; default service tier; 1400 output tokens; no automatic retries",
+  "budget": {
+    "capDollars": 2,
+    "reservationDollarsPerAttempt": 0.02,
+    "path": "results/v2-semantic-20261026-1/budget.json"
+  },
+  "inputs": [
+    {
+      "id": "explicit-payment-details",
+      "input": {
+        "facts": {
+          "businessId": "northside",
+          "businessName": "Northside Fitness",
+          "balanceCents": 12900,
+          "balanceAsOf": "2026-10-25T18:00:00.000Z",
+          "sourceVersion": "synthetic-v2-2",
+          "recognitionPolicy": "business_confirmation",
+          "timezone": "America/Denver",
+          "phone": "+1 202-555-0101",
+          "email": "alex@example.test",
+          "id": "late-payment",
+          "scenario": "late_payment",
+          "customer": "Alex",
+          "invoiceId": "INV-101",
+          "payments": [],
+          "accountNotes": [
+            "The snapshot cannot establish whether a later payment was received."
+          ]
+        },
+        "now": "2026-10-26T18:00:00.000Z",
+        "verification": null,
+        "messages": [
+          {
+            "id": "opening-late-payment",
+            "channel": "customer",
+            "speaker": "agent",
+            "origin": "synthetic_opening",
+            "at": "2026-10-26T18:00:00.000Z",
+            "text": "Hi Alex, this is Northside Fitness. Our records as of 2026-10-25 show $129.00 for invoice INV-101. Have you already paid, or would you like to discuss options?"
+          },
+          {
+            "id": "claim",
+            "speaker": "customer",
+            "text": "I paid $129 today for invoice INV-101. Please check with the business.",
+            "channel": "customer",
+            "at": "2026-10-26T18:00:00.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "explicit-other-invoice",
+      "input": {
+        "facts": {
+          "businessId": "northside",
+          "businessName": "Northside Fitness",
+          "balanceCents": 12900,
+          "balanceAsOf": "2026-10-25T18:00:00.000Z",
+          "sourceVersion": "synthetic-v2-2",
+          "recognitionPolicy": "business_confirmation",
+          "timezone": "America/Denver",
+          "phone": "+1 202-555-0101",
+          "email": "alex@example.test",
+          "id": "late-payment",
+          "scenario": "late_payment",
+          "customer": "Alex",
+          "invoiceId": "INV-101",
+          "payments": [],
+          "accountNotes": [
+            "The snapshot cannot establish whether a later payment was received."
+          ]
+        },
+        "now": "2026-10-26T18:00:00.000Z",
+        "verification": null,
+        "messages": [
+          {
+            "id": "opening-late-payment",
+            "channel": "customer",
+            "speaker": "agent",
+            "origin": "synthetic_opening",
+            "at": "2026-10-26T18:00:00.000Z",
+            "text": "Hi Alex, this is Northside Fitness. Our records as of 2026-10-25 show $129.00 for invoice INV-101. Have you already paid, or would you like to discuss options?"
+          },
+          {
+            "id": "claim",
+            "speaker": "customer",
+            "text": "I paid $129 for INV-9090, not the INV-101 you mentioned. Can you check that?",
+            "channel": "customer",
+            "at": "2026-10-26T18:00:00.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "business-yes-with-unknown-terms",
+      "input": {
+        "facts": {
+          "businessId": "northside",
+          "businessName": "Northside Fitness",
+          "balanceCents": 12900,
+          "balanceAsOf": "2026-10-25T18:00:00.000Z",
+          "sourceVersion": "synthetic-v2-2",
+          "recognitionPolicy": "business_confirmation",
+          "timezone": "America/Denver",
+          "phone": "+1 202-555-0101",
+          "email": "alex@example.test",
+          "id": "late-payment",
+          "scenario": "late_payment",
+          "customer": "Alex",
+          "invoiceId": "INV-101",
+          "payments": [],
+          "accountNotes": [
+            "The snapshot cannot establish whether a later payment was received."
+          ]
+        },
+        "now": "2026-10-26T18:00:00.000Z",
+        "verification": {
+          "claimMessageId": "claim",
+          "outcome": "awaiting_business",
+          "businessMessage": "Could you check for a payment toward INV-101 and tell us the amount, date and whether it settled? The customer hasn't supplied those details.",
+          "summary": "Awaiting business payment details",
+          "amountCents": null,
+          "paymentDate": null,
+          "invoiceId": "INV-101",
+          "reference": null,
+          "settlementStatus": "unknown",
+          "missingFacts": [
+            "amount",
+            "date",
+            "settlement"
+          ]
+        },
+        "messages": [
+          {
+            "id": "opening-late-payment",
+            "channel": "customer",
+            "speaker": "agent",
+            "origin": "synthetic_opening",
+            "at": "2026-10-26T18:00:00.000Z",
+            "text": "Hi Alex, this is Northside Fitness. Our records as of 2026-10-25 show $129.00 for invoice INV-101. Have you already paid, or would you like to discuss options?"
+          },
+          {
+            "id": "claim",
+            "speaker": "customer",
+            "text": "I made a payment toward INV-101, but I don't have the amount or date handy.",
+            "channel": "customer",
+            "at": "2026-10-26T18:00:00.000Z"
+          },
+          {
+            "id": "question",
+            "speaker": "agent",
+            "text": "Could you check for a payment toward INV-101 and tell us the amount, date and whether it settled? The customer hasn't supplied those details.",
+            "channel": "business",
+            "requestId": "evaluation-request",
+            "at": "2026-10-26T18:00:00.000Z"
+          },
+          {
+            "id": "business-reply",
+            "speaker": "business",
+            "text": "Yes",
+            "channel": "business",
+            "requestId": "evaluation-request",
+            "at": "2026-10-26T18:00:00.000Z"
+          }
+        ],
+        "requestId": "evaluation-request"
+      }
+    }
+  ],
+  "rows": [
+    {
+      "caseId": "explicit-payment-details",
+      "variant": "candidate",
+      "sourceRevision": "5134496daaac78765b363603893f07d01c24e379",
+      "roleVersion": "v2-claim-2",
+      "startedAt": "2026-10-27T00:30:35.308Z",
+      "elapsedMs": 9403,
+      "calls": [
+        {
+          "id": "28d15fa8-e5ab-42b1-a2c3-35e5fa01f642",
+          "result": {
+            "id": "28d15fa8-e5ab-42b1-a2c3-35e5fa01f642",
+            "inputTokens": 2659,
+            "outputTokens": 138,
+            "usageKnown": true,
+            "latencyMs": 2331,
+            "tools": [
+              "business_verification"
+            ],
+            "role": "customer"
+          },
+          "role": "customer"
+        },
+        {
+          "id": "5575767a-69cc-4f79-a52c-1ddc4ccf6ee5",
+          "result": {
+            "id": "5575767a-69cc-4f79-a52c-1ddc4ccf6ee5",
+            "inputTokens": 1477,
+            "outputTokens": 114,
+            "usageKnown": true,
+            "latencyMs": 1681,
+            "tools": [],
+            "role": "business_verification"
+          },
+          "role": "business_verification"
+        },
+        {
+          "id": "2969375e-ae53-437d-841e-7fc5a190174b",
+          "result": {
+            "id": "2969375e-ae53-437d-841e-7fc5a190174b",
+            "inputTokens": 2368,
+            "outputTokens": 49,
+            "usageKnown": true,
+            "latencyMs": 4265,
+            "tools": [],
+            "role": "customer"
+          },
+          "role": "customer"
+        },
+        {
+          "id": "b4c5487e-6290-4e56-85fe-c8c8fcd3d303",
+          "result": {
+            "id": "b4c5487e-6290-4e56-85fe-c8c8fcd3d303",
+            "inputTokens": 2127,
+            "outputTokens": 16,
+            "usageKnown": true,
+            "latencyMs": 1024,
+            "tools": [],
+            "role": "reviewer"
+          },
+          "role": "reviewer"
+        }
+      ],
+      "result": {
+        "draft": {
+          "reply": "Thanks for letting us know. We’ve asked Northside Fitness to check whether the $129 payment for invoice INV-101 was received; it’s still awaiting their confirmation.",
+          "needsOperator": false
+        },
+        "verification": {
+          "claimMessageId": "claim",
+          "outcome": "awaiting_business",
+          "businessMessage": "Could you check whether payment was received for invoice INV-101, and confirm the amount and payment date?",
+          "summary": "The customer says they paid $129 today for INV-101. This is a customer claim, not business confirmation.",
+          "amountCents": 12900,
+          "paymentDate": "2026-10-26",
+          "invoiceId": "INV-101",
+          "reference": null,
+          "settlementStatus": "unknown",
+          "missingFacts": [
+            "business confirmation of payment"
+          ]
+        },
+        "resolution": null,
+        "paymentClaim": {
+          "businessId": "northside",
+          "caseId": "late-payment",
+          "sourceVersion": "synthetic-v2-2",
+          "intent": "payment_claim",
+          "claimMessageId": "claim",
+          "throughMessageId": "claim",
+          "invoice": {
+            "value": "INV-101",
+            "evidence": [
+              {
+                "messageId": "claim",
+                "quote": "for invoice INV-101"
+              }
+            ]
+          },
+          "amount": {
+            "value": 12900,
+            "evidence": [
+              {
+                "messageId": "claim",
+                "quote": "I paid $129 today"
+              }
+            ]
+          },
+          "date": {
+            "value": "2026-10-26",
+            "evidence": [
+              {
+                "messageId": "claim",
+                "quote": "today"
+              }
+            ]
+          },
+          "uncertainties": []
+        },
+        "review": {
+          "accepted": true,
+          "reasons": []
+        },
+        "activity": [
+          {
+            "role": "business_verification",
+            "action": "delegated",
+            "summary": "Business verification requested; completion is recorded separately"
+          },
+          {
+            "role": "business_verification",
+            "action": "awaiting_business",
+            "summary": "The customer says they paid $129 today for INV-101. This is a customer claim, not business confirmation."
+          },
+          {
+            "role": "reviewer",
+            "action": "accepted",
+            "summary": "Evidence and proposed communication checked"
+          }
+        ]
+      },
+      "failures": []
+    },
+    {
+      "caseId": "explicit-other-invoice",
+      "variant": "candidate",
+      "sourceRevision": "5134496daaac78765b363603893f07d01c24e379",
+      "roleVersion": "v2-claim-2",
+      "startedAt": "2026-10-27T00:30:44.713Z",
+      "elapsedMs": 7698,
+      "calls": [
+        {
+          "id": "fb0be102-c8f4-41df-851f-96b5037108a2",
+          "result": {
+            "id": "fb0be102-c8f4-41df-851f-96b5037108a2",
+            "inputTokens": 2666,
+            "outputTokens": 14,
+            "usageKnown": true,
+            "latencyMs": 896,
+            "tools": [
+              "read_case"
+            ],
+            "role": "customer"
+          },
+          "role": "customer"
+        },
+        {
+          "id": "c46f1ce0-3a0a-4f41-aa67-98a946235ebc",
+          "result": {
+            "id": "c46f1ce0-3a0a-4f41-aa67-98a946235ebc",
+            "inputTokens": 2860,
+            "outputTokens": 77,
+            "usageKnown": true,
+            "latencyMs": 1349,
+            "tools": [
+              "account_resolution"
+            ],
+            "role": "customer"
+          },
+          "role": "customer"
+        },
+        {
+          "id": "b64d4046-91bc-408a-8414-5dd76d514366",
+          "result": {
+            "id": "b64d4046-91bc-408a-8414-5dd76d514366",
+            "inputTokens": 2349,
+            "outputTokens": 64,
+            "usageKnown": true,
+            "latencyMs": 1855,
+            "tools": [],
+            "role": "account_resolution"
+          },
+          "role": "account_resolution"
+        },
+        {
+          "id": "ed0d33d9-b6d9-40a1-8c49-e21e4679da63",
+          "result": {
+            "id": "ed0d33d9-b6d9-40a1-8c49-e21e4679da63",
+            "inputTokens": 2969,
+            "outputTokens": 59,
+            "usageKnown": true,
+            "latencyMs": 1402,
+            "tools": [],
+            "role": "customer"
+          },
+          "role": "customer"
+        },
+        {
+          "id": "568926e8-75c8-49f4-be37-54b7439fdbc5",
+          "result": {
+            "id": "568926e8-75c8-49f4-be37-54b7439fdbc5",
+            "inputTokens": 1973,
+            "outputTokens": 113,
+            "usageKnown": true,
+            "latencyMs": 2123,
+            "tools": [],
+            "role": "reviewer"
+          },
+          "role": "reviewer"
+        }
+      ],
+      "result": {
+        "draft": {
+          "reply": "This case’s records cover INV-101, so I can’t check payment for INV-9090 here. I’ll ask an operator to review the invoice mismatch; these records don’t establish whether your payment was received.",
+          "needsOperator": true
+        },
+        "verification": null,
+        "resolution": {
+          "summary": "I can’t verify payment against INV-9090 using this case’s records, which cover INV-101. I’ll ask an operator to review the invoice mismatch; the available snapshot doesn’t establish whether a later payment was received.",
+          "needsOperator": true,
+          "updates": []
+        },
+        "paymentClaim": null,
+        "review": {
+          "accepted": true,
+          "reasons": [
+            "The customer clearly identifies a payment for a different invoice, INV-9090, so the reply appropriately scopes the available records to INV-101 without asking them to repeat the invoice details.",
+            "The reply offers an operator review as a proposal, not as a claim that review has already happened, and does not imply the payment was received or resume collection demands.",
+            "The summary accurately notes that the snapshot cannot establish whether a later payment was received. No unsupported financial update or verification claim is made."
+          ]
+        },
+        "activity": [
+          {
+            "role": "customer",
+            "action": "read_case",
+            "summary": "Read the scoped source snapshot"
+          },
+          {
+            "role": "account_resolution",
+            "action": "delegated",
+            "summary": "Resolution requested; completion is recorded separately"
+          },
+          {
+            "role": "account_resolution",
+            "action": "needs_operator",
+            "summary": "I can’t verify payment against INV-9090 using this case’s records, which cover INV-101. I’ll ask an operator to review the invoice mismatch; the available snapshot doesn’t establish whether a later payment was received."
+          },
+          {
+            "role": "reviewer",
+            "action": "accepted",
+            "summary": "The customer clearly identifies a payment for a different invoice, INV-9090, so the reply appropriately scopes the available records to INV-101 without asking them to repeat the invoice details.; The reply offers an operator review as a proposal, not as a claim that review has already happened, and does not imply the payment was received or resume collection demands.; The summary accurately notes that the snapshot cannot establish whether a later payment was received. No unsupported financial update or verification claim is made."
+          }
+        ]
+      },
+      "failures": []
+    },
+    {
+      "caseId": "business-yes-with-unknown-terms",
+      "variant": "candidate",
+      "sourceRevision": "5134496daaac78765b363603893f07d01c24e379",
+      "roleVersion": "v2-claim-2",
+      "startedAt": "2026-10-27T00:30:52.413Z",
+      "elapsedMs": 5655,
+      "calls": [
+        {
+          "id": "df59b436-2f4a-41aa-a04a-bc29e826bbbc",
+          "result": {
+            "id": "df59b436-2f4a-41aa-a04a-bc29e826bbbc",
+            "inputTokens": 2751,
+            "outputTokens": 131,
+            "usageKnown": true,
+            "latencyMs": 2127,
+            "tools": [
+              "business_verification"
+            ],
+            "role": "customer"
+          },
+          "role": "customer"
+        },
+        {
+          "id": "747ea4e3-899a-41f7-a325-78f96b4a001b",
+          "result": {
+            "id": "747ea4e3-899a-41f7-a325-78f96b4a001b",
+            "inputTokens": 1677,
+            "outputTokens": 106,
+            "usageKnown": true,
+            "latencyMs": 1688,
+            "tools": [],
+            "role": "business_verification"
+          },
+          "role": "business_verification"
+        },
+        {
+          "id": "9c73e593-3d16-464f-a035-31745fccba74",
+          "result": {
+            "id": "9c73e593-3d16-464f-a035-31745fccba74",
+            "inputTokens": 2445,
+            "outputTokens": 42,
+            "usageKnown": true,
+            "latencyMs": 1809,
+            "tools": [],
+            "role": "customer"
+          },
+          "role": "customer"
+        }
+      ],
+      "result": null,
+      "failures": [
+        "Run incomplete; no fallback or automatic retry"
+      ],
+      "error": {
+        "kind": "unknown",
+        "message": "The agent run failed before completion. No unreviewed reply was published. Inspect saved evidence and retry explicitly."
+      }
+    }
+  ]
+}

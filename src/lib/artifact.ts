@@ -52,7 +52,7 @@ export const Conversation = z.object({
 });
 export type Conversation = z.infer<typeof Conversation>;
 
-const Arm = z.object({
+export const Arm = z.object({
   channel: z.enum(["sms", "email"]),
   window: z.enum(["morning", "evening"]),
   tone: z.enum(["friendly", "formal"]),
