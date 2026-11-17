@@ -308,6 +308,35 @@ beforeEach(async () => {
 });
 afterAll(closeV2Pool);
 
+test("hosted chat reservations share an atomic cap across concurrent requests", async () => {
+  vi.stubEnv("VERCEL", "1");
+  vi.stubEnv("V2_ENABLED", "true");
+  vi.stubEnv("V2_DATABASE_URL", "postgresql://synthetic@example.neon.tech/intervalagent_v2?sslmode=verify-full");
+  vi.stubEnv("V2_PUBLIC_ORIGIN", "https://interval-agent.vercel.app");
+  try {
+    await v2Pool().query("UPDATE rebuild_v2.budget SET used_micros=4980000 WHERE id=1");
+    const results = await Promise.allSettled([reserveLive(randomUUID()), reserveLive(randomUUID())]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((r) => r.status === "rejected")).toHaveLength(1);
+    expect(await budgetUsage()).toMatchObject({ capDollars: 5, conservativeUsedDollars: 5, calls: 1 });
+  } finally { vi.unstubAllEnvs(); }
+});
+
+test("learning cannot bypass a spent hosted model budget", async () => {
+  const { token, job } = await learningCase();
+  vi.stubEnv("VERCEL", "1");
+  vi.stubEnv("V2_ENABLED", "true");
+  vi.stubEnv("V2_DATABASE_URL", "postgresql://synthetic@example.neon.tech/intervalagent_v2?sslmode=verify-full");
+  vi.stubEnv("V2_PUBLIC_ORIGIN", "https://interval-agent.vercel.app");
+  try {
+    await v2Pool().query("UPDATE rebuild_v2.budget SET used_micros=4980000 WHERE id=1");
+    await reserveLive(randomUUID());
+    await expect(reserveLearningCall(token, job, randomUUID())).rejects.toMatchObject({ status: 429 });
+    expect((await readWorkspace(token)).learning!.calls).toBe(0);
+    expect((await budgetUsage()).calls).toBe(1);
+  } finally { vi.unstubAllEnvs(); }
+});
+
 const scriptedOutput = (value: unknown): ModelResponse => ({ usage: new Usage(), output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: JSON.stringify(value) }] }] });
 const scriptedTool = (name: string, args: unknown): ModelResponse => ({ usage: new Usage(), output: [{ type: "function_call", callId: randomUUID(), name, arguments: JSON.stringify(name === "business_verification" ? { paymentClaim: args } : args) }] });
 async function completeScripted(token: string, job: Job, model: Model) {

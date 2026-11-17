@@ -1,5 +1,7 @@
 # V2 architecture
 
+Hosted deployment is configured in [PRODUCTION.md](PRODUCTION.md). `/` and `/v2` now share the workspace; local development retains its isolated database and historical acceptance limits below.
+
 Recovery Lab is a private, synthetic billing/recovery demo with two businesses and twelve cases. It uses the **OpenAI Agents SDK for TypeScript**, Next.js/Node.js and PostgreSQL. The SDK supplies agent/tool execution; application code supplies durable state, permissions, review gates and transactions. It is not a new orchestration framework or a production collections service.
 
 ## Conversation and cross-party work

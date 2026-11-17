@@ -31,8 +31,10 @@ export async function handleV2(request: Request): Promise<Response> {
   try {
     const url = new URL(request.url);
     const host = request.headers.get("host") ?? "";
-    if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) || !/^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?$/.test(host)) throw new V2Error(403, "Phase 1 is a local-only demonstration.");
-    v2Config();
+    const config = v2Config();
+    if (config.publicOrigin) {
+      if (url.origin !== config.publicOrigin || host !== new URL(config.publicOrigin).host) throw new V2Error(403, "This host is not enabled for the V2 demo.");
+    } else if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) || !/^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?$/.test(host)) throw new V2Error(403, "This host is not enabled for the V2 demo.");
     const token = request.headers.get("cookie")?.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${COOKIE}=`))?.slice(COOKIE.length + 1) ?? "";
     if (request.method === "GET") return response({ workspace: await readWorkspace(token), budget: await budgetUsage() });
     if (request.method !== "POST") return response({ error: "Method not allowed" }, 405);
@@ -47,7 +49,7 @@ export async function handleV2(request: Request): Promise<Response> {
         catch (error) { if (!(error instanceof V2Error) || ![401, 410].includes(error.status)) throw error; }
       }
       const created = await createWorkspace();
-      return response({ workspace: created.view, budget: await budgetUsage() }, 201, `${COOKIE}=${created.token}; Path=/api/v2; Max-Age=86400; HttpOnly; SameSite=Strict`);
+      return response({ workspace: created.view, budget: await budgetUsage() }, 201, `${COOKIE}=${created.token}; Path=/api/v2; Max-Age=86400; HttpOnly; SameSite=Strict${config.publicOrigin ? "; Secure" : ""}`);
     }
     const learning = LearningCommand.safeParse(value);
     if (learning.success) {
@@ -88,6 +90,6 @@ export async function handleV2(request: Request): Promise<Response> {
     }
     return response({ workspace: await readWorkspace(token), budget: await budgetUsage() });
   } catch (error) {
-    return error instanceof V2Error ? response({ error: error.message }, error.status) : response({ error: "V2 is temporarily unavailable. Check the isolated local setup." }, 503);
+    return error instanceof V2Error ? response({ error: error.message }, error.status) : response({ error: "The workspace is temporarily unavailable. Please try again shortly." }, 503);
   }
 }

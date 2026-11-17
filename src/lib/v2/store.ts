@@ -39,11 +39,23 @@ export type Job = { id: string; revision: number; caseId: string; input: Investi
 export type Command = CaseCommand;
 let pool: Pool | undefined;
 
-export function v2Config() {
-  const env = projectEnv(".env.v2");
+export function v2Config(): { databaseUrl: string; apiKey: string | undefined; publicOrigin?: string; maxSpendMicros?: number } {
+  const hosted = process.env.VERCEL === "1";
+  const env = hosted ? process.env : projectEnv(".env.v2");
   if (env.V2_ENABLED !== "true" || !env.V2_DATABASE_URL) throw new V2Error(503, "V2 is disabled. Configure the isolated local demo first.");
-  const url = new URL(env.V2_DATABASE_URL);
-  if (url.hostname !== "127.0.0.1" || url.port !== "55442" || url.pathname !== "/intervalagent_v2") throw new V2Error(503, "Phase 1 requires its dedicated loopback database; V1 connections are refused.");
+  let url: URL;
+  try { url = new URL(env.V2_DATABASE_URL); }
+  catch { throw new V2Error(503, "Invalid V2 database configuration."); }
+  if (!["postgres:", "postgresql:"].includes(url.protocol) || url.pathname !== "/intervalagent_v2") throw new V2Error(503, "V2 requires its dedicated intervalagent_v2 database; V1 connections are refused.");
+  if (hosted) {
+    if (!url.hostname.endsWith(".neon.tech") || url.searchParams.get("sslmode") !== "verify-full") throw new V2Error(503, "Hosted V2 requires a verified TLS Neon connection.");
+    let origin: URL;
+    try { origin = new URL(env.V2_PUBLIC_ORIGIN ?? ""); }
+    catch { throw new V2Error(503, "Configure the V2 public HTTPS origin."); }
+    if (origin.protocol !== "https:" || origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash) throw new V2Error(503, "Configure the V2 public HTTPS origin.");
+    return { databaseUrl: env.V2_DATABASE_URL, apiKey: env.V2_OPENAI_API_KEY, publicOrigin: origin.origin, maxSpendMicros: 5_000_000 };
+  }
+  if (url.hostname !== "127.0.0.1" || url.port !== "55442") throw new V2Error(503, "Local V2 requires its dedicated loopback database; V1 connections are refused.");
   return { databaseUrl: env.V2_DATABASE_URL, apiKey: env.V2_OPENAI_API_KEY || process.env.OPENAI_API_KEY };
 }
 
@@ -374,8 +386,9 @@ export async function failRun(token: string, job: Job, failure?: RunFailure) {
 
 export async function reserveLive(id: string, scope?: { token: string; job: Job }) {
   const reserve = async (client: PoolClient) => {
-    const result = await client.query("UPDATE rebuild_v2.budget SET used_micros=used_micros+20000 WHERE id=1 RETURNING used_micros");
-    if (!result.rowCount) throw new V2Error(503, "Initialize V2 usage accounting before making model calls.");
+    const cap = v2Config().maxSpendMicros;
+    const result = await client.query("UPDATE rebuild_v2.budget SET used_micros=used_micros+20000 WHERE id=1 AND ($1::bigint IS NULL OR used_micros+20000<=$1::bigint) RETURNING used_micros", [cap ?? null]);
+    if (!result.rowCount) throw new V2Error(cap ? 429 : 503, cap ? "The public demo's model budget is exhausted or unavailable." : "Initialize V2 usage accounting before making model calls.");
     await client.query("INSERT INTO rebuild_v2.reservations(id,cost_micros) VALUES($1,20000)", [id]);
   };
   if (!scope) return transaction(reserve);
@@ -419,7 +432,8 @@ export async function budgetUsage() {
   const r = await v2Pool().query<{ used_micros: number }>("SELECT used_micros FROM rebuild_v2.budget WHERE id=1");
   if (!r.rows[0]) throw new V2Error(503, "V2 usage accounting is not initialized.");
   const usage = await v2Pool().query("SELECT COUNT(*)::int AS calls,COUNT(*) FILTER (WHERE input_tokens IS NULL)::int AS unknown_calls,COALESCE(SUM(input_tokens),0)::int AS input_tokens,COALESCE(SUM(output_tokens),0)::int AS output_tokens FROM rebuild_v2.reservations");
-  return { capDollars: null, conservativeUsedDollars: r.rows[0].used_micros / 1_000_000, ...usage.rows[0] as { calls: number; unknown_calls: number; input_tokens: number; output_tokens: number } };
+  const cap = v2Config().maxSpendMicros;
+  return { capDollars: cap ? cap / 1_000_000 : null, conservativeUsedDollars: r.rows[0].used_micros / 1_000_000, ...usage.rows[0] as { calls: number; unknown_calls: number; input_tokens: number; output_tokens: number } };
 }
 
 export async function beginLearning(token: string, command: LearningCommand): Promise<LearningJob | null> {
@@ -513,8 +527,9 @@ export async function reserveLearningCall(token: string, job: LearningJob, id: s
     if (!state || !candidate || candidate.status !== (job.kind === "propose" ? "proposing" : "evaluating") || Date.now() - Date.parse(candidate.updatedAt) > 180_000 || job.kind === "propose" && data.cases[candidate.sourceCaseId]?.revision !== candidate.sourceRevision || job.kind === "evaluate" && baselineCandidate(state, candidate.scope) !== candidate.baseCandidateId) throw new V2Error(409, "Learning run was superseded.");
     if (state.calls >= 64) throw new V2Error(429, "Workspace learning model-call limit reached.");
     state.calls++;
-    const budget = await client.query("UPDATE rebuild_v2.budget SET used_micros=used_micros+20000 WHERE id=1 RETURNING id");
-    if (!budget.rowCount) throw new V2Error(503, "Initialize usage accounting before learning calls.");
+    const cap = v2Config().maxSpendMicros;
+    const budget = await client.query("UPDATE rebuild_v2.budget SET used_micros=used_micros+20000 WHERE id=1 AND ($1::bigint IS NULL OR used_micros+20000<=$1::bigint) RETURNING id", [cap ?? null]);
+    if (!budget.rowCount) throw new V2Error(cap ? 429 : 503, cap ? "The public demo's model budget is exhausted or unavailable." : "Initialize usage accounting before learning calls.");
     await client.query("INSERT INTO rebuild_v2.reservations(id,cost_micros) VALUES($1,20000)", [id]);
   });
 }

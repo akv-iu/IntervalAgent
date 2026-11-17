@@ -4,12 +4,15 @@ An AI collections agent tested like production software: a live model writes pas
 
 **Live site:** https://interval-agent.vercel.app
 
-No real messages or payments are sent. Everything here is a simulation with one fictional business and synthetic customers. Results describe the simulation, not real collection performance or legal compliance.
+The home page is now the V2 recovery workspace: twelve synthetic cases across two fictional businesses, with customer dialogue, business verification, account resolution and review. Each visitor has a separate, expiring workspace. The original V1 dashboard is at `/customer`; its results and the V1 pages below remain available.
+
+No real messages or payments are sent. Results describe the simulation, not real collection performance or legal compliance. [Production configuration](docs/v2/PRODUCTION.md) covers the hosted workspace. Deployment does not resolve the live-model acceptance limits recorded in [V2 status](docs/v2/STATUS.md).
 
 ## What is on the site
 
 | Page | What it shows |
 | --- | --- |
+| Workspace | V2 investigation workspace at `/`, also available at `/v2`; separate customer/business conversations, reviewed updates and operator controls. |
 | Customer | What a business owner would see after an outreach run over 100 synthetic accounts: money recovered by a cutoff, recovery rate, plans, promises, handoffs, the backlog by days past due, every conversation, and a CSV download of the same numbers. |
 | Evals | The same live model in two setups, **baseline** (prompt only) and **guarded** (stricter prompt plus a code guard), on 12 scripted scenarios, replayed from a pinned recording. |
 | Picker | A small learning picker that chooses channel, send time and tone per aging segment, trained then frozen and compared with a fixed choice on held-out cases. |

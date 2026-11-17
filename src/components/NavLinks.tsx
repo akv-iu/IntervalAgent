@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV = [
-  ["/", "Customer"],
+  ["/", "Workspace"],
+  ["/customer", "Customer"],
   ["/evals", "Evals"],
   ["/picker", "Picker"],
   ["/try", "Try it"],
